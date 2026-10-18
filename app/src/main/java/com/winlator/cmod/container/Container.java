@@ -23,6 +23,21 @@ import java.io.File;
 import java.util.Iterator;
 
 public class Container {
+    public static final String RENDERER_OPENGL = "opengl";
+    public static final String RENDERER_VULKAN = "vulkan";
+    public static final int FULLSCREEN_OFF = 0;
+    public static final int FULLSCREEN_FIT = 1;
+    public static final int FULLSCREEN_STRETCH = 2;
+    public static final int FULLSCREEN_FILL = 3;
+    public static final int FULLSCREEN_INTEGER = 4;
+    public static final int ALIGN_CENTER = 0;
+    public static final int ALIGN_TOP = 1;
+    public static final int ALIGN_BOTTOM = 2;
+
+    public static int nextFullscreenMode(int mode) {
+        return (mode + 1) % (FULLSCREEN_INTEGER + 1);
+    }
+
     public enum XrControllerMapping {
         BUTTON_A, BUTTON_B, BUTTON_X, BUTTON_Y, BUTTON_GRIP, BUTTON_TRIGGER,
         THUMBSTICK_UP, THUMBSTICK_DOWN, THUMBSTICK_LEFT, THUMBSTICK_RIGHT
@@ -36,7 +51,7 @@ public class Container {
     public static final String DEFAULT_DXWRAPPER = "dxvk+vkd3d";
     public static final String DEFAULT_DXWRAPPERCONFIG = "version=" + DefaultVersion.DXVK + ",framerate=0,async=0,asyncCache=0" + ",vkd3dVersion=" + DefaultVersion.VKD3D + ",vkd3dLevel=12_1" + ",ddrawrapper=" + Container.DEFAULT_DDRAWRAPPER + ",csmt=3" + ",gpuName=NVIDIA GeForce GTX 480" + ",videoMemorySize=2048" + ",strict_shader_math=1" + ",OffscreenRenderingMode=fbo" + ",renderer=gl,dxvkConfig=1";
     public static final String DEFAULT_GRAPHICSDRIVERCONFIG =
-            "vulkanVersion=1.3" + ";version=" + ";blacklistedExtensions=" + ";maxDeviceMemory=0" + ";presentMode=mailbox" + ";syncFrame=0" + ";disablePresentWait=0" + ";astcTranscode=1" + ";etc2Transcode=0" + ";resourceType=auto" + ";bcnEmulation=auto" + ";bcnEmulationType=compute" + ";bcnEmulationCache=1" + ";bcnQualityPreset=auto" + ";gpuName=Device";
+            "vulkanVersion=1.3" + ";version=" + ";wrapperId=apex-wrapper" + ";blacklistedExtensions=" + ";maxDeviceMemory=0" + ";presentMode=mailbox" + ";syncFrame=0" + ";disablePresentWait=0" + ";astcTranscode=1" + ";etc2Transcode=0" + ";resourceType=auto" + ";bcnEmulation=auto" + ";bcnEmulationType=compute" + ";bcnEmulationCache=1" + ";bcnQualityPreset=auto" + ";gpuName=Device";
     public static final String DEFAULT_DDRAWRAPPER = "none";
     public static final String DEFAULT_WINCOMPONENTS = "direct3d=1,directsound=0,directmusic=0,directshow=0,directplay=0,xaudio=0,vcrun2010=1,directinput=0";
     public static final String FALLBACK_WINCOMPONENTS = "direct3d=1,directsound=1,directmusic=1,directshow=1,directplay=1,xaudio=1,vcrun2010=1,directinput=1";
@@ -61,6 +76,8 @@ public class Container {
     private String wineVersion = WineInfo.MAIN_WINE_VERSION.identifier();
     private boolean showFPS;
     private boolean fullscreenStretched;
+    private String renderer = RENDERER_OPENGL;
+    private boolean rendererNative;
     private byte startupSelection = STARTUP_SELECTION_ESSENTIAL;
     private String cpuList;
     private String cpuListWoW64;
@@ -214,6 +231,18 @@ public class Container {
 
     public boolean isFullscreenStretched() { return fullscreenStretched; }
 
+    public String getRenderer() { return renderer; }
+
+    public void setRenderer(String renderer) {
+        this.renderer = renderer != null ? renderer : RENDERER_OPENGL;
+    }
+
+    public boolean isRendererNative() { return rendererNative; }
+
+    public void setRendererNative(boolean rendererNative) {
+        this.rendererNative = rendererNative;
+    }
+
     public boolean isShowFPS() {
         return showFPS;
     }
@@ -261,11 +290,18 @@ public class Container {
     }
 
     public String getDisplayDriver() {
-        return displayDriver != null ? displayDriver : DEFAULT_DISPLAY_DRIVER;
+        return normalizeDisplayDriver(displayDriver);
     }
 
     public void setDisplayDriver(String displayDriver) {
-        this.displayDriver = displayDriver;
+        this.displayDriver = normalizeDisplayDriver(displayDriver);
+    }
+
+    public static String normalizeDisplayDriver(String displayDriver) {
+        if (displayDriver == null || displayDriver.isEmpty() || displayDriver.equalsIgnoreCase("displayx")) {
+            return DEFAULT_DISPLAY_DRIVER;
+        }
+        return displayDriver.equalsIgnoreCase("vulkan") ? "vulkan" : DEFAULT_DISPLAY_DRIVER;
     }
 
     public String getDisplayxConfig() {
@@ -513,6 +549,8 @@ public class Container {
             data.put("drives", drives);
             data.put("showFPS", showFPS);
             data.put("fullscreenStretched", fullscreenStretched);
+            data.put("renderer", renderer);
+            data.put("rendererNative", rendererNative);
             data.put("inputType", inputType);
             data.put("startupSelection", startupSelection);
             data.put("box64Version", box64Version);
@@ -596,6 +634,12 @@ public class Container {
                     break;
                 case "fullscreenStretched" :
                     setFullscreenStretched(data.getBoolean(key));
+                    break;
+                case "renderer" :
+                    setRenderer(data.getString(key));
+                    break;
+                case "rendererNative" :
+                    setRendererNative(data.getBoolean(key));
                     break;
                 case "inputType" :
                     setInputType(data.getInt(key));

@@ -4,31 +4,50 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/DrawerLayout"
     android:fitsSystemWindows="true"
+    android:background="@android:color/transparent"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <LinearLayout
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:layout_height="match_parent">
 
-        <androidx.appcompat.widget.Toolbar
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:id="@+id/Toolbar"
-            android:background="?attr/gamingToolbarColor"
-            android:elevation="0dp"
-            app:layout_scrollFlags="enterAlways|scroll"
-            app:title=""
-            app:titleTextColor="#ffffff"
-            app:titleTextAppearance="@style/TextAppearance.Winlator.Toolbar.Title" />
-
-        <FrameLayout
-            android:id="@+id/FLFragmentContainer"
+        <com.winlator.cmod.widget.PlaystationBackdropView
+            android:id="@+id/MainBackdrop"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            app:layout_behavior="@string/appbar_scrolling_view_behavior"/>
-    </LinearLayout>
+            android:importantForAccessibility="no" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.Toolbar
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:id="@+id/Toolbar"
+                android:background="@drawable/shortcut_toolbar_glass"
+                android:elevation="8dp"
+                app:layout_scrollFlags="enterAlways|scroll"
+                app:title=""
+                app:titleTextColor="#ffffff"
+                app:titleTextAppearance="@style/TextAppearance.Winlator.Toolbar.Title" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="?attr/semanticDivider" />
+
+            <FrameLayout
+                android:id="@+id/FLFragmentContainer"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                app:layout_behavior="@string/appbar_scrolling_view_behavior"/>
+        </LinearLayout>
+    </FrameLayout>
 
     <com.google.android.material.navigation.NavigationView
         android:layout_width="280dp"
@@ -36,7 +55,7 @@
         android:layout_gravity="start"
         android:id="@+id/NavigationView"
         android:fitsSystemWindows="true"
-        android:background="?attr/semanticSurface"
+        android:background="@drawable/navigation_drawer_glass"
         app:headerLayout="@layout/main_menu_header"
         app:itemShapeInsetStart="12dp"
         app:itemShapeInsetEnd="12dp"

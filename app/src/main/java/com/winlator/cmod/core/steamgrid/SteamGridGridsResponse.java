@@ -15,5 +15,7 @@ public class SteamGridGridsResponse {
         public String url;
         @SerializedName("thumb")
         public String thumb;
+        @SerializedName("style")
+        public String style;
     }
 }

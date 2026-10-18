@@ -16,6 +16,7 @@ import android.view.View;
 
 import com.winlator.cmod.ThemeManager;
 import com.winlator.cmod.ThemePreset;
+import com.winlator.cmod.renderer.vulkan.VulkanRenderer;
 
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -108,6 +109,8 @@ public class WinlatorHUD extends View {
     private String strGpu = "N/A", strCpu = "N/A", strRam = "N/A";
     private String strPwr = "N/A", strTmp = "", strCTmp = "", strFps = "0", strPct = "";
     private String strRend = "OpenGL", strWrapper = "WineD3D", strRamBooster = "";
+    private String strFrameGen = "";
+    private VulkanRenderer frameGenRenderer;
     private boolean snapCharging = false;
 
     private final SharedPreferences prefs;
@@ -287,6 +290,16 @@ public class WinlatorHUD extends View {
         if (dataSource != null && userEnabled) dataSource.start();
     }
 
+    public void setFrameGenerationRenderer(VulkanRenderer renderer) {
+        uiHandler.post(() -> {
+            frameGenRenderer = renderer;
+            updateFrameGenerationText();
+            requestLayout();
+            invalidate();
+            if (getVisibility() == VISIBLE) scheduleRedraw();
+        });
+    }
+
     private void snapshot() {
         long now = System.nanoTime();
         if (lastFpsNs == 0) lastFpsNs = now;
@@ -347,6 +360,37 @@ public class WinlatorHUD extends View {
                 else if (mw > 0)    strPwr = String.format(Locale.US, "%.1fW", mw / 1000f);
                 else                strPwr = "N/A";
             }
+        }
+        updateFrameGenerationText();
+    }
+
+    private void updateFrameGenerationText() {
+        String text = "";
+        VulkanRenderer renderer = frameGenRenderer;
+        if (renderer != null && renderer.isFrameGenArmed()) {
+            String engine = renderer.getFrameGenEngine() == VulkanRenderer.FG_ENGINE_WINFG
+                    ? "Win-FG" : "LSFG";
+            int problem = renderer.getFrameGenProblem();
+            if (problem == VulkanRenderer.FG_PROBLEM_DRIVER) {
+                text = engine + " unsupported";
+            } else if (problem == VulkanRenderer.FG_PROBLEM_START_FAILED) {
+                text = engine + " failed";
+            } else if (problem == VulkanRenderer.FG_PROBLEM_UNKNOWN) {
+                text = engine + " starting";
+            } else {
+                float[] stats = renderer.getFrameGenStats();
+                if (stats == null || stats.length < 4 || stats[2] <= 0f || stats[3] <= 0f) {
+                    text = engine + " starting";
+                } else {
+                    int generatedFps = Math.max(0, Math.round(stats[3] - stats[2]));
+                    text = String.format(Locale.US, "%s +%d f/s (%d FPS)", engine, generatedFps,
+                            Math.round(stats[3]));
+                }
+            }
+        }
+        if (!text.equals(strFrameGen)) {
+            strFrameGen = text;
+            layoutDirty = true;
         }
     }
 
@@ -549,6 +593,10 @@ public class WinlatorHUD extends View {
             }
             first = false;
         }
+        if (!strFrameGen.isEmpty()) {
+            if (!first) x += drawSep(c, x, 0);
+            c.drawText(strFrameGen, x, getBaseline(pFps, 0, rowH), pFps);
+        }
     }
 
     private void drawTilesHorizontal(Canvas c) {
@@ -672,6 +720,13 @@ public class WinlatorHUD extends View {
             if ((showMask & SHOW_GRAPH) != 0) {
                 drawInlineGraph(c, x + tilePad + labelW + fw + PAD, PAD, GRAW, rowH - PAD * 2);
             }
+            x += fpstw + tileGap;
+        }
+        if (!strFrameGen.isEmpty()) {
+            float tw = pFps.measureText(strFrameGen) + tilePad * 2;
+            c.drawRoundRect(new RectF(x, 0, x + tw, rowH), tileRadius, tileRadius, pTileBg);
+            if (drawBorder) c.drawRoundRect(new RectF(x, 0, x + tw, rowH), tileRadius, tileRadius, pTileBorder);
+            c.drawText(strFrameGen, x + tilePad, getBaseline(pFps, 0, rowH), pFps);
         }
     }
 
@@ -743,6 +798,11 @@ public class WinlatorHUD extends View {
             if (!compact) c.drawText(label, sidePad, bl, pFps);
             String fpsText = getFpsDisplayText();
             c.drawText(fpsText, sidePad + (compact ? 0 : labelW), bl, pFps);
+            if (!strFrameGen.isEmpty()) y += lineH;
+        }
+        if (!strFrameGen.isEmpty()) {
+            c.drawText(strFrameGen, sidePad, getBaseline(pFps, y, lineH), pFps);
+            y += lineH;
         }
     }
 
@@ -833,6 +893,12 @@ public class WinlatorHUD extends View {
             if (!compact) c.drawText(label, sidePad, bl, pFps);
             String fpsText = getFpsDisplayText();
             c.drawText(fpsText, sidePad + (compact ? 0 : labelW), bl, pFps);
+            if (!strFrameGen.isEmpty()) y += lineH + tileGap;
+        }
+        if (!strFrameGen.isEmpty()) {
+            c.drawRoundRect(new RectF(0, y, w, y + lineH), tileRadius, tileRadius, pTileBg);
+            if (drawBorder) c.drawRoundRect(new RectF(0, y, w, y + lineH), tileRadius, tileRadius, pTileBorder);
+            c.drawText(strFrameGen, sidePad, getBaseline(pFps, y, lineH), pFps);
         }
     }
 
@@ -934,6 +1000,10 @@ public class WinlatorHUD extends View {
             if ((showMask & SHOW_GRAPH) != 0) w += PAD + GRAW;
             first = false;
         }
+        if (!strFrameGen.isEmpty()) {
+            if (!first) w += (compact ? PAD / 2f : wSep);
+            w += pFps.measureText(strFrameGen);
+        }
         return w + radius * 2;
     }
 
@@ -999,6 +1069,10 @@ public class WinlatorHUD extends View {
             w += labelW + Math.max(pFps.measureText(fpsText), minValW) + graphW + tilePad * 2;
             tileCount++;
         }
+        if (!strFrameGen.isEmpty()) {
+            w += pFps.measureText(strFrameGen) + tilePad * 2;
+            tileCount++;
+        }
         if (tileCount > 1) w += (tileCount - 1) * tileGap;
         return w;
     }
@@ -1034,6 +1108,8 @@ public class WinlatorHUD extends View {
             float minValW = apexActive ? wValApex : wValFps;
             w = Math.max(w, sidePad * 2 + (compact ? 0 : labelW) + Math.max(pFps.measureText(fpsText), minValW));
         }
+        if (!strFrameGen.isEmpty())
+            w = Math.max(w, sidePad * 2 + pFps.measureText(strFrameGen));
         return w;
     }
 
@@ -1072,6 +1148,7 @@ public class WinlatorHUD extends View {
         }
         if ((showMask & SHOW_CPU_TEMP) != 0 && (!strCTmp.isEmpty() || !compact)) r++;
         if ((showMask & SHOW_FPS)      != 0) r++;
+        if (!strFrameGen.isEmpty()) r++;
         return Math.max(1, r);
     }
 
@@ -1235,10 +1312,12 @@ public class WinlatorHUD extends View {
     }
 
     private boolean isDisplayX = false;
+    private boolean isVulkanRenderer = false;
 
     public void setDisplayDriver(String displayDriver) {
         this.isDisplayX = displayDriver != null && displayDriver.equalsIgnoreCase("displayx");
-        this.rendererLabel = isDisplayX ? "DisplayX" : "OpenGL";
+        this.isVulkanRenderer = displayDriver != null && displayDriver.equalsIgnoreCase("vulkan");
+        this.rendererLabel = isDisplayX ? "DisplayX" : isVulkanRenderer ? "Vulkan" : "OpenGL";
         this.strRend = (isNative ? "+" : "") + rendererLabel;
         this.layoutDirty = true;
         postInvalidate();
@@ -1249,7 +1328,7 @@ public class WinlatorHUD extends View {
             rendererActive = true;
             boolean changed = false;
             String formatted = formatRendererName(name);
-            if (!isDisplayX && formatted != null && !formatted.isEmpty() && !formatted.equals(rendererLabel)) {
+            if (!isDisplayX && !isVulkanRenderer && formatted != null && !formatted.isEmpty() && !formatted.equals(rendererLabel)) {
                 rendererLabel = formatted;
                 strRend = (isNative ? "+" : "") + rendererLabel;
                 layoutDirty = true;
@@ -1297,7 +1376,9 @@ public class WinlatorHUD extends View {
     }
 
     public void setRenderer(String name, boolean isNative) {
-        this.rendererLabel = formatRendererName(name != null && !name.isEmpty() ? name : (isDisplayX ? "DisplayX" : "OpenGL"));
+        String selectedName = name != null && !name.isEmpty() ? name : (isDisplayX ? "DisplayX" : "OpenGL");
+        isVulkanRenderer = selectedName.equalsIgnoreCase("vulkan");
+        rendererLabel = formatRendererName(selectedName);
         this.isNative = isNative;
         this.strRend = (isNative ? "+" : "") + this.rendererLabel;
         this.layoutDirty = true;

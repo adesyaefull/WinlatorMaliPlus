@@ -7,6 +7,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wno-unused-function -Wimplicit-function
 add_subdirectory(OpenXR-SDK)
 add_subdirectory(patchelf)
 add_subdirectory(adrenotools)
+add_subdirectory(thirdparty/dxbc)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -61,6 +62,51 @@ target_link_libraries(winlator
         adrenotools
 )
 
+add_library(vulkan_renderer SHARED
+        winlator/vulkan_jni.cpp
+        winlator/VulkanRendererContext.cpp
+        winlator/VulkanRendererScanout.cpp
+        winlator/lsfg/lsfg_probe.cpp
+        winlator/lsfg/lsfg_dll.cpp
+        winlator/lsfg/lsfg_dxbc.cpp
+        winlator/lsfg/lsfg_vkd.cpp
+        winlator/lsfg/lsfg_common.cpp
+        winlator/lsfg/lsfg_shaders.cpp
+        winlator/lsfg/lsfg_mipmaps.cpp
+        winlator/lsfg/lsfg_alpha.cpp
+        winlator/lsfg/lsfg_beta.cpp
+        winlator/lsfg/lsfg_gamma.cpp
+        winlator/lsfg/lsfg_delta.cpp
+        winlator/lsfg/lsfg_generate.cpp
+        winlator/lsfg/lsfg_chain.cpp
+        winlator/lsfg/lsfg_pacer.cpp
+        winlator/lsfg/lsfg_engine.cpp
+        winlator/lsfg/lsfg_governor.cpp
+        winlator/lsfg/lsfg_jni.cpp
+        winlator/winfg/framegen.cpp
+        winlator/winfg/winfg_vkd.cpp
+        winlator/winfg/winfg_engine.cpp
+        scanout/ScanoutContext.cpp
+)
+
+target_compile_definitions(vulkan_renderer PRIVATE
+        WINFG_UPSTREAM="v0.3.0"
+)
+
+target_compile_options(vulkan_renderer PRIVATE
+        -Wall -Wextra -fvisibility=hidden -std=c++17
+)
+
+target_link_libraries(vulkan_renderer
+        log
+        android
+        vulkan
+        adrenotools
+        dxbc
+        dl
+        atomic
+)
+
 # Add Fake Input library for controller emulation (loaded via LD_PRELOAD)
 add_library(fakeinput SHARED
         winlator/fakeinput.cpp
@@ -74,5 +120,4 @@ target_link_libraries(fakeinput
 )
 
 add_subdirectory(gladiorenderer)
-
 

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <CheckBox
+        android:id="@+id/CBFrameGenEnabled"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/frame_gen"
+        android:textSize="14sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/frame_gen_engine"
+        android:textSize="13sp" />
+    <Spinner
+        android:id="@+id/SFrameGenEngine"
+        style="@style/ComboBox"
+        android:layout_width="match_parent"
+        android:layout_height="42dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/frame_gen_multiplier"
+        android:textSize="13sp" />
+    <Spinner
+        android:id="@+id/SFrameGenMultiplier"
+        style="@style/ComboBox"
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:entries="@array/frame_gen_multiplier_entries" />
+
+    <LinearLayout
+        android:id="@+id/LLFrameGenFlowScale"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/frame_gen_flow_scale"
+            android:textSize="13sp" />
+
+        <SeekBar
+            android:id="@+id/SBFrameGenFlowScale"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="15" />
+
+        <TextView
+            android:id="@+id/TVFrameGenFlowScale"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/frame_gen_flow_scale_info"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/frame_gen_runtime_info"
+        android:textSize="12sp" />
+</LinearLayout>

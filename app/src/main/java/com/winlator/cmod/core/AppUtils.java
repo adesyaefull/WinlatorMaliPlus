@@ -268,6 +268,7 @@ public abstract class AppUtils {
         spinner.setSelection(0, false);
         if (identifier == null) return false;
         String normalizedId = identifier.replace("_", "-");
+        if (normalizedId.equalsIgnoreCase("wrapper")) normalizedId = "apex-wrapper";
         if (normalizedId.equals("pulse-audio-gn") || normalizedId.equals("oboe")) normalizedId = "pulseaudio-gn";
         for (int i = 0; i < spinner.getCount(); i++) {
             String itemIdentifier = StringUtils.parseIdentifier(spinner.getItemAtPosition(i));

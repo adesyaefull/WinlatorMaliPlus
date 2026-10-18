@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -77,13 +78,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         setTheme(R.style.AppTheme_Dark);
         ThemeManager.applyTheme(this);
 
+        applyOrientationSystemUi();
         setContentView(R.layout.main_activity);
 
         drawerLayout = findViewById(R.id.DrawerLayout);
         NavigationView navigationView = findViewById(R.id.NavigationView);
         navigationView.setNavigationItemSelectedListener(this);
 
-        boolean forceShowAdreno = sharedPreferences.getBoolean("show_adrenotools_unsupported", false);
+        boolean forceShowAdreno = sharedPreferences.getBoolean("show_adrenotools_unsupported", true);
         if (!forceShowAdreno && !com.winlator.cmod.core.GPUInformation.isAdrenoGPU(this)) {
             navigationView.getMenu().findItem(R.id.main_menu_adrenotools_gpu_drivers).setVisible(false);
         } else {
@@ -193,6 +195,25 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        applyOrientationSystemUi();
+    }
+
+    private void applyOrientationSystemUi() {
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+        getWindow().getDecorView().setSystemUiVisibility(flags);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            getWindow().setStatusBarContrastEnforced(false);
+            getWindow().setNavigationBarContrastEnforced(false);
+        }
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         if (checkStoragePermissions()) {
@@ -202,7 +223,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
         NavigationView navigationView = findViewById(R.id.NavigationView);
         if (navigationView != null) {
-            boolean forceShowAdreno = PreferenceManager.getDefaultSharedPreferences(this).getBoolean("show_adrenotools_unsupported", false);
+            boolean forceShowAdreno = PreferenceManager.getDefaultSharedPreferences(this).getBoolean("show_adrenotools_unsupported", true);
             MenuItem item = navigationView.getMenu().findItem(R.id.main_menu_adrenotools_gpu_drivers);
             if (item != null) {
                 item.setVisible(forceShowAdreno || com.winlator.cmod.core.GPUInformation.isAdrenoGPU(this));
@@ -317,9 +338,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             case R.id.main_menu_contents:
                 show(new ContentsFragment(), false);  // Forward animation
                 break;
-            case R.id.main_menu_community_configs:
-                show(new CommunityConfigsFragment(), false);  // Forward animation
-                break;
             case R.id.main_menu_file_manager:
                 show(new FileManagerFragment(), false);
                 break;
@@ -393,7 +411,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             ((TextView) dialog.findViewById(R.id.TVAppVersion)).setText(getString(R.string.version) + " " + pInfo.versionName);
 
             String creditsAndThirdPartyAppsHTML = String.join("<br />",
-                    "<b>Winlator Mali</b> by Fcharan",
+                    "<b>Winlator Mali+</b> based on Winlator Mali by Fcharan",
+                    "UI customization, branding, wrapper integration, and additional project customizations by <a href=\"https://github.com/adesyaefull/WinlatorMaliPlus\">Adesyaefull</a>",
+                    "UI, frame generation, and Vulkan renderer references/adaptations: Bannerlator by <a href=\"https://github.com/The412Banner/Bannerlator\">The412Banner</a>",
                     "<b>Winlator & Gladio</b> by <a href=\"https://github.com/brunodev85\">Bruno (brunodev85)</a>",
                     "Fork of <b>Winlator Bionic</b> by <a href=\"https://github.com/Pipetto-crypto\">Pipetto Cripto</a>",
                     "Controller fixes by <a href=\"https://github.com/Vivsi1\">vivsi1</a>",
@@ -417,6 +437,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
             TextView tvCreditsAndThirdPartyApps = dialog.findViewById(R.id.TVCreditsAndThirdPartyApps);
             tvCreditsAndThirdPartyApps.setText(Html.fromHtml(creditsAndThirdPartyAppsHTML, Html.FROM_HTML_MODE_LEGACY));
+            tvCreditsAndThirdPartyApps.setTextColor(ThemeManager.getOnSurfaceTextColor(this));
+            tvCreditsAndThirdPartyApps.setLinkTextColor(ThemeManager.getAccentColor(this));
             tvCreditsAndThirdPartyApps.setMovementMethod(LinkMovementMethod.getInstance());
 
             String glibcExpVersionForkHTML = String.join("<br />",
@@ -434,9 +456,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void applyDrawerStyling(NavigationView navigationView) {
         int accentColor = ThemeManager.getAccentColor(this);
         int onSurfaceColor = ThemeManager.getOnSurfaceTextColor(this);
-        int surfaceColor = ThemeManager.getSurfaceColor(this);
 
-        navigationView.setBackgroundColor(surfaceColor);
+        navigationView.setBackgroundResource(R.drawable.navigation_drawer_glass);
 
         int[][] states = new int[][]{
             new int[]{android.R.attr.state_checked},

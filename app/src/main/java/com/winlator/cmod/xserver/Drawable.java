@@ -22,7 +22,7 @@ public class Drawable extends XResource {
     private Runnable onDrawListener;
     private Callback<Drawable> onDestroyListener;
     public final Object renderLock = new Object();
-    private boolean directScanout = false;
+    private volatile boolean directScanout = false;
 
     public boolean isDirectScanout() {
         return directScanout;
@@ -91,6 +91,12 @@ public class Drawable extends XResource {
 
     public void setData(ByteBuffer data) {
         this.data = data;
+    }
+
+    public void refreshDataFromTexture() {
+        if (texture instanceof GPUImage) {
+            data = ((GPUImage) texture).getVirtualData();
+        }
     }
 
     public short getStride() {

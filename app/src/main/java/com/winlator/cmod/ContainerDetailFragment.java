@@ -48,6 +48,8 @@ import com.winlator.cmod.contentdialog.ShortcutSettingsDialog;
 import com.winlator.cmod.contentdialog.WineD3DConfigDialog;
 import com.winlator.cmod.contents.ContentProfile;
 import com.winlator.cmod.contents.ContentsManager;
+import com.winlator.cmod.contents.AdrenotoolsManager;
+import com.winlator.cmod.contents.WrapperCatalogManager;
 import com.winlator.cmod.core.AppUtils;
 import com.winlator.cmod.core.Callback;
 import com.winlator.cmod.core.DefaultVersion;
@@ -332,6 +334,9 @@ public class ContainerDetailFragment extends Fragment {
         final Spinner sDisplayDriver = view.findViewById(R.id.SDisplayDriver);
         updateDisplayDriverSpinner(context, sDisplayDriver);
         String currentDisplayDriver = isEditMode() ? container.getDisplayDriver() : Container.DEFAULT_DISPLAY_DRIVER;
+        if (isEditMode() && Container.RENDERER_VULKAN.equals(container.getRenderer())) {
+            currentDisplayDriver = Container.RENDERER_VULKAN;
+        }
         AppUtils.setSpinnerSelectionFromIdentifier(sDisplayDriver, currentDisplayDriver);
 
         final View vDisplayDriverConfig = view.findViewById(R.id.BTDisplayDriverConfig);
@@ -343,25 +348,6 @@ public class ContainerDetailFragment extends Fragment {
         else {
             vDisplayDriverConfig.setVisibility(View.GONE);
         }
-
-        sDisplayDriver.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
-                String selectedItem = parent.getItemAtPosition(position).toString();
-                String identifier = StringUtils.parseIdentifier(selectedItem);
-                if (identifier.equals("displayx")) {
-                    vDisplayDriverConfig.setVisibility(View.VISIBLE);
-                    vDisplayDriverConfig.setOnClickListener((v1) -> (new com.winlator.cmod.contentdialog.DisplayXConfigDialog(vDisplayDriverConfig)).show());
-                    vDisplayDriverConfig.setTag(isEditMode() ? container.getDisplayxConfig() : com.winlator.cmod.contentdialog.DisplayXConfigDialog.DEFAULT_CONFIG);
-                }
-                else {
-                    vDisplayDriverConfig.setVisibility(View.GONE);
-                }
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
-        });
 
         final Spinner sGraphicsDriver = view.findViewById(R.id.SGraphicsDriver);
         
@@ -402,6 +388,102 @@ public class ContainerDetailFragment extends Fragment {
 
         final CheckBox cbFullscreenStretched = view.findViewById(R.id.CBFullscreenStretched);
         cbFullscreenStretched.setChecked(isEditMode() && container.isFullscreenStretched());
+
+        final Spinner sHostRenderer = view.findViewById(R.id.SHostRenderer);
+        sHostRenderer.setSelection(Container.RENDERER_VULKAN.equals(currentDisplayDriver) ? 1 : 0);
+        View btConfigureVulkanRenderer = view.findViewById(R.id.BTConfigureVulkanRenderer);
+        View llVulkanRendererSettings = view.findViewById(R.id.LLVulkanRendererSettings);
+        btConfigureVulkanRenderer.setOnClickListener(v ->
+                llVulkanRendererSettings.setVisibility(llVulkanRendererSettings.getVisibility() == View.VISIBLE
+                        ? View.GONE : View.VISIBLE));
+        final CheckBox cbRendererNative = view.findViewById(R.id.CBRendererNative);
+        cbRendererNative.setChecked(isEditMode() && container.isRendererNative());
+        final Spinner sRendererColorOrder = view.findViewById(R.id.SRendererColorOrder);
+        String rendererColorOrder = isEditMode() ? container.getExtra("rendererColorOrder", "bgra") : "bgra";
+        sRendererColorOrder.setSelection("rgba".equalsIgnoreCase(rendererColorOrder) ? 1 : 0);
+        final Spinner sRendererPresentMode = view.findViewById(R.id.SRendererPresentMode);
+        String rendererPresentMode = isEditMode() ? container.getExtra("rendererPresentMode", "fifo") : "fifo";
+        sRendererPresentMode.setSelection(rendererPresentModePosition(rendererPresentMode));
+        final Spinner sRendererDriver = view.findViewById(R.id.SRendererDriver);
+        String rendererDriverId = isEditMode() ? container.getExtra("rendererDriverId", "system") : "system";
+        populateRendererDriverSpinner(context, sRendererDriver, rendererDriverId);
+        populateFrameGenEngineSpinner(context, view.findViewById(R.id.SFrameGenEngine),
+                isEditMode() ? container.getExtra("frameGenEngine", "lsfg") : "lsfg");
+        CheckBox cbFrameGenEnabled = view.findViewById(R.id.CBFrameGenEnabled);
+        cbFrameGenEnabled.setChecked(isEditMode() && "1".equals(container.getExtra("frameGenEnabled", "0")));
+        Spinner sFrameGenEngine = view.findViewById(R.id.SFrameGenEngine);
+        Spinner sFrameGenMultiplier = view.findViewById(R.id.SFrameGenMultiplier);
+        String frameGenMultiplier = isEditMode() ? container.getExtra("frameGenMultiplier", "2") : "2";
+        sFrameGenMultiplier.setSelection("4".equals(frameGenMultiplier) ? 2 : "3".equals(frameGenMultiplier) ? 1 : 0);
+        Runnable updateRendererControls = () -> {
+            String selectedDriver = sDisplayDriver.getSelectedItem() == null ? ""
+                    : StringUtils.parseIdentifier(sDisplayDriver.getSelectedItem().toString());
+            boolean vulkan = Container.RENDERER_VULKAN.equals(selectedDriver);
+            boolean rgba = sRendererColorOrder.getSelectedItemPosition() == 1;
+            cbRendererNative.setEnabled(vulkan && !rgba);
+            sRendererColorOrder.setEnabled(vulkan);
+            sRendererPresentMode.setEnabled(vulkan);
+            sRendererDriver.setEnabled(vulkan);
+            btConfigureVulkanRenderer.setVisibility(vulkan ? View.VISIBLE : View.GONE);
+            llVulkanRendererSettings.setVisibility(vulkan ? View.VISIBLE : View.GONE);
+            cbFrameGenEnabled.setEnabled(vulkan);
+            sFrameGenEngine.setEnabled(vulkan && cbFrameGenEnabled.isChecked());
+            sFrameGenMultiplier.setEnabled(vulkan && cbFrameGenEnabled.isChecked());
+            if (!vulkan || rgba) cbRendererNative.setChecked(false);
+            if (!vulkan) cbFrameGenEnabled.setChecked(false);
+        };
+        updateRendererControls.run();
+        cbFrameGenEnabled.setOnCheckedChangeListener((buttonView, checked) -> updateRendererControls.run());
+        sHostRenderer.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                updateRendererControls.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        sRendererColorOrder.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                updateRendererControls.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        sDisplayDriver.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                String identifier = StringUtils.parseIdentifier(parent.getItemAtPosition(position).toString());
+                if ("displayx".equals(identifier)) {
+                    vDisplayDriverConfig.setVisibility(View.VISIBLE);
+                    vDisplayDriverConfig.setOnClickListener(v1 ->
+                            (new com.winlator.cmod.contentdialog.DisplayXConfigDialog(vDisplayDriverConfig)).show());
+                    vDisplayDriverConfig.setTag(isEditMode() ? container.getDisplayxConfig()
+                            : com.winlator.cmod.contentdialog.DisplayXConfigDialog.DEFAULT_CONFIG);
+                } else {
+                    vDisplayDriverConfig.setVisibility(View.GONE);
+                }
+                int rendererPosition = "vulkan".equals(StringUtils.parseIdentifier(parent.getItemAtPosition(position)))
+                        ? 1 : 0;
+                if (sHostRenderer.getSelectedItemPosition() != rendererPosition) sHostRenderer.setSelection(rendererPosition);
+                updateRendererControls.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        sHostRenderer.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                if (sDisplayDriver.getSelectedItemPosition() != position) sDisplayDriver.setSelection(position);
+                updateRendererControls.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
 
         final EditText etLC_ALL = view.findViewById(R.id.ETlcall);
         Locale systemLocal = Locale.getDefault();
@@ -583,15 +665,18 @@ public class ContainerDetailFragment extends Fragment {
                 String name = etName.getText().toString();
                 String screenSize = getScreenSize(view);
                 String envVars = envVarsView.getEnvVars();
-                String graphicsDriver = StringUtils.parseIdentifier(sGraphicsDriver.getSelectedItem());
+                String graphicsDriver = selectedGraphicsDriverIdentifier(sGraphicsDriver.getSelectedItem());
                 String graphicsDriverConfig = vGraphicsDriverConfig.getTag().toString();
-                String displayDriver = StringUtils.parseIdentifier(sDisplayDriver.getSelectedItem());
+                String displayDriver = sHostRenderer.getSelectedItemPosition() == 1 ? "vulkan" : "opengl";
                 String displayxConfig = vDisplayDriverConfig.getTag() != null ? vDisplayDriverConfig.getTag().toString() : com.winlator.cmod.contentdialog.DisplayXConfigDialog.DEFAULT_CONFIG;
                 HashMap<String, String> config = GraphicsDriverConfigDialog.parseGraphicsDriverConfig(graphicsDriverConfig);
+                String selectedWrapperId = config.getOrDefault("wrapperId",
+                        selectedGraphicsWrapperId(sGraphicsDriver));
+                config.put("wrapperId", selectedWrapperId);
                 if (config.get("version").isEmpty()) {
                     config.put("version", GPUInformation.isDriverSupported(DefaultVersion.WRAPPER_ADRENO, context) ? DefaultVersion.WRAPPER_ADRENO : DefaultVersion.WRAPPER);
-                    graphicsDriverConfig = GraphicsDriverConfigDialog.toGraphicsDriverConfig(config);
                 }
+                graphicsDriverConfig = GraphicsDriverConfigDialog.toGraphicsDriverConfig(config);
                 String dxwrapper = StringUtils.parseIdentifier(sDXWrapper.getSelectedItem());
                 String dxwrapperConfig = vDXWrapperConfig.getTag().toString();
                 String audioDriver = StringUtils.parseIdentifier(sAudioDriver.getSelectedItem());
@@ -600,6 +685,15 @@ public class ContainerDetailFragment extends Fragment {
                 String drives = getDrives(view);
                 boolean showFPS = cbShowFPS.isChecked();
                 boolean fullscreenStretched = cbFullscreenStretched.isChecked();
+                String hostRenderer = sHostRenderer.getSelectedItemPosition() == 1 ? Container.RENDERER_VULKAN : Container.RENDERER_OPENGL;
+                String rendererColorOrderToSave = sRendererColorOrder.getSelectedItemPosition() == 1 ? "rgba" : "bgra";
+                String rendererPresentModeToSave = rendererPresentModeId(sRendererPresentMode.getSelectedItemPosition());
+                String rendererDriverIdToSave = selectedRendererDriverId(sRendererDriver);
+                boolean rendererNative = hostRenderer.equals(Container.RENDERER_VULKAN)
+                        && !rendererColorOrderToSave.equals("rgba") && cbRendererNative.isChecked();
+                String frameGenEnabled = cbFrameGenEnabled.isChecked() ? "1" : "0";
+                String frameGenEngineToSave = selectedFrameGenEngine(sFrameGenEngine);
+                String frameGenMultiplierToSave = String.valueOf(sFrameGenMultiplier.getSelectedItemPosition() + 2);
                 String cpuList = cpuListView.getCheckedCPUListAsString();
                 String cpuListWoW64 = cpuListViewWoW64.getCheckedCPUListAsString();
                 byte startupSelection = (byte) sStartupSelection.getSelectedItemPosition();
@@ -639,6 +733,14 @@ public class ContainerDetailFragment extends Fragment {
                     container.setWinComponents(wincomponents);
                     container.setDrives(drives);
                     container.setShowFPS(showFPS);
+                    container.setRenderer(hostRenderer);
+                    container.setRendererNative(rendererNative);
+                    container.putExtra("rendererColorOrder", rendererColorOrderToSave);
+                    container.putExtra("rendererPresentMode", rendererPresentModeToSave);
+                    container.putExtra("rendererDriverId", rendererDriverIdToSave);
+                    container.putExtra("frameGenEnabled", frameGenEnabled);
+                    container.putExtra("frameGenEngine", frameGenEngineToSave);
+                    container.putExtra("frameGenMultiplier", frameGenMultiplierToSave);
                     container.setStartupSelection(startupSelection);
                     container.setBox64Version(box64Version);
                     container.setBox64Preset(box64Preset);
@@ -679,6 +781,16 @@ public class ContainerDetailFragment extends Fragment {
                     data.put("drives", drives);
                     data.put("showFPS", showFPS);
                     data.put("fullscreenStretched", fullscreenStretched);
+                    data.put("renderer", hostRenderer);
+                    data.put("rendererNative", rendererNative);
+                    JSONObject rendererExtraData = new JSONObject();
+                    rendererExtraData.put("rendererColorOrder", rendererColorOrderToSave);
+                    rendererExtraData.put("rendererPresentMode", rendererPresentModeToSave);
+                    rendererExtraData.put("rendererDriverId", rendererDriverIdToSave);
+                    rendererExtraData.put("frameGenEnabled", frameGenEnabled);
+                    rendererExtraData.put("frameGenEngine", frameGenEngineToSave);
+                    rendererExtraData.put("frameGenMultiplier", frameGenMultiplierToSave);
+                    data.put("extraData", rendererExtraData);
                     data.put("startupSelection", startupSelection);
                     data.put("box64Version", box64Version);
                     data.put("box64Preset", box64Preset);
@@ -865,9 +977,17 @@ public class ContainerDetailFragment extends Fragment {
 
         // Update the spinner with the available graphics driver options
         updateGraphicsDriverSpinner(context, sGraphicsDriver);
+        HashMap<String, String> initialConfig =
+                GraphicsDriverConfigDialog.parseGraphicsDriverConfig(vGraphicsDriverConfig.getTag().toString());
+        String initialWrapperId = initialConfig.getOrDefault("wrapperId", "apex-wrapper");
+        selectGraphicsWrapper(sGraphicsDriver, initialWrapperId);
 
-        Runnable update = () -> {
-            String graphicsDriver = StringUtils.parseIdentifier(sGraphicsDriver.getSelectedItem());
+        java.util.function.Consumer<String> update = wrapperId -> {
+            String graphicsDriver = selectedGraphicsDriverIdentifier(sGraphicsDriver.getSelectedItem());
+            HashMap<String, String> currentConfig =
+                    GraphicsDriverConfigDialog.parseGraphicsDriverConfig(vGraphicsDriverConfig.getTag().toString());
+            currentConfig.put("wrapperId", wrapperId);
+            vGraphicsDriverConfig.setTag(GraphicsDriverConfigDialog.toGraphicsDriverConfig(currentConfig));
 
             // Update the DXWrapper spinner
             ArrayList<String> items = new ArrayList<>();
@@ -885,19 +1005,43 @@ public class ContainerDetailFragment extends Fragment {
             vGraphicsDriverConfig.setVisibility(View.VISIBLE);
         };
 
-        sGraphicsDriver.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        final boolean[] initializingWrapperSelection = {true};
+        AdapterView.OnItemSelectedListener graphicsDriverSelectionListener =
+                new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                update.run();
+                if (initializingWrapperSelection[0]) return;
+                Object item = parent.getItemAtPosition(position);
+                if (item instanceof GraphicsDriverChoice) {
+                    update.accept(((GraphicsDriverChoice) item).wrapperId);
+                }
             }
 
             @Override
             public void onNothingSelected(AdapterView<?> parent) {}
+        };
+        sGraphicsDriver.setOnItemSelectedListener(graphicsDriverSelectionListener);
+        sGraphicsDriver.setOnTouchListener((spinnerView, event) -> {
+            if (event.getAction() == android.view.MotionEvent.ACTION_DOWN) {
+                String selectedWrapperId = selectedGraphicsWrapperId(sGraphicsDriver);
+                sGraphicsDriver.setOnItemSelectedListener(null);
+                updateGraphicsDriverSpinner(context, sGraphicsDriver);
+                selectGraphicsWrapper(sGraphicsDriver, selectedWrapperId);
+                sGraphicsDriver.setOnItemSelectedListener(graphicsDriverSelectionListener);
+                update.accept(selectedWrapperId);
+            }
+            return false;
         });
 
         // Set the spinner's initial selection
-        AppUtils.setSpinnerSelectionFromIdentifier(sGraphicsDriver, selectedGraphicsDriver);
-        update.run();
+        if (!Container.DEFAULT_GRAPHICS_DRIVER.equals(selectedGraphicsDriver)) {
+            AppUtils.setSpinnerSelectionFromIdentifier(sGraphicsDriver, selectedGraphicsDriver);
+        }
+        sGraphicsDriver.post(() -> {
+            selectGraphicsWrapper(sGraphicsDriver, initialWrapperId);
+            update.accept(initialWrapperId);
+            initializingWrapperSelection[0] = false;
+        });
     }
 
     public static void setupDXWrapperSpinner(final Spinner sDXWrapper, final View vDXWrapperConfig, boolean isARM64EC) {
@@ -1188,12 +1332,156 @@ public class ContainerDetailFragment extends Fragment {
         spinner.setAdapter(new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, itemList));
     }
 
+    public static void populateFrameGenEngineSpinner(Context context, Spinner spinner, String selectedEngine) {
+        String[] allEngines = context.getResources().getStringArray(R.array.frame_gen_engine_entries);
+        boolean lsfgAvailable = com.winlator.cmod.core.LsfgNative.isCacheValid(context);
+        String[] engines = lsfgAvailable ? allEngines : new String[]{allEngines[1]};
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(context, android.R.layout.simple_spinner_item, engines);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        spinner.setSelection(lsfgAvailable && "lsfg".equalsIgnoreCase(selectedEngine) ? 0 : lsfgAvailable ? 1 : 0);
+    }
+
+    public static String selectedFrameGenEngine(Spinner spinner) {
+        Object selected = spinner.getSelectedItem();
+        return selected != null && selected.toString().startsWith("LSFG") ? "lsfg" : "winfg";
+    }
+
+    public static final class RendererDriverChoice {
+        public final String id;
+        private final String label;
+
+        RendererDriverChoice(String id, String label) {
+            this.id = id;
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    public static void populateRendererDriverSpinner(Context context, Spinner spinner, String selectedId) {
+        ArrayList<RendererDriverChoice> choices = new ArrayList<>();
+        choices.add(new RendererDriverChoice("system", "System Vulkan driver"));
+        AdrenotoolsManager manager = new AdrenotoolsManager(context);
+        for (String id : manager.enumarateInstalledDrivers()) {
+            String name = manager.getDriverName(id);
+            choices.add(new RendererDriverChoice(id, name.isEmpty() ? id : name));
+        }
+
+        ArrayAdapter<RendererDriverChoice> adapter =
+                new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, choices);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        for (int i = 0; i < choices.size(); i++) {
+            if (choices.get(i).id.equals(selectedId)) {
+                spinner.setSelection(i, false);
+                return;
+            }
+        }
+        spinner.setSelection(0, false);
+    }
+
+    public static String selectedRendererDriverId(Spinner spinner) {
+        Object selected = spinner.getSelectedItem();
+        return selected instanceof RendererDriverChoice
+                ? ((RendererDriverChoice) selected).id : "system";
+    }
+
+    public static int rendererPresentModePosition(String mode) {
+        switch (mode == null ? "fifo" : mode.toLowerCase(java.util.Locale.ROOT)) {
+            case "mailbox": return 1;
+            case "immediate": return 2;
+            case "relaxed":
+            case "fifo_relaxed": return 3;
+            default: return 0;
+        }
+    }
+
+    public static String rendererPresentModeId(int position) {
+        switch (position) {
+            case 1: return "mailbox";
+            case 2: return "immediate";
+            case 3: return "relaxed";
+            default: return "fifo";
+        }
+    }
+
     public static void updateGraphicsDriverSpinner(Context context, Spinner spinner) {
-        String[] originalItems = context.getResources().getStringArray(R.array.graphics_driver_entries);
-        List<String> itemList = new ArrayList<>(Arrays.asList(originalItems));
-        
-        // Set the adapter with the combined list
-        spinner.setAdapter(new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, itemList));
+        ArrayList<GraphicsDriverChoice> choices = new ArrayList<>();
+        choices.add(new GraphicsDriverChoice("apex-wrapper", "Apex-Wrapper"));
+        for (WrapperCatalogManager.Entry entry : WrapperCatalogManager.getInstalledWrappers(context)) {
+            choices.add(new GraphicsDriverChoice(entry.id, entry.name));
+        }
+        ArrayAdapter<GraphicsDriverChoice> adapter = new ArrayAdapter<>(
+                context, android.R.layout.simple_spinner_dropdown_item, choices);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+    }
+
+    public static final class GraphicsDriverChoice {
+        public final String wrapperId;
+        private final String label;
+
+        GraphicsDriverChoice(String wrapperId, String label) {
+            this.wrapperId = wrapperId;
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    public static String selectedGraphicsDriverIdentifier(Object selected) {
+        return selected instanceof GraphicsDriverChoice
+                ? Container.DEFAULT_GRAPHICS_DRIVER : StringUtils.parseGraphicsDriverIdentifier(selected);
+    }
+
+    public static String selectedGraphicsWrapperId(Spinner spinner) {
+        Object selected = spinner.getSelectedItem();
+        return selected instanceof GraphicsDriverChoice
+                ? ((GraphicsDriverChoice) selected).wrapperId : "apex-wrapper";
+    }
+
+    public static void selectGraphicsWrapper(Spinner spinner, String wrapperId) {
+        for (int i = 0; i < spinner.getCount(); i++) {
+            Object item = spinner.getItemAtPosition(i);
+            if (item instanceof GraphicsDriverChoice
+                    && ((GraphicsDriverChoice) item).wrapperId.equals(wrapperId)) {
+                spinner.setSelection(i, false);
+                return;
+            }
+        }
+        if (wrapperId == null || wrapperId.isEmpty()) {
+            spinner.setSelection(0, false);
+            return;
+        }
+
+        ArrayList<GraphicsDriverChoice> choices = new ArrayList<>();
+        for (int i = 0; i < spinner.getCount(); i++) {
+            Object item = spinner.getItemAtPosition(i);
+            if (item instanceof GraphicsDriverChoice) {
+                choices.add((GraphicsDriverChoice) item);
+            }
+        }
+
+        String label = wrapperId;
+        for (WrapperCatalogManager.Entry entry : WrapperCatalogManager.getCachedCatalog(spinner.getContext())) {
+            if (entry.id.equals(wrapperId)) {
+                label = entry.name;
+                break;
+            }
+        }
+        choices.add(new GraphicsDriverChoice(wrapperId, label));
+        ArrayAdapter<GraphicsDriverChoice> adapter = new ArrayAdapter<>(
+                spinner.getContext(), android.R.layout.simple_spinner_dropdown_item, choices);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        spinner.setSelection(choices.size() - 1, false);
     }
 
     public static void loadBox64VersionSpinner(Context context, Container container, ContentsManager manager, Spinner spinner, boolean isArm64EC) {
@@ -1228,5 +1516,3 @@ public class ContainerDetailFragment extends Fragment {
     }
 
 }
-
-

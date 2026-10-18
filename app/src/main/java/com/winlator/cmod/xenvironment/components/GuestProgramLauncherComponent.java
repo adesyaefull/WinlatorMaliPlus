@@ -486,7 +486,8 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         String displayDriver = container.getDisplayDriver();
         String displayxConfigStr = container.getDisplayxConfig();
         if (shortcut != null) {
-            displayDriver = shortcut.getExtra("displayDriver", container.getDisplayDriver());
+            displayDriver = Container.normalizeDisplayDriver(
+                    shortcut.getExtra("displayDriver", container.getDisplayDriver()));
             displayxConfigStr = shortcut.getExtra("displayxConfig", container.getDisplayxConfig());
         }
 

@@ -32,6 +32,11 @@ public class StringUtils {
         return text.toString().toLowerCase(Locale.ENGLISH).replaceAll(" *\\(([^\\)]+)\\)$", "").replaceAll("( \\+ )+| +", "-");
     }
 
+    public static String parseGraphicsDriverIdentifier(Object text) {
+        String identifier = parseIdentifier(text);
+        return "apex-wrapper".equals(identifier) ? "wrapper" : identifier;
+    }
+
     public static String parseNumber(Object text) {
         return text.toString().replaceAll("[^0-9\\.]+", "");
     }

@@ -41,6 +41,7 @@ public class XServer {
     private com.winlator.cmod.widget.DisplayXView displayXView;
     private SHMSegmentManager shmSegmentManager;
     private GLRenderer renderer;
+    private volatile boolean renderingEnabled = true;
     private volatile com.winlator.cmod.widget.WinlatorHUD winlatorHUD;
     private volatile int fpsLimit = 0;
     private WinHandler winHandler;
@@ -126,9 +127,19 @@ public class XServer {
     public void setRenderer(GLRenderer renderer) {
         this.renderer = renderer;
         if (renderer != null) {
+            renderer.setRenderingEnabled(renderingEnabled);
             if (winlatorHUD != null) renderer.setWinlatorHUD(winlatorHUD);
             if (fpsLimit > 0) renderer.setFpsLimit(fpsLimit);
         }
+    }
+
+    public void setRenderingEnabled(boolean enabled) {
+        renderingEnabled = enabled;
+        if (renderer != null) renderer.setRenderingEnabled(enabled);
+    }
+
+    public boolean isRenderingEnabled() {
+        return renderingEnabled;
     }
 
     public com.winlator.cmod.widget.WinlatorHUD getWinlatorHUD() {

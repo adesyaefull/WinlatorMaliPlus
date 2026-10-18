@@ -72,6 +72,7 @@ import com.winlator.cmod.contentdialog.WineD3DConfigDialog;
 import com.winlator.cmod.contents.ContentProfile;
 import com.winlator.cmod.contents.ContentsManager;
 import com.winlator.cmod.contents.AdrenotoolsManager;
+import com.winlator.cmod.contents.WrapperCatalogManager;
 import com.winlator.cmod.core.AppUtils;
 import com.winlator.cmod.core.DefaultVersion;
 import com.winlator.cmod.core.EnvVars;
@@ -181,6 +182,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     public boolean performanceMode = true;
     public boolean presentRR = true;
     private String graphicsDriver = Container.DEFAULT_GRAPHICS_DRIVER;
+    private String activeWrapperName = "Apex-Wrapper";
     private HashMap<String, String> graphicsDriverConfig;
     private String audioDriver = Container.DEFAULT_AUDIO_DRIVER;
     private String emulator = Container.DEFAULT_EMULATOR;
@@ -591,7 +593,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 graphicsDriver = Container.DEFAULT_GRAPHICS_DRIVER;
             }
             graphicsDriverConfig = shortcut.getExtra("graphicsDriverConfig", container.getGraphicsDriverConfig());
-            displayDriver = shortcut.getExtra("displayDriver", container.getDisplayDriver());
+            displayDriver = Container.normalizeDisplayDriver(
+                    shortcut.getExtra("displayDriver", container.getDisplayDriver()));
             displayxConfig = shortcut.getExtra("displayxConfig", container.getDisplayxConfig());
             audioDriver = Container.normalizeAudioDriver(shortcut.getExtra("audioDriver", container.getAudioDriver()));
             emulator = shortcut.getExtra("emulator", container.getEmulator());
@@ -616,6 +619,18 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             Log.d("XServerDisplayActivity", "XInput Disabled from Shortcut: " + xinputDisabledFromShortcut);
         }
 
+        HashMap<String, String> selectedGraphicsConfig =
+                GraphicsDriverConfigDialog.parseGraphicsDriverConfig(graphicsDriverConfig);
+        if (shortcut != null) {
+            String selectedWrapperId = shortcut.getExtra("graphicsWrapperId");
+            if (!selectedWrapperId.isEmpty()) {
+                selectedGraphicsConfig.put("wrapperId", selectedWrapperId);
+                graphicsDriverConfig =
+                        GraphicsDriverConfigDialog.toGraphicsDriverConfig(selectedGraphicsConfig);
+            }
+        }
+        activeWrapperName = WrapperCatalogManager.getInstalledWrapperName(
+                this, selectedGraphicsConfig.getOrDefault("wrapperId", "apex-wrapper"));
         this.displayxConfig = com.winlator.cmod.contentdialog.DisplayXConfigDialog.parseConfig(displayxConfig);
         this.performanceMode = "1".equals(this.displayxConfig.get("performanceMode"));
         this.presentRR = "1".equals(this.displayxConfig.get("presentRR"));
@@ -643,7 +658,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             @Override
             public void onUpdateWindowContentDirect(Window window, Drawable drawable) {
                 if (!winStarted[0] && window != null && window.id != xServer.windowManager.rootWindow.id && window.getWidth() > 10 && window.getHeight() > 10) {
-                    if (xServerView != null) xServerView.getRenderer().setCursorVisible(true);
+                    if (xServerView != null) xServerView.setCursorVisible(true);
                     else if (displayXView != null) displayXView.setCursorVisible(true);
                     preloaderDialog.closeOnUiThread();
                     winStarted[0] = true;
@@ -656,7 +671,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             @Override
             public void onUpdateWindowContent(Window window) {
                 if (!winStarted[0] && window != null && (window.isApplicationWindow() || (window.id != xServer.windowManager.rootWindow.id && window.getWidth() > 10 && window.getHeight() > 10))) {
-                    if (xServerView != null) xServerView.getRenderer().setCursorVisible(true);
+                    if (xServerView != null) xServerView.setCursorVisible(true);
                     else if (displayXView != null) displayXView.setCursorVisible(true);
                     preloaderDialog.closeOnUiThread();
                     winStarted[0] = true;
@@ -674,7 +689,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 // Log the class name of the mapped window
                 Log.d("XServerDisplayActivity", "onMapWindow: Mapping window: " + window.getClassName());
                 if (!winStarted[0] && window != null && window.id != xServer.windowManager.rootWindow.id && window.getWidth() > 10 && window.getHeight() > 10) {
-                    if (xServerView != null) xServerView.getRenderer().setCursorVisible(true);
+                    if (xServerView != null) xServerView.setCursorVisible(true);
                     else if (displayXView != null) displayXView.setCursorVisible(true);
                     preloaderDialog.closeOnUiThread();
                     winStarted[0] = true;
@@ -932,6 +947,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     }
 
     private void exit() {
+        if (xServerView != null) xServerView.prepareForGuestShutdown();
         preloaderDialog.showOnUiThread(R.string.shutdown);
         com.winlator.cmod.perf.PerformanceManager.onGameStop(this);
         Executors.newSingleThreadExecutor().execute(() -> {
@@ -969,6 +985,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     protected void onDestroy() {
         com.winlator.cmod.core.RefreshRateUtils.onActivityDestroyed(this);
         com.winlator.cmod.perf.PerformanceManager.onGameStop(this);
+        if (xServerView != null) xServerView.onDestroy();
         if (displayXView != null) displayXView.onDestroy();
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         if (hudDataSource != null) {
@@ -1054,9 +1071,15 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             case R.id.main_menu_graphics_enhancements:
                 if (xServer.isDisplayX()) {
                     AppUtils.showToast(this, "Screen Effects and Apex FrameGen are disabled in DisplayX mode");
+                } else if (xServerView != null && xServerView.isVulkanRendererActive()) {
+                    AppUtils.showToast(this, "Graphics enhancements are currently available with OpenGL only");
                 } else {
                     new GraphicsEnhancementsDialog(this).show();
                 }
+                drawerLayout.closeDrawers();
+                break;
+            case R.id.main_menu_frame_generation:
+                showFrameGenerationDialog();
                 drawerLayout.closeDrawers();
                 break;
             case R.id.main_menu_performance:
@@ -1112,6 +1135,127 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         dialog.show();
     }
 
+    private void showFrameGenerationDialog() {
+        if (xServerView == null || !xServerView.isVulkanRendererActive()) {
+            AppUtils.showToast(this, "Frame generation requires the Vulkan screen renderer");
+            return;
+        }
+        com.winlator.cmod.renderer.vulkan.VulkanRenderer vkRenderer = xServerView.getVulkanRenderer();
+        if (vkRenderer == null) {
+            AppUtils.showToast(this, "Vulkan renderer is not available");
+            return;
+        }
+
+        final ContentDialog dialog = new ContentDialog(this, R.layout.frame_generation_dialog);
+        dialog.setTitle(R.string.frame_gen_menu);
+        CheckBox enabled = dialog.findViewById(R.id.CBFrameGenEnabled);
+        Spinner engine = dialog.findViewById(R.id.SFrameGenEngine);
+        Spinner multiplier = dialog.findViewById(R.id.SFrameGenMultiplier);
+        View flowScaleSection = dialog.findViewById(R.id.LLFrameGenFlowScale);
+        SeekBar flowScale = dialog.findViewById(R.id.SBFrameGenFlowScale);
+        TextView tvFlowScaleValue = dialog.findViewById(R.id.TVFrameGenFlowScale);
+
+        String selectedEngine = shortcut != null
+                ? shortcut.getExtra("frameGenEngine", container.getExtra("frameGenEngine", "lsfg"))
+                : container.getExtra("frameGenEngine", "lsfg");
+        com.winlator.cmod.ContainerDetailFragment.populateFrameGenEngineSpinner(this, engine, selectedEngine);
+        String savedMultiplier = shortcut != null
+                ? shortcut.getExtra("frameGenMultiplier", container.getExtra("frameGenMultiplier", "2"))
+                : container.getExtra("frameGenMultiplier", "2");
+        String savedFlowScale = shortcut != null
+                ? shortcut.getExtra("frameGenFlowScale", container.getExtra("frameGenFlowScale", "1.0"))
+                : container.getExtra("frameGenFlowScale", "1.0");
+        float initialFlowScale = parseFrameGenFlowScale(savedFlowScale);
+        multiplier.setSelection("4".equals(savedMultiplier) ? 2 : "3".equals(savedMultiplier) ? 1 : 0);
+        flowScale.setProgress(Math.round((initialFlowScale * 100f - 25f) / 5f));
+        tvFlowScaleValue.setText(getString(R.string.frame_gen_flow_scale_value,
+                Math.round(initialFlowScale * 100f)));
+        enabled.setChecked(vkRenderer.isFrameGenArmed());
+        Runnable updateEnabledState = () -> {
+            boolean isEnabled = enabled.isChecked();
+            engine.setEnabled(isEnabled);
+            multiplier.setEnabled(enabled.isChecked());
+            boolean winFgSelected = "winfg".equals(
+                    com.winlator.cmod.ContainerDetailFragment.selectedFrameGenEngine(engine));
+            flowScaleSection.setVisibility(isEnabled && winFgSelected ? View.VISIBLE : View.GONE);
+            flowScale.setEnabled(isEnabled && winFgSelected);
+        };
+        updateEnabledState.run();
+        enabled.setOnCheckedChangeListener((button, checked) -> updateEnabledState.run());
+        engine.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, View view,
+                                       int position, long id) {
+                updateEnabledState.run();
+            }
+
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {
+                updateEnabledState.run();
+            }
+        });
+        flowScale.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                int percentage = 25 + progress * 5;
+                tvFlowScaleValue.setText(getString(R.string.frame_gen_flow_scale_value, percentage));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
+        dialog.setOnConfirmCallback(() -> {
+            boolean arm = enabled.isChecked();
+            String engineId = com.winlator.cmod.ContainerDetailFragment.selectedFrameGenEngine(engine);
+            int multiplierValue = multiplier.getSelectedItemPosition() + 2;
+            float selectedFlowScale = (25 + flowScale.getProgress() * 5) / 100f;
+            if (arm && "lsfg".equals(engineId)) {
+                if (!com.winlator.cmod.core.LsfgNative.isCacheValid(this)) {
+                    AppUtils.showToast(this, "LSFG Native requires a valid imported Lossless.dll");
+                    vkRenderer.setFrameGenArmed(false, multiplierValue);
+                    return;
+                }
+                vkRenderer.setLsfgCachePath(
+                        com.winlator.cmod.core.LsfgNative.cacheFile(this).getAbsolutePath());
+            }
+            vkRenderer.setFrameGenEngine("lsfg".equals(engineId)
+                    ? com.winlator.cmod.renderer.vulkan.VulkanRenderer.FG_ENGINE_LSFG
+                    : com.winlator.cmod.renderer.vulkan.VulkanRenderer.FG_ENGINE_WINFG);
+            vkRenderer.setFrameGenTuning("winfg".equals(engineId) ? selectedFlowScale : 1.0f, 0.0f);
+            vkRenderer.setFrameGenArmed(arm, multiplierValue);
+
+            if (shortcut != null) {
+                shortcut.putExtra("frameGenEnabled", arm ? "1" : "0");
+                shortcut.putExtra("frameGenEngine", engineId);
+                shortcut.putExtra("frameGenMultiplier", String.valueOf(multiplierValue));
+                shortcut.putExtra("frameGenFlowScale", String.valueOf(selectedFlowScale));
+                shortcut.saveData();
+            } else {
+                container.putExtra("frameGenEnabled", arm ? "1" : "0");
+                container.putExtra("frameGenEngine", engineId);
+                container.putExtra("frameGenMultiplier", String.valueOf(multiplierValue));
+                container.putExtra("frameGenFlowScale", String.valueOf(selectedFlowScale));
+                container.saveData();
+            }
+        });
+        dialog.show();
+    }
+
+    private static float parseFrameGenFlowScale(String value) {
+        float flowScale = 1.0f;
+        try {
+            flowScale = Float.parseFloat(value);
+        } catch (NumberFormatException e) {
+            Log.w("WinFG", "Invalid saved flow scale; using 1.0", e);
+        }
+        if (Float.isNaN(flowScale) || Float.isInfinite(flowScale)) flowScale = 1.0f;
+        return Math.max(0.25f, Math.min(1.0f, flowScale));
+    }
+
     private void showHUDConfigDialog() {
         if (container == null || !container.isShowFPS()) {
             AppUtils.showToast(this, "Turn on 'Show FPS' in Container Settings");
@@ -1124,10 +1268,10 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             hudDataSource = new HudDataSource(this);
             frameRating = new WinlatorHUD(this);
             frameRating.setDataSource(hudDataSource);
-            frameRating.setWrapperName(graphicsDriver);
+            frameRating.setWrapperName(activeWrapperName);
             frameRating.setDisplayDriver(xServer.getDisplayDriver());
             xServer.setWinlatorHUD(frameRating);
-            if (renderer != null) renderer.setWinlatorHUD(frameRating);
+            if (xServerView != null) xServerView.setFrameRating(frameRating);
             rootView.addView(frameRating);
 
             if (environment != null) {
@@ -1534,7 +1678,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         // Startup watchdog: guarantees preloader dialog dismisses once environment is running
         handler.postDelayed(() -> {
             if (!isFinishing() && !isDestroyed()) {
-                if (xServerView != null) xServerView.getRenderer().setCursorVisible(true);
+                if (xServerView != null) xServerView.setCursorVisible(true);
                 else if (displayXView != null) displayXView.setCursorVisible(true);
                 preloaderDialog.closeOnUiThread();
             }
@@ -1551,6 +1695,17 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         scriptFile.setExecutable(true);
     }
 
+    private static int toVkPresentMode(String mode) {
+        if (mode == null) return 2;
+        switch (mode.toLowerCase(java.util.Locale.ROOT)) {
+            case "immediate": return 0;
+            case "mailbox": return 1;
+            case "relaxed":
+            case "fifo_relaxed": return 3;
+            default: return 2;
+        }
+    }
+
     private void setupUI() {
         FrameLayout rootView = findViewById(R.id.FLXServerDisplay);
         if (xServer.isDisplayX()) {
@@ -1564,10 +1719,117 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         } else {
             xServerView = new XServerView(this, xServer);
             final GLRenderer renderer = xServerView.getRenderer();
-            renderer.setCursorVisible(false);
+            String rendererId = shortcut != null
+                    ? shortcut.getExtra("renderer", container.getRenderer())
+                    : container.getRenderer();
+            if (!"vulkan".equalsIgnoreCase(rendererId) && !"opengl".equalsIgnoreCase(rendererId)) {
+                Log.w("XServerDisplayActivity", "Unknown host renderer '" + rendererId + "'; using OpenGL");
+                rendererId = Container.RENDERER_OPENGL;
+            }
+            if (Container.RENDERER_VULKAN.equalsIgnoreCase(xServer.getDisplayDriver())
+                    || Container.RENDERER_VULKAN.equalsIgnoreCase(rendererId)) {
+                rendererId = Container.RENDERER_VULKAN;
+                xServer.setDisplayDriver(Container.RENDERER_VULKAN);
+                displayDriver = Container.RENDERER_VULKAN;
+            } else {
+                xServer.setDisplayDriver(Container.RENDERER_OPENGL);
+                displayDriver = Container.RENDERER_OPENGL;
+            }
+            String nativeModeSetting = shortcut != null
+                    ? shortcut.getExtra("rendererNative", container.isRendererNative() ? "1" : "0")
+                    : (container.isRendererNative() ? "1" : "0");
+            String rendererColorOrder = shortcut != null
+                    ? shortcut.getExtra("rendererColorOrder", container.getExtra("rendererColorOrder", "bgra"))
+                    : container.getExtra("rendererColorOrder", "bgra");
+            boolean rendererSwapRB = "rgba".equalsIgnoreCase(rendererColorOrder);
+            boolean nativeMode = "1".equals(nativeModeSetting) && !rendererSwapRB;
+            if (!"1".equals(nativeModeSetting) && !"0".equals(nativeModeSetting)) {
+                Log.w("XServerDisplayActivity", "Invalid Native Rendering setting '" + nativeModeSetting + "'; disabling it");
+                nativeMode = false;
+            }
+            if ("vulkan".equalsIgnoreCase(rendererId)) {
+                xServerView.initVulkanRenderer(nativeMode);
+                com.winlator.cmod.renderer.vulkan.VulkanRenderer vkRenderer = xServerView.getVulkanRenderer();
+                if (vkRenderer != null) {
+                    vkRenderer.setSwapRB(rendererSwapRB);
+                    String presentMode = shortcut != null
+                            ? shortcut.getExtra("rendererPresentMode", container.getExtra("rendererPresentMode", "fifo"))
+                            : container.getExtra("rendererPresentMode", "fifo");
+                    vkRenderer.setVkPresentMode(toVkPresentMode(presentMode));
+                    String rendererDriverId = shortcut != null
+                            ? shortcut.getExtra("rendererDriverId", container.getExtra("rendererDriverId", "system"))
+                            : container.getExtra("rendererDriverId", "system");
+                    if (!rendererDriverId.isEmpty() && !"system".equalsIgnoreCase(rendererDriverId)) {
+                        com.winlator.cmod.contents.AdrenotoolsManager driverManager =
+                                new com.winlator.cmod.contents.AdrenotoolsManager(this);
+                        if (driverManager.enumarateInstalledDrivers().contains(rendererDriverId)) {
+                            String libraryName = driverManager.getLibraryName(rendererDriverId);
+                            if (!libraryName.isEmpty()) {
+                                vkRenderer.setDriverInfo(driverManager.getDriverPath(rendererDriverId),
+                                        libraryName, getApplicationInfo().nativeLibraryDir);
+                            } else {
+                                Log.w("XServerDisplayActivity", "Vulkan driver '" + rendererDriverId
+                                        + "' has no libraryName; using system driver");
+                            }
+                        } else {
+                            Log.w("XServerDisplayActivity", "Vulkan driver '" + rendererDriverId
+                                    + "' is not installed; using system driver");
+                        }
+                    }
+
+                    String frameGenEnabled = shortcut != null
+                            ? shortcut.getExtra("frameGenEnabled", container.getExtra("frameGenEnabled", "0"))
+                            : container.getExtra("frameGenEnabled", "0");
+                    String frameGenEngine = shortcut != null
+                            ? shortcut.getExtra("frameGenEngine", container.getExtra("frameGenEngine", "lsfg"))
+                            : container.getExtra("frameGenEngine", "lsfg");
+                    String frameGenMultiplier = shortcut != null
+                            ? shortcut.getExtra("frameGenMultiplier", container.getExtra("frameGenMultiplier", "2"))
+                            : container.getExtra("frameGenMultiplier", "2");
+                    String frameGenFlowScale = shortcut != null
+                            ? shortcut.getExtra("frameGenFlowScale", container.getExtra("frameGenFlowScale", "1.0"))
+                            : container.getExtra("frameGenFlowScale", "1.0");
+                    boolean frameGenArmed = "1".equals(frameGenEnabled);
+                    int frameGenMultiplierValue = "4".equals(frameGenMultiplier) ? 4
+                            : "3".equals(frameGenMultiplier) ? 3 : 2;
+                    int frameGenEngineValue = "winfg".equalsIgnoreCase(frameGenEngine)
+                            ? com.winlator.cmod.renderer.vulkan.VulkanRenderer.FG_ENGINE_WINFG
+                            : com.winlator.cmod.renderer.vulkan.VulkanRenderer.FG_ENGINE_LSFG;
+                    if (frameGenArmed && frameGenEngineValue
+                            == com.winlator.cmod.renderer.vulkan.VulkanRenderer.FG_ENGINE_LSFG) {
+                        if (com.winlator.cmod.core.LsfgNative.isCacheValid(this)) {
+                            vkRenderer.setLsfgCachePath(
+                                    com.winlator.cmod.core.LsfgNative.cacheFile(this).getAbsolutePath());
+                        } else {
+                            Log.e("XServerDisplayActivity", "LSFG Native requested without a valid Lossless.dll cache");
+                            AppUtils.showToast(this, "LSFG Native is disabled: import a valid Lossless.dll in Settings first");
+                            frameGenArmed = false;
+                        }
+                    }
+                    vkRenderer.setFrameGenEngine(frameGenEngineValue);
+                    vkRenderer.setFrameGenTuning(
+                            frameGenEngineValue == com.winlator.cmod.renderer.vulkan.VulkanRenderer.FG_ENGINE_WINFG
+                                    ? parseFrameGenFlowScale(frameGenFlowScale) : 1.0f,
+                            0.0f);
+                    vkRenderer.setFrameGenArmed(frameGenArmed, frameGenMultiplierValue);
+                }
+            } else if (nativeMode) {
+                Log.w("XServerDisplayActivity", "Native Rendering is only available with the Vulkan screen renderer");
+            }
+            if ("1".equals(shortcut != null
+                    ? shortcut.getExtra("frameGenEnabled", container.getExtra("frameGenEnabled", "0"))
+                    : container.getExtra("frameGenEnabled", "0"))
+                    && !"vulkan".equalsIgnoreCase(rendererId)) {
+                AppUtils.showToast(this, "Frame generation requires the Vulkan screen renderer");
+            }
+            if ("1".equals(nativeModeSetting) && rendererSwapRB) {
+                Log.i("XServerDisplayActivity", "Native Rendering disabled because RGBA output requires Vulkan composition");
+            }
+
+            xServerView.setCursorVisible(false);
 
             if (shortcut != null) {
-                renderer.setUnviewableWMClasses("explorer.exe");
+                xServerView.setUnviewableWMClasses("explorer.exe");
             }
 
             xServer.setRenderer(renderer);
@@ -1615,11 +1877,11 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             hudDataSource = new HudDataSource(this);
             frameRating = new WinlatorHUD(this);
             frameRating.setDataSource(hudDataSource);
-            frameRating.setWrapperName(graphicsDriver);
+            frameRating.setWrapperName(activeWrapperName);
             frameRating.setDisplayDriver(xServer.getDisplayDriver());
 
             xServer.setWinlatorHUD(frameRating);
-            if (xServerView != null) xServerView.getRenderer().setWinlatorHUD(frameRating);
+            if (xServerView != null) xServerView.setFrameRating(frameRating);
             frameRating.enableByUser();
             rootView.addView(frameRating);
         }
@@ -1641,7 +1903,13 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         if (shouldStretch) {
             // Toggle fullscreen mode based on the final decision
             if (displayXView != null) displayXView.toggleFullscreen();
-            else if (xServerView != null) xServerView.getRenderer().toggleFullscreen();
+            else if (xServerView != null) {
+                if (xServerView.isVulkanRendererActive()) {
+                    xServerView.setFullscreenMode(Container.FULLSCREEN_STRETCH);
+                } else {
+                    xServerView.toggleFullscreen();
+                }
+            }
             touchpadView.toggleFullscreen();
         }
 
@@ -1658,7 +1926,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         AppUtils.observeSoftKeyboardVisibility(drawerLayout, (cond) -> {
             if (displayXView != null) displayXView.setScreenOffsetYRelativeToCursor(cond);
-            else if (xServerView != null) xServerView.getRenderer().setScreenOffsetYRelativeToCursor(cond);
+            else if (xServerView != null) xServerView.setScreenOffsetYRelativeToCursor(cond);
         });
     }
 
@@ -1716,6 +1984,10 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 AppUtils.showToast(this, "Screen Effects are not supported in DisplayX mode");
                 return;
             }
+            if (xServerView != null && xServerView.isVulkanRendererActive()) {
+                AppUtils.showToast(this, "Screen Effects are currently available with OpenGL only");
+                return;
+            }
             ScreenEffectDialog screenEffectDialog = new ScreenEffectDialog(this);
             screenEffectDialog.setOnConfirmCallback(() -> {
                 if (xServerView != null) {
@@ -1734,7 +2006,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         dialog.findViewById(R.id.BTToggleFullscreen).setOnClickListener(v -> {
             if (displayXView != null) displayXView.toggleFullscreen();
-            else if (xServerView != null) xServerView.getRenderer().toggleFullscreen();
+            else if (xServerView != null) xServerView.toggleFullscreen();
             touchpadView.toggleFullscreen();
             dialog.dismiss();
         });
@@ -1765,10 +2037,10 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 FrameLayout container = findViewById(R.id.FLXServerDisplay);
                 magnifierView = new MagnifierView(this);
                 magnifierView.setZoomButtonCallback(value -> {
-                    xServerView.getRenderer().setMagnifierZoom(Mathf.clamp(xServerView.getRenderer().getMagnifierZoom() + value, 1.0f, 3.0f));
-                    magnifierView.setZoomValue(xServerView.getRenderer().getMagnifierZoom());
+                    xServerView.setMagnifierZoom(Mathf.clamp(xServerView.getMagnifierZoom() + value, 1.0f, 3.0f));
+                    magnifierView.setZoomValue(xServerView.getMagnifierZoom());
                 });
-                magnifierView.setZoomValue(xServerView.getRenderer().getMagnifierZoom());
+                magnifierView.setZoomValue(xServerView.getMagnifierZoom());
                 magnifierView.setHideButtonCallback(() -> {
                     container.removeView(magnifierView);
                     magnifierView = null;
@@ -2241,12 +2513,26 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         Log.d("XServerDisplayActivity", "Extracting graphics driver files");
         String driverFile = "graphics_driver/wrapper.tzst";
-
-        File internalDriverFile = new File(getFilesDir(), driverFile);
-        if (internalDriverFile.exists()) {
-            TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, internalDriverFile, rootDir);
+        String wrapperId = graphicsDriverConfig.getOrDefault("wrapperId", "apex-wrapper");
+        File selectedWrapper = "apex-wrapper".equals(wrapperId)
+                ? null : WrapperCatalogManager.getInstalledWrapperFile(this, wrapperId);
+        boolean extractedWrapper;
+        if (selectedWrapper != null) {
+            extractedWrapper = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD,
+                    selectedWrapper, rootDir);
         } else {
-            TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, driverFile, rootDir);
+            if (!"apex-wrapper".equals(wrapperId)) {
+                Log.e("GraphicsDriverExtraction", "Selected wrapper is missing: " + wrapperId);
+                AppUtils.showToast(this, R.string.selected_wrapper_missing);
+            }
+            File internalDriverFile = new File(getFilesDir(), driverFile);
+            extractedWrapper = internalDriverFile.exists()
+                    ? TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, internalDriverFile, rootDir)
+                    : TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, driverFile, rootDir);
+        }
+        if (!extractedWrapper) {
+            Log.e("GraphicsDriverExtraction", "Failed to extract selected wrapper " + wrapperId);
+            AppUtils.showToast(this, R.string.selected_wrapper_extract_failed);
         }
 
         String astcTranscode = graphicsDriverConfig.get("astcTranscode");
@@ -2968,7 +3254,3 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }, 500);
     }
 }
-
-
-
-

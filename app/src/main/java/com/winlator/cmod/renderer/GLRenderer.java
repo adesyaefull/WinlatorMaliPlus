@@ -49,6 +49,7 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
     private boolean toggleFullscreen = false;
     public boolean viewportNeedsUpdate = true;
     private boolean cursorVisible = true;
+    private volatile boolean renderingEnabled = true;
     private boolean screenOffsetYRelativeToCursor = false;
     private String[] unviewableWMClasses = null;
     private float magnifierZoom = 1.0f;
@@ -134,6 +135,8 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
 
     @Override
     public void onDrawFrame(GL10 gl) {
+        if (!renderingEnabled) return;
+
         boolean isApex = ApexNativeBridge.nativeIsActive();
         int fpsLimit = isApex ? ApexNativeBridge.nativeGetTargetFPS() : 0;
 
@@ -196,6 +199,11 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
         if (xServer != null && xServer.getFpsLimit() != fpsLimit) {
             xServer.setFpsLimit(fpsLimit);
         }
+    }
+
+    public void setRenderingEnabled(boolean enabled) {
+        renderingEnabled = enabled;
+        if (enabled) xServerView.requestRender();
     }
 
     public int getFpsLimit() {

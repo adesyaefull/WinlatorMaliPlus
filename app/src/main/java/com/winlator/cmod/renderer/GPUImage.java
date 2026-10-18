@@ -52,7 +52,7 @@ public class GPUImage extends Texture {
             imageKHRPtr = createImageKHR(hardwareBufferPtr, textureId);
             if (imageKHRPtr == 0) {
                 System.err.println("Error: Failed to create EGL image");
-                destroyHardwareBuffer(hardwareBufferPtr);
+                releaseHardwareBuffer();
                 hardwareBufferPtr = 0;
             }
         }
@@ -77,6 +77,19 @@ public class GPUImage extends Texture {
         return virtualData;
     }
 
+    public void lock() {
+        if (hardwareBufferPtr != 0 && virtualData == null) {
+            virtualData = lockHardwareBuffer(hardwareBufferPtr);
+        }
+    }
+
+    public int unlock() {
+        if (hardwareBufferPtr == 0 || virtualData == null) return -1;
+        int fenceFd = unlockHardwareBuffer(hardwareBufferPtr);
+        virtualData = null;
+        return fenceFd;
+    }
+
     @Override
     public void destroy() {
         if (imageKHRPtr != 0) {
@@ -84,11 +97,19 @@ public class GPUImage extends Texture {
             imageKHRPtr = 0;
         }
         if (hardwareBufferPtr != 0) {
-            destroyHardwareBuffer(hardwareBufferPtr);
+            releaseHardwareBuffer();
             hardwareBufferPtr = 0;
         }
         virtualData = null;
         super.destroy();
+    }
+
+    private void releaseHardwareBuffer() {
+        if (virtualData != null) {
+            unlockHardwareBufferForRelease(hardwareBufferPtr);
+            virtualData = null;
+        }
+        destroyHardwareBuffer(hardwareBufferPtr);
     }
 
     public static boolean isSupported() {
@@ -108,6 +129,10 @@ public class GPUImage extends Texture {
     private native long createHardwareBuffer(short width, short height);
 
     private native void destroyHardwareBuffer(long hardwareBufferPtr);
+
+    private native int unlockHardwareBuffer(long hardwareBufferPtr);
+
+    private native void unlockHardwareBufferForRelease(long hardwareBufferPtr);
 
     private native ByteBuffer lockHardwareBuffer(long hardwareBufferPtr);
 

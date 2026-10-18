@@ -7,7 +7,6 @@ import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
-import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.RadialGradient;
 import android.graphics.Rect;
@@ -15,8 +14,6 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.util.Log;
-
-import androidx.palette.graphics.Palette;
 
 import com.winlator.cmod.core.FileUtils;
 import com.winlator.cmod.core.ImageUtils;
@@ -52,6 +49,7 @@ public class Shortcut {
 
     private static final String COVER_ART_DIR = "app_data/cover_arts/";
     private static final String FALLBACK_COVER_ART_DIR = "app_data/fallback_cover_arts/";
+    private static final String FALLBACK_COVER_ART_VERSION = "2";
 
     private static final ExecutorService backgroundExecutor = Executors.newFixedThreadPool(4);
 
@@ -163,120 +161,57 @@ public class Shortcut {
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
 
-        int dominantColor = Color.parseColor("#121212");
-        int darkColor = Color.parseColor("#050505");
-        int vibrantColor = Color.parseColor("#1A237E");
-
-        if (icon != null) {
-            try {
-                Palette palette = Palette.from(icon).generate();
-                vibrantColor = palette.getVibrantColor(vibrantColor);
-                vibrantColor = palette.getLightVibrantColor(vibrantColor);
-                vibrantColor = palette.getDominantColor(vibrantColor);
-
-                float[] hsv = new float[3];
-                Color.colorToHSV(vibrantColor, hsv);
-                hsv[1] = Math.min(hsv[1], 0.6f);
-                hsv[2] *= 0.15f;
-                dominantColor = Color.HSVToColor(hsv);
-            } catch (Exception ignored) {}
-        } else {
-            int paletteIdx = Math.abs(this.name.hashCode()) % AAA_PALETTES.length;
-            vibrantColor = AAA_PALETTES[paletteIdx][1];
-            dominantColor = AAA_PALETTES[paletteIdx][0];
-            float[] hsv = new float[3];
-            Color.colorToHSV(vibrantColor, hsv);
-            hsv[1] = Math.min(hsv[1], 0.6f);
-            hsv[2] *= 0.15f;
-            dominantColor = Color.HSVToColor(hsv);
-        }
+        int paletteIdx = Math.floorMod(this.name.hashCode(), AAA_PALETTES.length);
+        int vibrantColor = AAA_PALETTES[paletteIdx][1];
+        int dominantColor = AAA_PALETTES[paletteIdx][0];
+        int darkColor = AAA_PALETTES[paletteIdx][2];
+        float[] hsv = new float[3];
+        Color.colorToHSV(vibrantColor, hsv);
+        hsv[1] = Math.min(hsv[1], 0.6f);
+        hsv[2] *= 0.15f;
+        dominantColor = Color.HSVToColor(hsv);
 
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
         Shader gradient = new LinearGradient(0, 0, 0, height, dominantColor, darkColor, Shader.TileMode.CLAMP);
         paint.setShader(gradient);
         canvas.drawRect(0, 0, width, height, paint);
 
-        if (icon != null) {
-            Bitmap blurredIcon = Bitmap.createScaledBitmap(icon, 256, 256, true);
-            Matrix matrix = new Matrix();
-            float scale = Math.max((float)width / 256, (float)height / 256) * 1.5f;
-            matrix.postScale(scale, scale);
-            matrix.postTranslate((width - 256 * scale) * 0.4f, (height - 256 * scale) * 0.3f);
+        float centerX = width / 2.0f;
+        float centerY = height * 0.42f;
+        float badgeRadius = width * 0.22f;
 
-            Paint iconPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
-            iconPaint.setAlpha(100);
-            canvas.drawBitmap(blurredIcon, matrix, iconPaint);
+        Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        shadowPaint.setColor(vibrantColor);
+        shadowPaint.setAlpha(90);
+        shadowPaint.setMaskFilter(new BlurMaskFilter(width * 0.16f, BlurMaskFilter.Blur.NORMAL));
+        canvas.drawCircle(centerX, centerY, badgeRadius * 1.25f, shadowPaint);
 
-            Paint overlayPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            overlayPaint.setColor(vibrantColor);
-            overlayPaint.setAlpha(20);
-            canvas.drawRect(0, 0, width, height, overlayPaint);
-        }
+        Paint blackShadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        blackShadowPaint.setColor(Color.BLACK);
+        blackShadowPaint.setAlpha(160);
+        blackShadowPaint.setMaskFilter(new BlurMaskFilter(width * 0.05f, BlurMaskFilter.Blur.NORMAL));
+        canvas.drawCircle(centerX, centerY + 20, badgeRadius * 1.1f, blackShadowPaint);
 
-        if (icon != null) {
-            float minDim = Math.min(width, height);
-            int iconSize = (int)(minDim * 0.72f);
-            int originalWidth = icon.getWidth();
-            int originalHeight = icon.getHeight();
-            float iconScale = Math.min((float)iconSize / originalWidth, (float)iconSize / originalHeight);
-            int scaledWidth = (int)(originalWidth * iconScale);
-            int scaledHeight = (int)(originalHeight * iconScale);
+        Paint corePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        corePaint.setColor(0xEE141A26);
+        canvas.drawCircle(centerX, centerY, badgeRadius, corePaint);
 
-            Bitmap scaledIcon = Bitmap.createScaledBitmap(icon, scaledWidth, scaledHeight, true);
-            int left = (width - scaledWidth) / 2;
-            int top = (height - scaledHeight) / 2 - (int)(0.12f * height);
+        Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        ringPaint.setStyle(Paint.Style.STROKE);
+        ringPaint.setStrokeWidth(4.0f);
+        ringPaint.setColor(vibrantColor);
+        canvas.drawCircle(centerX, centerY, badgeRadius, ringPaint);
 
-            Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            shadowPaint.setColor(vibrantColor);
-            shadowPaint.setAlpha(90);
-            shadowPaint.setMaskFilter(new BlurMaskFilter(width * 0.16f, BlurMaskFilter.Blur.NORMAL));
-            canvas.drawCircle(width / 2.0f, top + scaledHeight / 2.0f, scaledWidth * 0.62f, shadowPaint);
-
-            Paint blackShadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            blackShadowPaint.setColor(Color.BLACK);
-            blackShadowPaint.setAlpha(160);
-            blackShadowPaint.setMaskFilter(new BlurMaskFilter(width * 0.05f, BlurMaskFilter.Blur.NORMAL));
-            canvas.drawCircle(width / 2.0f, top + scaledHeight / 2.0f + 20, scaledWidth * 0.55f, blackShadowPaint);
-
-            canvas.drawBitmap(scaledIcon, left, top, new Paint(Paint.FILTER_BITMAP_FLAG));
-        } else {
-            float centerX = width / 2.0f;
-            float centerY = height * 0.42f;
-            float badgeRadius = width * 0.22f;
-
-            Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            shadowPaint.setColor(vibrantColor);
-            shadowPaint.setAlpha(90);
-            shadowPaint.setMaskFilter(new BlurMaskFilter(width * 0.16f, BlurMaskFilter.Blur.NORMAL));
-            canvas.drawCircle(centerX, centerY, badgeRadius * 1.25f, shadowPaint);
-
-            Paint blackShadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            blackShadowPaint.setColor(Color.BLACK);
-            blackShadowPaint.setAlpha(160);
-            blackShadowPaint.setMaskFilter(new BlurMaskFilter(width * 0.05f, BlurMaskFilter.Blur.NORMAL));
-            canvas.drawCircle(centerX, centerY + 20, badgeRadius * 1.1f, blackShadowPaint);
-
-            Paint corePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            corePaint.setColor(0xEE141A26);
-            canvas.drawCircle(centerX, centerY, badgeRadius, corePaint);
-
-            Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            ringPaint.setStyle(Paint.Style.STROKE);
-            ringPaint.setStrokeWidth(4.0f);
-            ringPaint.setColor(vibrantColor);
-            canvas.drawCircle(centerX, centerY, badgeRadius, ringPaint);
-
-            String initials = extractInitials(this.name);
-            Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            textPaint.setColor(Color.WHITE);
-            textPaint.setTextSize(badgeRadius * 0.85f);
-            textPaint.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD));
-            textPaint.setTextAlign(Paint.Align.CENTER);
-            textPaint.setShadowLayer(10f, 0, 4f, 0xCC000000);
-            Paint.FontMetrics fm = textPaint.getFontMetrics();
-            float textY = centerY - (fm.ascent + fm.descent) / 2f;
-            canvas.drawText(initials, centerX, textY, textPaint);
-        }
+        String initials = extractInitials(this.name);
+        Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        textPaint.setColor(Color.WHITE);
+        textPaint.setTextSize(badgeRadius * 0.85f);
+        textPaint.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD));
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setShadowLayer(10f, 0, 4f, 0xCC000000);
+        Paint.FontMetrics fm = textPaint.getFontMetrics();
+        float textY = centerY - (fm.ascent + fm.descent) / 2f;
+        canvas.drawText(initials, centerX, textY, textPaint);
 
         Random random = new Random(this.name != null ? this.name.hashCode() : 42);
         Paint starPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -290,7 +225,6 @@ public class Shortcut {
         vignettePaint.setShader(new RadialGradient(width / 2.0f, height * 0.4f, height * 0.9f, Color.TRANSPARENT, Color.parseColor("#A6000000"), Shader.TileMode.CLAMP));
         canvas.drawRect(0, 0, width, height, vignettePaint);
 
-        float[] hsv = new float[3];
         Color.colorToHSV(vibrantColor, hsv);
         hsv[2] *= 0.04f;
         int bottomColor = Color.HSVToColor(255, hsv);
@@ -383,9 +317,12 @@ public class Shortcut {
                 changed = true;
             } else {
                 File fallbackFile = new File(new File(container.getRootDir(), FALLBACK_COVER_ART_DIR), this.name + ".png");
-                if (!fallbackFile.exists()) {
+                if (!FALLBACK_COVER_ART_VERSION.equals(getExtra("fallbackCoverArtVersion"))
+                        || !fallbackFile.exists()) {
                     this.fallbackCoverArt = generateFallbackCoverArt(600, 900);
                     saveFallbackCoverArt(this.fallbackCoverArt);
+                    putExtra("fallbackCoverArtVersion", FALLBACK_COVER_ART_VERSION);
+                    saveData();
                     changed = true;
                 } else if (this.fallbackCoverArt == null) {
                     this.fallbackCoverArt = BitmapFactory.decodeFile(fallbackFile.getPath());

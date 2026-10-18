@@ -20,14 +20,37 @@
     </string-array>
     <string-array name="display_driver_entries">
         <item>OpenGL</item>
-        <item>DisplayX</item>
+        <item>Vulkan</item>
+    </string-array>
+    <string-array name="host_renderer_entries">
+        <item>OpenGL</item>
+        <item>Vulkan</item>
+    </string-array>
+    <string-array name="renderer_color_entries">
+        <item>BGRA (default)</item>
+        <item>RGBA (swap red/blue)</item>
+    </string-array>
+    <string-array name="renderer_present_mode_entries">
+        <item>FIFO (VSync)</item>
+        <item>Mailbox (low latency)</item>
+        <item>Immediate (tearing possible)</item>
+        <item>FIFO relaxed</item>
+    </string-array>
+    <string-array name="frame_gen_engine_entries">
+        <item>LSFG Native (Lossless.dll)</item>
+        <item>Win-FG Native</item>
+    </string-array>
+    <string-array name="frame_gen_multiplier_entries">
+        <item>2x</item>
+        <item>3x</item>
+        <item>4x</item>
     </string-array>
     <string-array name="surface_format_entries">
         <item>rgba8</item>
         <item>bgra8</item>
     </string-array>
     <string-array name="graphics_driver_entries">
-        <item>Wrapper</item>
+        <item>Apex-Wrapper</item>
     </string-array>
     <string-array name="wrapper_graphics_driver_version_entries">
         <item>System</item>

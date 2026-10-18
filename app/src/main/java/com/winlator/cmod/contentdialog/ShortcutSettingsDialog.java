@@ -108,7 +108,8 @@ public class ShortcutSettingsDialog extends ContentDialog {
 
         final Spinner sDisplayDriver = findViewById(R.id.SDisplayDriver);
         ContainerDetailFragment.updateDisplayDriverSpinner(context, sDisplayDriver);
-        String currentDisplayDriver = shortcut.getExtra("displayDriver", shortcut.container.getDisplayDriver());
+        String currentDisplayDriver = com.winlator.cmod.container.Container.normalizeDisplayDriver(
+                shortcut.getExtra("displayDriver", shortcut.container.getDisplayDriver()));
         AppUtils.setSpinnerSelectionFromIdentifier(sDisplayDriver, currentDisplayDriver);
 
         final View vDisplayDriverConfig = findViewById(R.id.BTDisplayDriverConfig);
@@ -155,6 +156,14 @@ public class ShortcutSettingsDialog extends ContentDialog {
 
         final View vGraphicsDriverConfig = findViewById(R.id.BTGraphicsDriverConfig);
         vGraphicsDriverConfig.setTag(shortcut.getExtra("graphicsDriverConfig", shortcut.container.getGraphicsDriverConfig()));
+        java.util.HashMap<String, String> savedGraphicsDriverConfig =
+                GraphicsDriverConfigDialog.parseGraphicsDriverConfig(
+                        vGraphicsDriverConfig.getTag().toString());
+        String savedWrapperId = shortcut.getExtra("graphicsWrapperId",
+                savedGraphicsDriverConfig.getOrDefault("wrapperId", "apex-wrapper"));
+        savedGraphicsDriverConfig.put("wrapperId", savedWrapperId);
+        vGraphicsDriverConfig.setTag(
+                GraphicsDriverConfigDialog.toGraphicsDriverConfig(savedGraphicsDriverConfig));
 
         findViewById(R.id.BTBCNConfig).setOnClickListener(v -> new BCNConfigDialog(vGraphicsDriverConfig).show());
         View vBCNRow = findViewById(R.id.LLBCNConfigRow);
@@ -239,6 +248,88 @@ public class ShortcutSettingsDialog extends ContentDialog {
         boolean fullscreenStretched = shortcut.getExtra("fullscreenStretched", "0").equals("1");
         cbFullscreenStretched.setChecked(fullscreenStretched);
 
+        final Spinner sHostRenderer = findViewById(R.id.SHostRenderer);
+        String currentHostRenderer = shortcut.getExtra("renderer", shortcut.container.getRenderer());
+        sHostRenderer.setSelection("vulkan".equalsIgnoreCase(currentHostRenderer) ? 1 : 0);
+        sDisplayDriver.setSelection(sHostRenderer.getSelectedItemPosition());
+        View btConfigureVulkanRenderer = findViewById(R.id.BTConfigureVulkanRenderer);
+        View llVulkanRendererSettings = findViewById(R.id.LLVulkanRendererSettings);
+        btConfigureVulkanRenderer.setOnClickListener(v ->
+                llVulkanRendererSettings.setVisibility(llVulkanRendererSettings.getVisibility() == View.VISIBLE
+                        ? View.GONE : View.VISIBLE));
+        final CheckBox cbRendererNative = findViewById(R.id.CBRendererNative);
+        cbRendererNative.setChecked(shortcut.getExtra("rendererNative", shortcut.container.isRendererNative() ? "1" : "0").equals("1"));
+        final Spinner sRendererColorOrder = findViewById(R.id.SRendererColorOrder);
+        String rendererColorOrder = shortcut.getExtra("rendererColorOrder",
+                shortcut.container.getExtra("rendererColorOrder", "bgra"));
+        sRendererColorOrder.setSelection("rgba".equalsIgnoreCase(rendererColorOrder) ? 1 : 0);
+        final Spinner sRendererPresentMode = findViewById(R.id.SRendererPresentMode);
+        String rendererPresentMode = shortcut.getExtra("rendererPresentMode",
+                shortcut.container.getExtra("rendererPresentMode", "fifo"));
+        sRendererPresentMode.setSelection(ContainerDetailFragment.rendererPresentModePosition(rendererPresentMode));
+        final Spinner sRendererDriver = findViewById(R.id.SRendererDriver);
+        String rendererDriverId = shortcut.getExtra("rendererDriverId",
+                shortcut.container.getExtra("rendererDriverId", "system"));
+        ContainerDetailFragment.populateRendererDriverSpinner(context, sRendererDriver, rendererDriverId);
+        CheckBox cbFrameGenEnabled = findViewById(R.id.CBFrameGenEnabled);
+        cbFrameGenEnabled.setChecked("1".equals(shortcut.getExtra("frameGenEnabled",
+                shortcut.container.getExtra("frameGenEnabled", "0"))));
+        Spinner sFrameGenEngine = findViewById(R.id.SFrameGenEngine);
+        String frameGenEngine = shortcut.getExtra("frameGenEngine",
+                shortcut.container.getExtra("frameGenEngine", "lsfg"));
+        ContainerDetailFragment.populateFrameGenEngineSpinner(context, sFrameGenEngine, frameGenEngine);
+        Spinner sFrameGenMultiplier = findViewById(R.id.SFrameGenMultiplier);
+        String frameGenMultiplier = shortcut.getExtra("frameGenMultiplier",
+                shortcut.container.getExtra("frameGenMultiplier", "2"));
+        sFrameGenMultiplier.setSelection("4".equals(frameGenMultiplier) ? 2 : "3".equals(frameGenMultiplier) ? 1 : 0);
+        Runnable updateRendererControls = () -> {
+            String selectedDriver = sDisplayDriver.getSelectedItem() == null ? ""
+                    : StringUtils.parseIdentifier(sDisplayDriver.getSelectedItem().toString());
+            boolean vulkan = "vulkan".equals(selectedDriver);
+            boolean rgba = sRendererColorOrder.getSelectedItemPosition() == 1;
+            cbRendererNative.setEnabled(vulkan && !rgba);
+            sRendererColorOrder.setEnabled(vulkan);
+            sRendererPresentMode.setEnabled(vulkan);
+            sRendererDriver.setEnabled(vulkan);
+            btConfigureVulkanRenderer.setVisibility(vulkan ? View.VISIBLE : View.GONE);
+            llVulkanRendererSettings.setVisibility(vulkan ? View.VISIBLE : View.GONE);
+            cbFrameGenEnabled.setEnabled(vulkan);
+            sFrameGenEngine.setEnabled(vulkan && cbFrameGenEnabled.isChecked());
+            sFrameGenMultiplier.setEnabled(vulkan && cbFrameGenEnabled.isChecked());
+            if (!vulkan || rgba) cbRendererNative.setChecked(false);
+            if (!vulkan) cbFrameGenEnabled.setChecked(false);
+        };
+        updateRendererControls.run();
+        cbFrameGenEnabled.setOnCheckedChangeListener((buttonView, checked) -> updateRendererControls.run());
+        sHostRenderer.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                if (sDisplayDriver.getSelectedItemPosition() != position) sDisplayDriver.setSelection(position);
+                updateRendererControls.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        sDisplayDriver.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                if (sHostRenderer.getSelectedItemPosition() != position) sHostRenderer.setSelection(position);
+                updateRendererControls.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        sRendererColorOrder.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                updateRendererControls.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
         final Spinner sBox64Preset = findViewById(R.id.SBox64Preset);
         Box64PresetManager.loadSpinner("box64", sBox64Preset, shortcut.getExtra("box64Preset", shortcut.container.getBox64Preset()));
 
@@ -427,8 +518,16 @@ public class ShortcutSettingsDialog extends ContentDialog {
             boolean renamingSuccess = !nameChanged || new File(shortcut.file.getParent(), name + ".desktop").exists();
 
             if (renamingSuccess) {
-                String graphicsDriver = StringUtils.parseIdentifier(sGraphicsDriver.getSelectedItem());
+                String graphicsDriver = ContainerDetailFragment.selectedGraphicsDriverIdentifier(
+                        sGraphicsDriver.getSelectedItem());
                 String graphicsDriverConfig = vGraphicsDriverConfig.getTag().toString();
+                java.util.HashMap<String, String> graphicsDriverSettings =
+                        GraphicsDriverConfigDialog.parseGraphicsDriverConfig(graphicsDriverConfig);
+                String selectedWrapperId = graphicsDriverSettings.getOrDefault("wrapperId",
+                        ContainerDetailFragment.selectedGraphicsWrapperId(sGraphicsDriver));
+                graphicsDriverSettings.put("wrapperId", selectedWrapperId);
+                graphicsDriverConfig =
+                        GraphicsDriverConfigDialog.toGraphicsDriverConfig(graphicsDriverSettings);
                 String dxwrapper = StringUtils.parseIdentifier(sDXWrapper.getSelectedItem());
                 String dxwrapperConfig = vDXWrapperConfig.getTag().toString();
                 String audioDriver = StringUtils.parseIdentifier(sAudioDriver.getSelectedItem());
@@ -446,10 +545,11 @@ public class ShortcutSettingsDialog extends ContentDialog {
                 String execArgs = etExecArgs.getText().toString();
                 shortcut.putExtra("execArgs", !execArgs.isEmpty() ? execArgs : null);
                 shortcut.putExtra("screenSize", screenSize);
-                shortcut.putExtra("displayDriver", com.winlator.cmod.core.StringUtils.parseIdentifier(sDisplayDriver.getSelectedItem()));
+                shortcut.putExtra("displayDriver", sHostRenderer.getSelectedItemPosition() == 1 ? "vulkan" : "opengl");
                 shortcut.putExtra("displayxConfig", vDisplayDriverConfig.getTag() != null ? vDisplayDriverConfig.getTag().toString() : DisplayXConfigDialog.DEFAULT_CONFIG);
                 shortcut.putExtra("graphicsDriver", graphicsDriver);
                 shortcut.putExtra("graphicsDriverConfig", graphicsDriverConfig);
+                shortcut.putExtra("graphicsWrapperId", selectedWrapperId);
                 shortcut.putExtra("dxwrapper", dxwrapper);
                 shortcut.putExtra("dxwrapperConfig", dxwrapperConfig);
                 shortcut.putExtra("audioDriver", audioDriver);
@@ -458,6 +558,37 @@ public class ShortcutSettingsDialog extends ContentDialog {
                 shortcut.putExtra("lc_all", lc_all);
 
                 shortcut.putExtra("fullscreenStretched", cbFullscreenStretched.isChecked() ? "1" : null);
+                String hostRenderer = sHostRenderer.getSelectedItemPosition() == 1 ? "vulkan" : "opengl";
+                shortcut.putExtra("renderer", hostRenderer.equals(shortcut.container.getRenderer()) ? null : hostRenderer);
+                String rendererColorOrderToSave = sRendererColorOrder.getSelectedItemPosition() == 1 ? "rgba" : "bgra";
+                String containerColorOrder = shortcut.container.getExtra("rendererColorOrder", "bgra");
+                shortcut.putExtra("rendererColorOrder",
+                        rendererColorOrderToSave.equals(containerColorOrder) ? null : rendererColorOrderToSave);
+                String rendererPresentModeToSave = ContainerDetailFragment.rendererPresentModeId(
+                        sRendererPresentMode.getSelectedItemPosition());
+                String containerPresentMode = shortcut.container.getExtra("rendererPresentMode", "fifo");
+                shortcut.putExtra("rendererPresentMode",
+                        rendererPresentModeToSave.equals(containerPresentMode) ? null : rendererPresentModeToSave);
+                String rendererDriverIdToSave = ContainerDetailFragment.selectedRendererDriverId(sRendererDriver);
+                String containerDriverId = shortcut.container.getExtra("rendererDriverId", "system");
+                shortcut.putExtra("rendererDriverId",
+                        rendererDriverIdToSave.equals(containerDriverId) ? null : rendererDriverIdToSave);
+                boolean rendererNative = "vulkan".equals(hostRenderer)
+                        && !"rgba".equals(rendererColorOrderToSave) && cbRendererNative.isChecked();
+                boolean containerRendererNative = shortcut.container.isRendererNative();
+                shortcut.putExtra("rendererNative", rendererNative == containerRendererNative ? null : (rendererNative ? "1" : "0"));
+                String frameGenEnabled = cbFrameGenEnabled.isChecked() ? "1" : "0";
+                String containerFrameGenEnabled = shortcut.container.getExtra("frameGenEnabled", "0");
+                shortcut.putExtra("frameGenEnabled",
+                        frameGenEnabled.equals(containerFrameGenEnabled) ? null : frameGenEnabled);
+                String frameGenEngineToSave = ContainerDetailFragment.selectedFrameGenEngine(sFrameGenEngine);
+                String containerFrameGenEngine = shortcut.container.getExtra("frameGenEngine", "lsfg");
+                shortcut.putExtra("frameGenEngine",
+                        frameGenEngineToSave.equals(containerFrameGenEngine) ? null : frameGenEngineToSave);
+                String frameGenMultiplierToSave = String.valueOf(sFrameGenMultiplier.getSelectedItemPosition() + 2);
+                String containerFrameGenMultiplier = shortcut.container.getExtra("frameGenMultiplier", "2");
+                shortcut.putExtra("frameGenMultiplier",
+                        frameGenMultiplierToSave.equals(containerFrameGenMultiplier) ? null : frameGenMultiplierToSave);
 
                 String wincomponents = containerDetailFragment.getWinComponents(getContentView());
                 shortcut.putExtra("wincomponents", wincomponents);
@@ -654,11 +785,23 @@ public class ShortcutSettingsDialog extends ContentDialog {
         final Context context = sGraphicsDriver.getContext();
         
         ContainerDetailFragment.updateGraphicsDriverSpinner(context, sGraphicsDriver);
+        java.util.HashMap<String, String> initialConfig =
+                GraphicsDriverConfigDialog.parseGraphicsDriverConfig(vGraphicsDriverConfig.getTag().toString());
+        String initialWrapperId = initialConfig.getOrDefault("wrapperId", "apex-wrapper");
+        ContainerDetailFragment.selectGraphicsWrapper(
+                sGraphicsDriver, initialWrapperId);
         
         final String[] dxwrapperEntries = context.getResources().getStringArray(R.array.dxwrapper_entries);
         
-        Runnable update = () -> {
-            String graphicsDriver = StringUtils.parseIdentifier(sGraphicsDriver.getSelectedItem());
+        java.util.function.Consumer<String> update = wrapperId -> {
+            String graphicsDriver = ContainerDetailFragment.selectedGraphicsDriverIdentifier(
+                    sGraphicsDriver.getSelectedItem());
+            java.util.HashMap<String, String> currentConfig =
+                    GraphicsDriverConfigDialog.parseGraphicsDriverConfig(
+                            vGraphicsDriverConfig.getTag().toString());
+            currentConfig.put("wrapperId", wrapperId);
+            vGraphicsDriverConfig.setTag(
+                    GraphicsDriverConfigDialog.toGraphicsDriverConfig(currentConfig));
             String graphicsDriverConfig = vGraphicsDriverConfig.getTag().toString();
 
             tvGraphicsDriverVersion.setText(GraphicsDriverConfigDialog.getVersion(graphicsDriverConfig));
@@ -675,17 +818,42 @@ public class ShortcutSettingsDialog extends ContentDialog {
             AppUtils.setSpinnerSelectionFromIdentifier(sDXWrapper, selectedDXWrapper);
         };
 
-        sGraphicsDriver.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        final boolean[] initializingWrapperSelection = {true};
+        AdapterView.OnItemSelectedListener graphicsDriverSelectionListener =
+                new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                update.run();
+                if (initializingWrapperSelection[0]) return;
+                Object item = parent.getItemAtPosition(position);
+                if (item instanceof ContainerDetailFragment.GraphicsDriverChoice) {
+                    update.accept(((ContainerDetailFragment.GraphicsDriverChoice) item).wrapperId);
+                }
             }
 
             @Override
             public void onNothingSelected(AdapterView<?> parent) {}
+        };
+        sGraphicsDriver.setOnItemSelectedListener(graphicsDriverSelectionListener);
+        sGraphicsDriver.setOnTouchListener((spinnerView, event) -> {
+            if (event.getAction() == android.view.MotionEvent.ACTION_DOWN) {
+                String selectedWrapperId =
+                        ContainerDetailFragment.selectedGraphicsWrapperId(sGraphicsDriver);
+                sGraphicsDriver.setOnItemSelectedListener(null);
+                ContainerDetailFragment.updateGraphicsDriverSpinner(context, sGraphicsDriver);
+                ContainerDetailFragment.selectGraphicsWrapper(sGraphicsDriver, selectedWrapperId);
+                sGraphicsDriver.setOnItemSelectedListener(graphicsDriverSelectionListener);
+                update.accept(selectedWrapperId);
+            }
+            return false;
         });
 
-        AppUtils.setSpinnerSelectionFromIdentifier(sGraphicsDriver, selectedGraphicsDriver);
-        update.run();
+        if (!com.winlator.cmod.container.Container.DEFAULT_GRAPHICS_DRIVER.equals(selectedGraphicsDriver)) {
+            AppUtils.setSpinnerSelectionFromIdentifier(sGraphicsDriver, selectedGraphicsDriver);
+        }
+        sGraphicsDriver.post(() -> {
+            ContainerDetailFragment.selectGraphicsWrapper(sGraphicsDriver, initialWrapperId);
+            update.accept(initialWrapperId);
+            initializingWrapperSelection[0] = false;
+        });
     }
 }

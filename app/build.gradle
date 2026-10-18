@@ -88,7 +88,7 @@ android {
     buildToolsVersion "35.0.0"
 
     defaultConfig {
-        applicationId "com.winlator.cmod"
+        applicationId "com.winlator.mali.plus"
         minSdkVersion 26
         // We’re preserving Winlator’s request to keep targetSdkVersion at 28
         targetSdkVersion 28
@@ -165,18 +165,23 @@ android {
     productFlavors {
         standard {
             dimension "version"
-            applicationId "com.winlator.mali"
-            resValue "string", "app_name", "Winlator Mali"
+            applicationId "com.winlator.mali.plus"
+            resValue "string", "app_name", "Winlator Mali+"
         }
         ludashi {
             dimension "version"
-            applicationId "com.ludashi.benchmark"
-            resValue "string", "app_name", "Winlator Mali Ludashi"
+            applicationId "com.ludasi.benchmark"
+            resValue "string", "app_name", "Winlator Mali+"
         }
         antutu {
             dimension "version"
             applicationId "com.antutu.ABenchMark"
-            resValue "string", "app_name", "Winlator Mali AnTuTu"
+            resValue "string", "app_name", "Winlator Mali+"
+        }
+        futuremark {
+            dimension "version"
+            applicationId "com.futuremark.dmandroid.application"
+            resValue "string", "app_name", "Winlator Mali+"
         }
     }
 
@@ -228,6 +233,3 @@ dependencies {
     implementation 'com.caverock:androidsvg-aar:1.4'
     annotationProcessor 'com.github.bumptech.glide:compiler:4.11.0'
 }
-
-
-

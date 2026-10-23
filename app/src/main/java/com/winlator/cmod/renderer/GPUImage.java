@@ -55,9 +55,25 @@ public class GPUImage {
         return virtualData;
     }
 
+    public void lock() {
+        if (hardwareBufferPtr != 0 && virtualData == null) {
+            virtualData = lockHardwareBuffer(hardwareBufferPtr);
+        }
+    }
+
+    public int unlock() {
+        if (hardwareBufferPtr == 0 || virtualData == null) return -1;
+        int fenceFd = unlockHardwareBuffer(hardwareBufferPtr);
+        virtualData = null;
+        return fenceFd;
+    }
+
     /** Releases this reference; the native renderer keeps its own EGLImage reference until it drops the texture. */
     public void destroy() {
         if (hardwareBufferPtr != 0) {
+            if (virtualData != null) {
+                unlockHardwareBufferForRelease(hardwareBufferPtr);
+            }
             destroyHardwareBuffer(hardwareBufferPtr);
             hardwareBufferPtr = 0;
         }
@@ -69,6 +85,10 @@ public class GPUImage {
     private native long createHardwareBuffer(short width, short height);
 
     private native void destroyHardwareBuffer(long hardwareBufferPtr);
+
+    private native int unlockHardwareBuffer(long hardwareBufferPtr);
+
+    private native void unlockHardwareBufferForRelease(long hardwareBufferPtr);
 
     private native ByteBuffer lockHardwareBuffer(long hardwareBufferPtr);
 }

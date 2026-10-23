@@ -1558,9 +1558,127 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         scriptFile.setExecutable(true);
     }
 
+    private static int toVkPresentMode(String mode) {
+        if (mode == null) return 2;
+        switch (mode.toLowerCase(java.util.Locale.ROOT)) {
+            case "immediate": return 0;
+            case "mailbox": return 1;
+            case "relaxed":
+            case "fifo_relaxed": return 3;
+            default: return 2;
+        }
+    }
+
+    private static float parseFrameGenFlowScale(String value) {
+        float flowScale = 1.0f;
+        try {
+            flowScale = Float.parseFloat(value);
+        } catch (NumberFormatException e) {
+            Log.w("XServerDisplayActivity", "Invalid saved frame-generation flow scale; using 1.0", e);
+        }
+        if (Float.isNaN(flowScale) || Float.isInfinite(flowScale)) flowScale = 1.0f;
+        return Math.max(0.25f, Math.min(1.0f, flowScale));
+    }
+
+    private String getRendererSetting(String key, String defaultValue) {
+        return shortcut != null
+                ? shortcut.getExtra(key, container.getExtra(key, defaultValue))
+                : container.getExtra(key, defaultValue);
+    }
+
+    private void configureVulkanRenderer() {
+        String rendererId = shortcut != null
+                ? shortcut.getExtra("renderer", container.getRenderer())
+                : container.getRenderer();
+        if (!Container.RENDERER_VULKAN.equalsIgnoreCase(rendererId)
+                && !Container.RENDERER_OPENGL.equalsIgnoreCase(rendererId)) {
+            Log.w("XServerDisplayActivity", "Unknown host renderer '" + rendererId + "'; using OpenGL");
+            rendererId = Container.RENDERER_OPENGL;
+        }
+
+        String nativeModeSetting = shortcut != null
+                ? shortcut.getExtra("rendererNative", container.isRendererNative() ? "1" : "0")
+                : (container.isRendererNative() ? "1" : "0");
+        String colorOrder = getRendererSetting("rendererColorOrder", "bgra");
+        boolean swapRedBlue = "rgba".equalsIgnoreCase(colorOrder);
+        boolean nativeMode = "1".equals(nativeModeSetting) && !swapRedBlue;
+        if (!"1".equals(nativeModeSetting) && !"0".equals(nativeModeSetting)) {
+            Log.w("XServerDisplayActivity", "Invalid Native Rendering setting '" + nativeModeSetting
+                    + "'; disabling it");
+            nativeMode = false;
+        }
+
+        boolean useVulkan = Container.RENDERER_VULKAN.equalsIgnoreCase(rendererId);
+        xServerView = new XServerView(this, xServer, useVulkan);
+        if (useVulkan) {
+            xServerView.initVulkanRenderer(nativeMode);
+            com.winlator.cmod.renderer.vulkan.VulkanRenderer renderer = xServerView.getVulkanRenderer();
+            if (renderer != null) {
+                renderer.setSwapRB(swapRedBlue);
+                renderer.setVkPresentMode(toVkPresentMode(getRendererSetting("rendererPresentMode", "fifo")));
+
+                String driverId = getRendererSetting("rendererDriverId", "system");
+                if (!driverId.isEmpty() && !"system".equalsIgnoreCase(driverId)) {
+                    com.winlator.cmod.contents.AdrenotoolsManager driverManager =
+                            new com.winlator.cmod.contents.AdrenotoolsManager(this);
+                    if (driverManager.enumarateInstalledDrivers().contains(driverId)) {
+                        String libraryName = driverManager.getLibraryName(driverId);
+                        if (!libraryName.isEmpty()) {
+                            renderer.setDriverInfo(driverManager.getDriverPath(driverId),
+                                    libraryName, getApplicationInfo().nativeLibraryDir);
+                        } else {
+                            Log.w("XServerDisplayActivity", "Vulkan driver '" + driverId
+                                    + "' has no library name; using system driver");
+                        }
+                    } else {
+                        Log.w("XServerDisplayActivity", "Vulkan driver '" + driverId
+                                + "' is not installed; using system driver");
+                    }
+                }
+
+                String frameGenEnabled = getRendererSetting("frameGenEnabled", "0");
+                String frameGenEngine = getRendererSetting("frameGenEngine", "lsfg");
+                String frameGenMultiplier = getRendererSetting("frameGenMultiplier", "2");
+                boolean frameGenArmed = "1".equals(frameGenEnabled);
+                int multiplier = "4".equals(frameGenMultiplier) ? 4
+                        : "3".equals(frameGenMultiplier) ? 3 : 2;
+                int engine = "winfg".equalsIgnoreCase(frameGenEngine)
+                        ? com.winlator.cmod.renderer.vulkan.VulkanRenderer.FG_ENGINE_WINFG
+                        : com.winlator.cmod.renderer.vulkan.VulkanRenderer.FG_ENGINE_LSFG;
+                if (frameGenArmed
+                        && engine == com.winlator.cmod.renderer.vulkan.VulkanRenderer.FG_ENGINE_LSFG) {
+                    if (com.winlator.cmod.core.LsfgNative.isCacheValid(this)) {
+                        renderer.setLsfgCachePath(
+                                com.winlator.cmod.core.LsfgNative.cacheFile(this).getAbsolutePath());
+                    } else {
+                        Log.e("XServerDisplayActivity", "LSFG Native requested without a valid Lossless.dll cache");
+                        AppUtils.showToast(this,
+                                "LSFG Native is disabled: import a valid Lossless.dll in Settings first");
+                        frameGenArmed = false;
+                    }
+                }
+                renderer.setFrameGenEngine(engine);
+                renderer.setFrameGenTuning(engine
+                        == com.winlator.cmod.renderer.vulkan.VulkanRenderer.FG_ENGINE_WINFG
+                        ? parseFrameGenFlowScale(getRendererSetting("frameGenFlowScale", "1.0")) : 1.0f,
+                        0.0f);
+                renderer.setFrameGenArmed(frameGenArmed, multiplier);
+            }
+        } else if ("1".equals(nativeModeSetting)) {
+            Log.w("XServerDisplayActivity", "Native Rendering is only available with the Vulkan screen renderer");
+        }
+
+        if ("1".equals(getRendererSetting("frameGenEnabled", "0")) && !useVulkan) {
+            AppUtils.showToast(this, "Frame generation requires the Vulkan screen renderer");
+        }
+        if ("1".equals(nativeModeSetting) && swapRedBlue) {
+            Log.i("XServerDisplayActivity", "Native Rendering disabled because RGBA output requires Vulkan composition");
+        }
+    }
+
     private void setupUI() {
         FrameLayout rootView = findViewById(R.id.FLXServerDisplay);
-        xServerView = new XServerView(this, xServer);
+        configureVulkanRenderer();
         xServerView.setCursorVisible(false);
         if (shortcut != null) {
             xServerView.setUnviewableWMClass("explorer.exe");
@@ -1570,6 +1688,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         com.winlator.cmod.renderer.PostProcessing savedSettings = new com.winlator.cmod.renderer.PostProcessing(getSavedPostProcessing());
         if (savedSettings.fpsLimit > 0)
             xServer.setFpsLimit(savedSettings.fpsLimit);
+        if (xServerView.getVulkanRenderer() != null)
+            xServerView.getVulkanRenderer().setFpsLimit(savedSettings.fpsLimit);
         com.winlator.cmod.core.RefreshRateUtils.setFrameCadence(this, savedSettings.displayCadence());
         xServer.setRenderer(xServerView);
         rootView.addView(xServerView);
@@ -3010,7 +3130,5 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         return createThemedSpinnerAdapter(context, java.util.Arrays.asList(items), isDarkMode);
     }
 }
-
-
 
 

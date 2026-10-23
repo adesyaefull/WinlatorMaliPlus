@@ -16,6 +16,8 @@ import com.winlator.cmod.core.steamgrid.SteamGridSearchResponse;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 
 import okhttp3.OkHttpClient;
@@ -120,76 +122,232 @@ public class CoverArtManager {
             return;
         }
 
-        String tempApiKey = DEFAULT_API_KEY;
-        try {
-            if (PreferenceManager.getDefaultSharedPreferences(context).getBoolean("enable_custom_api_key", false)) {
-                String customKey = PreferenceManager.getDefaultSharedPreferences(context).getString("custom_api_key", "");
-                if (!customKey.isEmpty()) tempApiKey = customKey;
-            }
-        } catch (Exception e) {}
-
-        final String apiKey = tempApiKey;
         SteamGridDBApi api = getRetrofit().create(SteamGridDBApi.class);
-
-        String searchName = (searchQuery != null && !searchQuery.isEmpty()) ? searchQuery : 
-                           (shortcut.name != null ? shortcut.name.replaceAll("\\(.*?\\)", "").replaceAll("\\[.*?\\]", "").trim() : "");
+        String searchName = (searchQuery != null && !searchQuery.isEmpty()) ? searchQuery :
+                (shortcut.name != null ? shortcut.name : "");
+        searchName = searchName.replaceAll("\\(.*?\\)", "")
+                .replaceAll("\\[.*?\\]", "").trim();
 
         if (searchName.isEmpty()) {
             if (callback != null) callback.onFailed(ErrorReason.NOT_FOUND);
             return;
         }
 
-        api.searchGame("Bearer " + apiKey, searchName).enqueue(new Callback<SteamGridSearchResponse>() {
+        searchGame(api, "Bearer " + getApiKey(context), buildSearchQueries(searchName), 0, callback);
+    }
+
+    private static String getApiKey(Context context) {
+        String apiKey = DEFAULT_API_KEY;
+        try {
+            if (PreferenceManager.getDefaultSharedPreferences(context).getBoolean("enable_custom_api_key", false)) {
+                String customKey = PreferenceManager.getDefaultSharedPreferences(context).getString("custom_api_key", "");
+                if (!customKey.isEmpty()) apiKey = customKey;
+            }
+        } catch (Exception e) {}
+        return apiKey;
+    }
+
+    private static List<String> buildSearchQueries(String searchName) {
+        List<String> queries = new ArrayList<>();
+        addSearchQuery(queries, searchName);
+
+        String withoutLauncher = searchName.replaceAll(
+                "(?i)(?:launcher|bootstrapper|setup|installer|\\.exe)$", "").trim();
+        addSearchQuery(queries, withoutLauncher);
+        addSearchQuery(queries, withoutLauncher.replaceAll("(?<=[a-z])(?=[A-Z])", " "));
+
+        String normalized = withoutLauncher.replaceAll("[^a-zA-Z0-9]", "").toLowerCase(java.util.Locale.ROOT);
+        if (normalized.matches("gta(v|5)")) addSearchQuery(queries, "Grand Theft Auto V");
+        else if (normalized.matches("gta(iii|3)")) addSearchQuery(queries, "Grand Theft Auto III");
+        else if (normalized.matches("gta(iv|4)")) addSearchQuery(queries, "Grand Theft Auto IV");
+        else if (normalized.matches("gta(vi|6)")) addSearchQuery(queries, "Grand Theft Auto VI");
+        return queries;
+    }
+
+    private static void addSearchQuery(List<String> queries, String query) {
+        String trimmed = query.trim();
+        if (!trimmed.isEmpty() && !queries.contains(trimmed)) queries.add(trimmed);
+    }
+
+    private static void searchGame(SteamGridDBApi api, String auth, List<String> queries,
+                                   int queryIndex, GridOptionsCallback callback) {
+        if (queryIndex >= queries.size()) {
+            if (callback != null) callback.onFailed(ErrorReason.NOT_FOUND);
+            return;
+        }
+        api.searchGame(auth, queries.get(queryIndex)).enqueue(new Callback<SteamGridSearchResponse>() {
             @Override
             public void onResponse(Call<SteamGridSearchResponse> call, Response<SteamGridSearchResponse> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().data != null && !response.body().data.isEmpty()) {
-                    int gameId = response.body().data.get(0).id;
-                    api.getGridsByGameId("Bearer " + apiKey, gameId, "no_logo,alternate,material,blurred", "600x900,342x482", "static").enqueue(new Callback<SteamGridGridsResponse>() {
-                        @Override
-                        public void onResponse(Call<SteamGridGridsResponse> call, Response<SteamGridGridsResponse> response) {
-                            if (response.isSuccessful() && response.body() != null && response.body().data != null && !response.body().data.isEmpty()) {
-                                if (callback != null) callback.onOptionsAvailable(response.body().data);
-                            } else {
-                                if (response.code() == 429) {
-                                    if (callback != null) callback.onFailed(ErrorReason.RATE_LIMITED);
-                                    return;
-                                }
-                                api.getGridsByGameId("Bearer " + apiKey, gameId, null, null, "static").enqueue(new Callback<SteamGridGridsResponse>() {
-                                    @Override
-                                    public void onResponse(Call<SteamGridGridsResponse> call, Response<SteamGridGridsResponse> response) {
-                                        if (response.isSuccessful() && response.body() != null && response.body().data != null && !response.body().data.isEmpty()) {
-                                            if (callback != null) callback.onOptionsAvailable(response.body().data);
-                                        } else if (callback != null) {
-                                            if (response.code() == 429) callback.onFailed(ErrorReason.RATE_LIMITED);
-                                            else callback.onFailed(ErrorReason.NOT_FOUND);
-                                        }
-                                    }
-
-                                    @Override
-                                    public void onFailure(Call<SteamGridGridsResponse> call, Throwable t) {
-                                        if (callback != null) callback.onFailed(ErrorReason.UNKNOWN);
-                                    }
-                                });
-                            }
-                        }
-
-                        @Override
-                        public void onFailure(Call<SteamGridGridsResponse> call, Throwable t) {
-                            if (callback != null) callback.onFailed(ErrorReason.UNKNOWN);
-                        }
-                    });
-                } else if (callback != null) {
-                    if (response.code() == 401) callback.onFailed(ErrorReason.UNAUTHORIZED);
-                    else if (response.code() == 429) callback.onFailed(ErrorReason.RATE_LIMITED);
-                    else callback.onFailed(ErrorReason.NOT_FOUND);
+                    fetchGrids(api, auth, response.body().data.get(0).id, callback);
+                } else if (response.code() == 401) {
+                    if (callback != null) callback.onFailed(ErrorReason.UNAUTHORIZED);
+                } else if (response.code() == 429) {
+                    if (callback != null) callback.onFailed(ErrorReason.RATE_LIMITED);
+                } else {
+                    searchGame(api, auth, queries, queryIndex + 1, callback);
                 }
             }
 
             @Override
             public void onFailure(Call<SteamGridSearchResponse> call, Throwable t) {
+                Log.e("CoverArtManager", "SteamGridDB search failed for " + queries.get(queryIndex), t);
                 if (callback != null) callback.onFailed(ErrorReason.NETWORK_UNAVAILABLE);
             }
         });
+    }
+
+    private static void fetchGrids(SteamGridDBApi api, String auth, int gameId,
+                                   GridOptionsCallback callback) {
+        api.getGridsByGameId(auth, gameId, "no_logo,alternate,material,blurred",
+                "600x900,342x482", "static").enqueue(new Callback<SteamGridGridsResponse>() {
+            @Override
+            public void onResponse(Call<SteamGridGridsResponse> call, Response<SteamGridGridsResponse> response) {
+                if (response.isSuccessful() && response.body() != null
+                        && response.body().data != null && !response.body().data.isEmpty()) {
+                    if (callback != null) callback.onOptionsAvailable(response.body().data);
+                } else if (response.code() == 429) {
+                    if (callback != null) callback.onFailed(ErrorReason.RATE_LIMITED);
+                } else {
+                    api.getGridsByGameId(auth, gameId, null, null, "static").enqueue(new Callback<SteamGridGridsResponse>() {
+                        @Override
+                        public void onResponse(Call<SteamGridGridsResponse> call, Response<SteamGridGridsResponse> response) {
+                            if (response.isSuccessful() && response.body() != null
+                                    && response.body().data != null && !response.body().data.isEmpty()) {
+                                if (callback != null) callback.onOptionsAvailable(response.body().data);
+                            } else if (callback != null) {
+                                if (response.code() == 429) callback.onFailed(ErrorReason.RATE_LIMITED);
+                                else callback.onFailed(ErrorReason.NOT_FOUND);
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(Call<SteamGridGridsResponse> call, Throwable t) {
+                            Log.e("CoverArtManager", "SteamGridDB artwork lookup failed", t);
+                            if (callback != null) callback.onFailed(ErrorReason.UNKNOWN);
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public void onFailure(Call<SteamGridGridsResponse> call, Throwable t) {
+                Log.e("CoverArtManager", "SteamGridDB artwork lookup failed", t);
+                if (callback != null) callback.onFailed(ErrorReason.UNKNOWN);
+            }
+        });
+    }
+
+    public static void fetchDefaultCoverArt(Context context, Shortcut shortcut, DownloadCallback callback) {
+        if (context == null || shortcut == null || !shortcut.getCustomCoverArtPath().isEmpty()) return;
+        if (!AppUtils.isNetworkAvailable(context)) {
+            if (callback != null) callback.onFailed(ErrorReason.NETWORK_UNAVAILABLE);
+            return;
+        }
+
+        SteamGridDBApi api = getRetrofit().create(SteamGridDBApi.class);
+        String auth = "Bearer " + getApiKey(context);
+        searchDefaultCoverArt(api, auth, shortcut, buildSearchQueries(shortcut.name), 0, callback);
+    }
+
+    private static void searchDefaultCoverArt(SteamGridDBApi api, String auth, Shortcut shortcut,
+                                              List<String> queries, int queryIndex,
+                                              DownloadCallback callback) {
+        if (queryIndex >= queries.size()) {
+            Log.w("CoverArtManager", "No SteamGridDB no-logo cover found for " + shortcut.name);
+            if (callback != null) callback.onFailed(ErrorReason.NOT_FOUND);
+            return;
+        }
+        api.searchGame(auth, queries.get(queryIndex)).enqueue(new Callback<SteamGridSearchResponse>() {
+            @Override
+            public void onResponse(Call<SteamGridSearchResponse> call, Response<SteamGridSearchResponse> response) {
+                if (response.code() == 401) {
+                    if (callback != null) callback.onFailed(ErrorReason.UNAUTHORIZED);
+                    return;
+                }
+                if (response.code() == 429) {
+                    if (callback != null) callback.onFailed(ErrorReason.RATE_LIMITED);
+                    return;
+                }
+                if (!response.isSuccessful() || response.body() == null
+                        || response.body().data == null || response.body().data.isEmpty()) {
+                    searchDefaultCoverArt(api, auth, shortcut, queries, queryIndex + 1, callback);
+                    return;
+                }
+                fetchDefaultGrid(api, auth, shortcut, response.body().data.get(0).id,
+                        queries, queryIndex, callback);
+            }
+
+            @Override
+            public void onFailure(Call<SteamGridSearchResponse> call, Throwable t) {
+                Log.e("CoverArtManager", "SteamGridDB search failed for " + queries.get(queryIndex), t);
+                if (callback != null) callback.onFailed(ErrorReason.NETWORK_UNAVAILABLE);
+            }
+        });
+    }
+
+    private static void fetchDefaultGrid(SteamGridDBApi api, String auth, Shortcut shortcut,
+                                         int gameId, List<String> queries, int queryIndex,
+                                         DownloadCallback callback) {
+        api.getGridsByGameId(auth, gameId, "no_logo", "600x900,342x482", "static")
+                .enqueue(new Callback<SteamGridGridsResponse>() {
+                    @Override
+                    public void onResponse(Call<SteamGridGridsResponse> call,
+                                           Response<SteamGridGridsResponse> response) {
+                        if (response.code() == 401) {
+                            if (callback != null) callback.onFailed(ErrorReason.UNAUTHORIZED);
+                            return;
+                        }
+                        if (response.code() == 429) {
+                            if (callback != null) callback.onFailed(ErrorReason.RATE_LIMITED);
+                            return;
+                        }
+                        SteamGridGridsResponse.GridData cover = findNoLogoGrid(response.body());
+                        if (cover != null) {
+                            if (shortcut.getCustomCoverArtPath().isEmpty()) {
+                                downloadSelectedCoverArt(cover.url, shortcut, callback);
+                            }
+                            return;
+                        }
+                        api.getGridsByGameId(auth, gameId, "no_logo", null, "static")
+                                .enqueue(new Callback<SteamGridGridsResponse>() {
+                                    @Override
+                                    public void onResponse(Call<SteamGridGridsResponse> call,
+                                                           Response<SteamGridGridsResponse> response) {
+                                        SteamGridGridsResponse.GridData cover = findNoLogoGrid(response.body());
+                                        if (cover != null) {
+                                            if (shortcut.getCustomCoverArtPath().isEmpty()) {
+                                                downloadSelectedCoverArt(cover.url, shortcut, callback);
+                                            }
+                                        } else {
+                                            searchDefaultCoverArt(api, auth, shortcut, queries,
+                                                    queryIndex + 1, callback);
+                                        }
+                                    }
+
+                                    @Override
+                                    public void onFailure(Call<SteamGridGridsResponse> call, Throwable t) {
+                                        Log.e("CoverArtManager", "SteamGridDB no-logo cover lookup failed", t);
+                                        if (callback != null) callback.onFailed(ErrorReason.UNKNOWN);
+                                    }
+                                });
+                    }
+
+                    @Override
+                    public void onFailure(Call<SteamGridGridsResponse> call, Throwable t) {
+                        Log.e("CoverArtManager", "SteamGridDB no-logo cover lookup failed", t);
+                        if (callback != null) callback.onFailed(ErrorReason.UNKNOWN);
+                    }
+                });
+    }
+
+    private static SteamGridGridsResponse.GridData findNoLogoGrid(SteamGridGridsResponse response) {
+        if (response == null || response.data == null) return null;
+        for (SteamGridGridsResponse.GridData option : response.data) {
+            if (option.url != null && !option.url.isEmpty()
+                    && "no_logo".equalsIgnoreCase(option.style)) return option;
+        }
+        return null;
     }
 
     public static void downloadSelectedCoverArt(String url, Shortcut shortcut, DownloadCallback callback) {

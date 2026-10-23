@@ -23,6 +23,21 @@ import java.io.File;
 import java.util.Iterator;
 
 public class Container {
+    public static final String RENDERER_OPENGL = "opengl";
+    public static final String RENDERER_VULKAN = "vulkan";
+    public static final int FULLSCREEN_OFF = 0;
+    public static final int FULLSCREEN_FIT = 1;
+    public static final int FULLSCREEN_STRETCH = 2;
+    public static final int FULLSCREEN_FILL = 3;
+    public static final int FULLSCREEN_INTEGER = 4;
+    public static final int ALIGN_CENTER = 0;
+    public static final int ALIGN_TOP = 1;
+    public static final int ALIGN_BOTTOM = 2;
+
+    public static int nextFullscreenMode(int mode) {
+        return (mode + 1) % (FULLSCREEN_INTEGER + 1);
+    }
+
     public static final String DEFAULT_ENV_VARS = "WRAPPER_MAX_IMAGE_COUNT=0 WINEESYNC=1 DXVK_HUD=devinfo,fps,memory,gpuload,version,api PULSE_LATENCY_MSEC=40 WRAPPER_NO_PATCH_OPCONSTCOMP=1 GLADIO_NO_ERROR=1";
     public static final String DEFAULT_SCREEN_SIZE = "1280x720";
     public static final String DEFAULT_GRAPHICS_DRIVER = "wrapper";
@@ -53,6 +68,8 @@ public class Container {
     private String envVars = DEFAULT_ENV_VARS;
     private String graphicsDriver = DEFAULT_GRAPHICS_DRIVER;
     private String graphicsDriverConfig = DEFAULT_GRAPHICSDRIVERCONFIG;
+    private String renderer = RENDERER_OPENGL;
+    private boolean rendererNative;
     private String dxwrapper = DEFAULT_DXWRAPPER;
     private String dxwrapperConfig = "";
     private String wincomponents = DEFAULT_WINCOMPONENTS;
@@ -134,6 +151,22 @@ public class Container {
 
     public void setGraphicsDriver(String graphicsDriver) {
         this.graphicsDriver = graphicsDriver;
+    }
+
+    public String getRenderer() {
+        return renderer;
+    }
+
+    public void setRenderer(String renderer) {
+        this.renderer = RENDERER_VULKAN.equalsIgnoreCase(renderer) ? RENDERER_VULKAN : RENDERER_OPENGL;
+    }
+
+    public boolean isRendererNative() {
+        return rendererNative;
+    }
+
+    public void setRendererNative(boolean rendererNative) {
+        this.rendererNative = rendererNative;
     }
 
     public String getGraphicsDriverConfig() { return this.graphicsDriverConfig; }
@@ -469,6 +502,8 @@ public class Container {
             data.put("cpuListWoW64", cpuListWoW64);
             data.put("graphicsDriver", graphicsDriver);
             data.put("graphicsDriverConfig", graphicsDriverConfig);
+            data.put("renderer", renderer);
+            data.put("rendererNative", rendererNative);
             data.put("emulator", emulator);
             data.put("dxwrapper", dxwrapper);
             if (!dxwrapperConfig.isEmpty()) data.put("dxwrapperConfig", dxwrapperConfig);
@@ -531,6 +566,12 @@ public class Container {
                     break;
                 case "graphicsDriverConfig" :
                     setGraphicsDriverConfig(data.getString(key));
+                    break;
+                case "renderer" :
+                    setRenderer(data.getString(key));
+                    break;
+                case "rendererNative" :
+                    setRendererNative(data.getBoolean(key));
                     break;
                 case "emulator":
                     setEmulator(data.getString(key));

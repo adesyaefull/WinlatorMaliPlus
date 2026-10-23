@@ -71,14 +71,29 @@ JNIEXPORT void JNICALL
 Java_com_winlator_cmod_renderer_GPUImage_destroyHardwareBuffer(JNIEnv *env, jclass obj, jlong hardwareBufferPtr) {
     AHardwareBuffer* hardwareBuffer = (AHardwareBuffer*)hardwareBufferPtr;
     if (hardwareBuffer) {
-        AHardwareBuffer_unlock(hardwareBuffer, NULL);
         AHardwareBuffer_release(hardwareBuffer);
     }
 }
 
+JNIEXPORT jint JNICALL
+Java_com_winlator_cmod_renderer_GPUImage_unlockHardwareBuffer(JNIEnv *env, jobject obj, jlong hardwareBufferPtr) {
+    AHardwareBuffer *hardwareBuffer = (AHardwareBuffer *)hardwareBufferPtr;
+    if (!hardwareBuffer) return -1;
+
+    int fenceFd = -1;
+    if (AHardwareBuffer_unlock(hardwareBuffer, &fenceFd) != 0) return -1;
+    return (jint)fenceFd;
+}
+
+JNIEXPORT void JNICALL
+Java_com_winlator_cmod_renderer_GPUImage_unlockHardwareBufferForRelease(JNIEnv *env, jobject obj, jlong hardwareBufferPtr) {
+    AHardwareBuffer *hardwareBuffer = (AHardwareBuffer *)hardwareBufferPtr;
+    if (hardwareBuffer) AHardwareBuffer_unlock(hardwareBuffer, NULL);
+}
+
 // JNI method to lock a hardware buffer
 JNIEXPORT jobject JNICALL
-Java_com_winlator_cmod_renderer_GPUImage_lockHardwareBuffer(JNIEnv *env, jclass obj, jlong hardwareBufferPtr) {
+Java_com_winlator_cmod_renderer_GPUImage_lockHardwareBuffer(JNIEnv *env, jobject obj, jlong hardwareBufferPtr) {
     AHardwareBuffer* hardwareBuffer = (AHardwareBuffer*)hardwareBufferPtr;
     if (!hardwareBuffer) {
         printf("Invalid AHardwareBuffer pointer\n");

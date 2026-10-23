@@ -365,6 +365,77 @@ public class ContainerDetailFragment extends Fragment {
         final CheckBox cbFullscreenStretched = view.findViewById(R.id.CBFullscreenStretched);
         cbFullscreenStretched.setChecked(isEditMode() && container.isFullscreenStretched());
 
+        final TextView tvHostRenderer = view.findViewById(R.id.TVHostRenderer);
+        final Spinner sHostRenderer = view.findViewById(R.id.SHostRenderer);
+        final View btConfigureVulkanRenderer = view.findViewById(R.id.BTConfigureVulkanRenderer);
+        final View llVulkanRendererSettings = view.findViewById(R.id.LLVulkanRendererSettings);
+        final CheckBox cbRendererNative = view.findViewById(R.id.CBRendererNative);
+        final Spinner sRendererColorOrder = view.findViewById(R.id.SRendererColorOrder);
+        final Spinner sRendererPresentMode = view.findViewById(R.id.SRendererPresentMode);
+        final Spinner sRendererDriver = view.findViewById(R.id.SRendererDriver);
+        final CheckBox cbFrameGenEnabled = view.findViewById(R.id.CBFrameGenEnabled);
+        final Spinner sFrameGenEngine = view.findViewById(R.id.SFrameGenEngine);
+        final Spinner sFrameGenMultiplier = view.findViewById(R.id.SFrameGenMultiplier);
+
+        tvHostRenderer.setVisibility(View.VISIBLE);
+        sHostRenderer.setVisibility(View.VISIBLE);
+        sHostRenderer.setSelection(isEditMode()
+                && Container.RENDERER_VULKAN.equalsIgnoreCase(container.getRenderer()) ? 1 : 0);
+        cbRendererNative.setChecked(isEditMode() && container.isRendererNative());
+        sRendererColorOrder.setSelection("rgba".equalsIgnoreCase(
+                isEditMode() ? container.getExtra("rendererColorOrder", "bgra") : "bgra") ? 1 : 0);
+        String rendererPresentMode = isEditMode()
+                ? container.getExtra("rendererPresentMode", "fifo") : "fifo";
+        sRendererPresentMode.setSelection(rendererPresentModePosition(rendererPresentMode));
+        populateRendererDriverSpinner(context, sRendererDriver,
+                isEditMode() ? container.getExtra("rendererDriverId", "system") : "system");
+        populateFrameGenEngineSpinner(context, sFrameGenEngine,
+                isEditMode() ? container.getExtra("frameGenEngine", "lsfg") : "lsfg");
+        cbFrameGenEnabled.setChecked(isEditMode()
+                && "1".equals(container.getExtra("frameGenEnabled", "0")));
+        String frameGenMultiplier = isEditMode()
+                ? container.getExtra("frameGenMultiplier", "2") : "2";
+        sFrameGenMultiplier.setSelection("4".equals(frameGenMultiplier) ? 2
+                : "3".equals(frameGenMultiplier) ? 1 : 0);
+        btConfigureVulkanRenderer.setOnClickListener(v ->
+                llVulkanRendererSettings.setVisibility(llVulkanRendererSettings.getVisibility() == View.VISIBLE
+                        ? View.GONE : View.VISIBLE));
+        Runnable updateRendererControls = () -> {
+            boolean vulkan = sHostRenderer.getSelectedItemPosition() == 1;
+            boolean rgba = sRendererColorOrder.getSelectedItemPosition() == 1;
+            btConfigureVulkanRenderer.setVisibility(vulkan ? View.VISIBLE : View.GONE);
+            llVulkanRendererSettings.setVisibility(vulkan ? View.VISIBLE : View.GONE);
+            cbRendererNative.setEnabled(vulkan && !rgba);
+            sRendererColorOrder.setEnabled(vulkan);
+            sRendererPresentMode.setEnabled(vulkan);
+            sRendererDriver.setEnabled(vulkan);
+            cbFrameGenEnabled.setEnabled(vulkan);
+            sFrameGenEngine.setEnabled(vulkan && cbFrameGenEnabled.isChecked());
+            sFrameGenMultiplier.setEnabled(vulkan && cbFrameGenEnabled.isChecked());
+            if (!vulkan || rgba) cbRendererNative.setChecked(false);
+            if (!vulkan) cbFrameGenEnabled.setChecked(false);
+        };
+        sHostRenderer.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                updateRendererControls.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        sRendererColorOrder.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                updateRendererControls.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        cbFrameGenEnabled.setOnCheckedChangeListener((buttonView, checked) -> updateRendererControls.run());
+        updateRendererControls.run();
+
         final EditText etLC_ALL = view.findViewById(R.id.ETlcall);
         Locale systemLocal = Locale.getDefault();
         etLC_ALL.setText(isEditMode() ? container.getLC_ALL() : systemLocal.getLanguage() + '_' + systemLocal.getCountry() + ".UTF-8");
@@ -547,6 +618,17 @@ public class ContainerDetailFragment extends Fragment {
                 String drives = getDrives(view);
                 boolean showFPS = cbShowFPS.isChecked();
                 boolean fullscreenStretched = cbFullscreenStretched.isChecked();
+                String hostRenderer = sHostRenderer.getSelectedItemPosition() == 1
+                        ? Container.RENDERER_VULKAN : Container.RENDERER_OPENGL;
+                String rendererColorOrderToSave = sRendererColorOrder.getSelectedItemPosition() == 1
+                        ? "rgba" : "bgra";
+                String rendererPresentModeToSave = rendererPresentModeId(sRendererPresentMode.getSelectedItemPosition());
+                String rendererDriverIdToSave = selectedRendererDriverId(sRendererDriver);
+                boolean rendererNative = Container.RENDERER_VULKAN.equals(hostRenderer)
+                        && !"rgba".equals(rendererColorOrderToSave) && cbRendererNative.isChecked();
+                String frameGenEnabled = cbFrameGenEnabled.isChecked() ? "1" : "0";
+                String frameGenEngineToSave = selectedFrameGenEngine(sFrameGenEngine);
+                String frameGenMultiplierToSave = String.valueOf(sFrameGenMultiplier.getSelectedItemPosition() + 2);
                 String cpuList = cpuListView.getCheckedCPUListAsString();
                 String cpuListWoW64 = cpuListViewWoW64.getCheckedCPUListAsString();
                 byte startupSelection = (byte) sStartupSelection.getSelectedItemPosition();
@@ -582,6 +664,14 @@ public class ContainerDetailFragment extends Fragment {
                     container.setWinComponents(wincomponents);
                     container.setDrives(drives);
                     container.setShowFPS(showFPS);
+                    container.setRenderer(hostRenderer);
+                    container.setRendererNative(rendererNative);
+                    container.putExtra("rendererColorOrder", rendererColorOrderToSave);
+                    container.putExtra("rendererPresentMode", rendererPresentModeToSave);
+                    container.putExtra("rendererDriverId", rendererDriverIdToSave);
+                    container.putExtra("frameGenEnabled", frameGenEnabled);
+                    container.putExtra("frameGenEngine", frameGenEngineToSave);
+                    container.putExtra("frameGenMultiplier", frameGenMultiplierToSave);
                     container.setStartupSelection(startupSelection);
                     container.setBox64Version(box64Version);
                     container.setBox64Preset(box64Preset);
@@ -618,6 +708,16 @@ public class ContainerDetailFragment extends Fragment {
                     data.put("drives", drives);
                     data.put("showFPS", showFPS);
                     data.put("fullscreenStretched", fullscreenStretched);
+                    data.put("renderer", hostRenderer);
+                    data.put("rendererNative", rendererNative);
+                    JSONObject rendererExtraData = new JSONObject();
+                    rendererExtraData.put("rendererColorOrder", rendererColorOrderToSave);
+                    rendererExtraData.put("rendererPresentMode", rendererPresentModeToSave);
+                    rendererExtraData.put("rendererDriverId", rendererDriverIdToSave);
+                    rendererExtraData.put("frameGenEnabled", frameGenEnabled);
+                    rendererExtraData.put("frameGenEngine", frameGenEngineToSave);
+                    rendererExtraData.put("frameGenMultiplier", frameGenMultiplierToSave);
+                    data.put("extraData", rendererExtraData);
                     data.put("startupSelection", startupSelection);
                     data.put("box64Version", box64Version);
                     data.put("box64Preset", box64Preset);
@@ -1092,6 +1192,78 @@ public class ContainerDetailFragment extends Fragment {
         spinner.setAdapter(new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, itemList));
     }
 
+    public static void populateRendererDriverSpinner(Context context, Spinner spinner, String selectedId) {
+        ArrayList<RendererDriverChoice> choices = new ArrayList<>();
+        choices.add(new RendererDriverChoice("system", "System Vulkan driver"));
+        com.winlator.cmod.contents.AdrenotoolsManager manager =
+                new com.winlator.cmod.contents.AdrenotoolsManager(context);
+        for (String id : manager.enumarateInstalledDrivers()) {
+            choices.add(new RendererDriverChoice(id, id));
+        }
+
+        ArrayAdapter<RendererDriverChoice> adapter =
+                new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, choices);
+        spinner.setAdapter(adapter);
+        for (int i = 0; i < choices.size(); i++) {
+            if (choices.get(i).id.equals(selectedId)) {
+                spinner.setSelection(i, false);
+                return;
+            }
+        }
+        spinner.setSelection(0, false);
+    }
+
+    public static String selectedRendererDriverId(Spinner spinner) {
+        Object item = spinner.getSelectedItem();
+        return item instanceof RendererDriverChoice ? ((RendererDriverChoice) item).id : "system";
+    }
+
+    public static void populateFrameGenEngineSpinner(Context context, Spinner spinner, String selectedEngine) {
+        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
+                context, R.array.frame_gen_engine_entries, android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        spinner.setSelection("winfg".equalsIgnoreCase(selectedEngine) ? 1 : 0, false);
+    }
+
+    public static String selectedFrameGenEngine(Spinner spinner) {
+        return spinner.getSelectedItemPosition() == 1 ? "winfg" : "lsfg";
+    }
+
+    public static int rendererPresentModePosition(String mode) {
+        if (mode == null) return 0;
+        switch (mode.toLowerCase(java.util.Locale.ROOT)) {
+            case "mailbox": return 1;
+            case "immediate": return 2;
+            case "relaxed":
+            case "fifo_relaxed": return 3;
+            default: return 0;
+        }
+    }
+
+    public static String rendererPresentModeId(int position) {
+        switch (position) {
+            case 1: return "mailbox";
+            case 2: return "immediate";
+            case 3: return "relaxed";
+            default: return "fifo";
+        }
+    }
+
+    private static final class RendererDriverChoice {
+        final String id;
+        final String label;
+
+        RendererDriverChoice(String id, String label) {
+            this.id = id;
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
     public static void loadBox64VersionSpinner(Context context, Container container, ContentsManager manager, Spinner spinner, boolean isArm64EC) {
         List<String> itemList;
         if (isArm64EC) {
@@ -1124,5 +1296,3 @@ public class ContainerDetailFragment extends Fragment {
     }
 
 }
-
-

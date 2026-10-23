@@ -29,6 +29,7 @@ import com.winlator.cmod.R;
 import com.winlator.cmod.ShortcutsFragment;
 import com.winlator.cmod.box64.Box64PresetManager;
 import com.winlator.cmod.container.ContainerManager;
+import com.winlator.cmod.container.Container;
 import com.winlator.cmod.container.Shortcut;
 import com.winlator.cmod.contents.ContentProfile;
 import com.winlator.cmod.contents.ContentsManager;
@@ -204,6 +205,78 @@ public class ShortcutSettingsDialog extends ContentDialog {
         final CheckBox cbFullscreenStretched =  findViewById(R.id.CBFullscreenStretched);
         boolean fullscreenStretched = shortcut.getExtra("fullscreenStretched", "0").equals("1");
         cbFullscreenStretched.setChecked(fullscreenStretched);
+
+        final TextView tvHostRenderer = findViewById(R.id.TVHostRenderer);
+        final Spinner sHostRenderer = findViewById(R.id.SHostRenderer);
+        final View btConfigureVulkanRenderer = findViewById(R.id.BTConfigureVulkanRenderer);
+        final View llVulkanRendererSettings = findViewById(R.id.LLVulkanRendererSettings);
+        final CheckBox cbRendererNative = findViewById(R.id.CBRendererNative);
+        final Spinner sRendererColorOrder = findViewById(R.id.SRendererColorOrder);
+        final Spinner sRendererPresentMode = findViewById(R.id.SRendererPresentMode);
+        final Spinner sRendererDriver = findViewById(R.id.SRendererDriver);
+        final CheckBox cbFrameGenEnabled = findViewById(R.id.CBFrameGenEnabled);
+        final Spinner sFrameGenEngine = findViewById(R.id.SFrameGenEngine);
+        final Spinner sFrameGenMultiplier = findViewById(R.id.SFrameGenMultiplier);
+        String selectedRenderer = shortcut.getExtra("renderer", shortcut.container.getRenderer());
+
+        tvHostRenderer.setVisibility(View.VISIBLE);
+        sHostRenderer.setVisibility(View.VISIBLE);
+        sHostRenderer.setSelection(Container.RENDERER_VULKAN.equalsIgnoreCase(selectedRenderer) ? 1 : 0);
+        cbRendererNative.setChecked("1".equals(shortcut.getExtra("rendererNative",
+                shortcut.container.isRendererNative() ? "1" : "0")));
+        String colorOrder = shortcut.getExtra("rendererColorOrder",
+                shortcut.container.getExtra("rendererColorOrder", "bgra"));
+        sRendererColorOrder.setSelection("rgba".equalsIgnoreCase(colorOrder) ? 1 : 0);
+        String presentMode = shortcut.getExtra("rendererPresentMode",
+                shortcut.container.getExtra("rendererPresentMode", "fifo"));
+        sRendererPresentMode.setSelection(ContainerDetailFragment.rendererPresentModePosition(presentMode));
+        ContainerDetailFragment.populateRendererDriverSpinner(context, sRendererDriver,
+                shortcut.getExtra("rendererDriverId", shortcut.container.getExtra("rendererDriverId", "system")));
+        cbFrameGenEnabled.setChecked("1".equals(shortcut.getExtra("frameGenEnabled",
+                shortcut.container.getExtra("frameGenEnabled", "0"))));
+        ContainerDetailFragment.populateFrameGenEngineSpinner(context, sFrameGenEngine,
+                shortcut.getExtra("frameGenEngine", shortcut.container.getExtra("frameGenEngine", "lsfg")));
+        String multiplier = shortcut.getExtra("frameGenMultiplier",
+                shortcut.container.getExtra("frameGenMultiplier", "2"));
+        sFrameGenMultiplier.setSelection("4".equals(multiplier) ? 2 : "3".equals(multiplier) ? 1 : 0);
+        btConfigureVulkanRenderer.setOnClickListener(v ->
+                llVulkanRendererSettings.setVisibility(llVulkanRendererSettings.getVisibility() == View.VISIBLE
+                        ? View.GONE : View.VISIBLE));
+        Runnable updateRendererControls = () -> {
+            boolean vulkan = sHostRenderer.getSelectedItemPosition() == 1;
+            boolean rgba = sRendererColorOrder.getSelectedItemPosition() == 1;
+            btConfigureVulkanRenderer.setVisibility(vulkan ? View.VISIBLE : View.GONE);
+            llVulkanRendererSettings.setVisibility(vulkan ? View.VISIBLE : View.GONE);
+            cbRendererNative.setEnabled(vulkan && !rgba);
+            sRendererColorOrder.setEnabled(vulkan);
+            sRendererPresentMode.setEnabled(vulkan);
+            sRendererDriver.setEnabled(vulkan);
+            cbFrameGenEnabled.setEnabled(vulkan);
+            sFrameGenEngine.setEnabled(vulkan && cbFrameGenEnabled.isChecked());
+            sFrameGenMultiplier.setEnabled(vulkan && cbFrameGenEnabled.isChecked());
+            if (!vulkan || rgba) cbRendererNative.setChecked(false);
+            if (!vulkan) cbFrameGenEnabled.setChecked(false);
+        };
+        sHostRenderer.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                updateRendererControls.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        sRendererColorOrder.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                updateRendererControls.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        cbFrameGenEnabled.setOnCheckedChangeListener((buttonView, checked) -> updateRendererControls.run());
+        updateRendererControls.run();
 
         final Spinner sBox64Preset = findViewById(R.id.SBox64Preset);
         Box64PresetManager.loadSpinner("box64", sBox64Preset, shortcut.getExtra("box64Preset", shortcut.container.getBox64Preset()));
@@ -412,6 +485,42 @@ public class ShortcutSettingsDialog extends ContentDialog {
                 String execArgs = etExecArgs.getText().toString();
                 shortcut.putExtra("execArgs", !execArgs.isEmpty() ? execArgs : null);
                 shortcut.putExtra("screenSize", screenSize);
+                String hostRenderer = sHostRenderer.getSelectedItemPosition() == 1
+                        ? Container.RENDERER_VULKAN : Container.RENDERER_OPENGL;
+                shortcut.putExtra("renderer",
+                        hostRenderer.equals(shortcut.container.getRenderer()) ? null : hostRenderer);
+                String rendererColorOrderToSave = sRendererColorOrder.getSelectedItemPosition() == 1
+                        ? "rgba" : "bgra";
+                String containerColorOrder = shortcut.container.getExtra("rendererColorOrder", "bgra");
+                shortcut.putExtra("rendererColorOrder",
+                        rendererColorOrderToSave.equals(containerColorOrder) ? null : rendererColorOrderToSave);
+                String rendererPresentModeToSave = ContainerDetailFragment.rendererPresentModeId(
+                        sRendererPresentMode.getSelectedItemPosition());
+                String containerPresentMode = shortcut.container.getExtra("rendererPresentMode", "fifo");
+                shortcut.putExtra("rendererPresentMode",
+                        rendererPresentModeToSave.equals(containerPresentMode) ? null : rendererPresentModeToSave);
+                String rendererDriverIdToSave = ContainerDetailFragment.selectedRendererDriverId(sRendererDriver);
+                String containerDriverId = shortcut.container.getExtra("rendererDriverId", "system");
+                shortcut.putExtra("rendererDriverId",
+                        rendererDriverIdToSave.equals(containerDriverId) ? null : rendererDriverIdToSave);
+                boolean rendererNative = Container.RENDERER_VULKAN.equals(hostRenderer)
+                        && !"rgba".equals(rendererColorOrderToSave) && cbRendererNative.isChecked();
+                boolean containerRendererNative = shortcut.container.isRendererNative();
+                shortcut.putExtra("rendererNative", rendererNative == containerRendererNative
+                        ? null : (rendererNative ? "1" : "0"));
+                String frameGenEnabled = cbFrameGenEnabled.isChecked() ? "1" : "0";
+                String containerFrameGenEnabled = shortcut.container.getExtra("frameGenEnabled", "0");
+                shortcut.putExtra("frameGenEnabled",
+                        frameGenEnabled.equals(containerFrameGenEnabled) ? null : frameGenEnabled);
+                String frameGenEngineToSave = ContainerDetailFragment.selectedFrameGenEngine(sFrameGenEngine);
+                String containerFrameGenEngine = shortcut.container.getExtra("frameGenEngine", "lsfg");
+                shortcut.putExtra("frameGenEngine",
+                        frameGenEngineToSave.equals(containerFrameGenEngine) ? null : frameGenEngineToSave);
+                String frameGenMultiplierToSave = String.valueOf(sFrameGenMultiplier.getSelectedItemPosition() + 2);
+                String containerFrameGenMultiplier = shortcut.container.getExtra("frameGenMultiplier", "2");
+                shortcut.putExtra("frameGenMultiplier",
+                        frameGenMultiplierToSave.equals(containerFrameGenMultiplier)
+                                ? null : frameGenMultiplierToSave);
                 shortcut.putExtra("displayDriver", null);
                 shortcut.putExtra("displayxConfig", null);
                 shortcut.putExtra("graphicsDriver", graphicsDriver);

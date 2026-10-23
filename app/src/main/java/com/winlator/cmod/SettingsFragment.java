@@ -39,6 +39,7 @@ import com.winlator.cmod.core.AppUtils;
 import com.winlator.cmod.core.ArrayUtils;
 import com.winlator.cmod.core.Callback;
 import com.winlator.cmod.core.FileUtils;
+import com.winlator.cmod.core.LsfgNative;
 import com.winlator.cmod.core.PreloaderDialog;
 import com.winlator.cmod.fexcore.FEXCoreEditPresetDialog;
 import com.winlator.cmod.fexcore.FEXCorePreset;
@@ -51,8 +52,11 @@ import org.json.JSONException;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -79,6 +83,7 @@ public class SettingsFragment extends Fragment {
     private static final int REQUEST_CODE_INSTALL_SOUNDFONT = 1001;
     private static final int REQUEST_CODE_IMPORT_BOX64_PRESET = 1004;
     private static final int REQUEST_CODE_IMPORT_FEXCORE_PRESET = 1005;
+    private static final int REQUEST_CODE_IMPORT_LOSSLESS_DLL = 1006;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -251,6 +256,12 @@ public class SettingsFragment extends Fragment {
 
         sMIDISoundFont.setPopupBackgroundResource(isDarkMode ? R.drawable.content_dialog_background_dark : R.drawable.content_dialog_background);
 
+        TextView tvLosslessDllStatus = view.findViewById(R.id.TVLosslessDllStatus);
+        if (LsfgNative.isDllAvailable(context)) {
+            tvLosslessDllStatus.setText(R.string.lossless_dll_imported);
+        }
+        view.findViewById(R.id.BTImportLosslessDll).setOnClickListener(v -> openFile(REQUEST_CODE_IMPORT_LOSSLESS_DLL));
+
         final View btInstallSF = view.findViewById(R.id.BTInstallSF);
         final View btRemoveSF = view.findViewById(R.id.BTRemoveSF);
 
@@ -341,7 +352,7 @@ public class SettingsFragment extends Fragment {
         cbShareClipboard.setChecked(preferences.getBoolean("share_android_clipboard", false));
 
         final CheckBox cbShowAdrenoTools = view.findViewById(R.id.CBShowAdrenoTools);
-        cbShowAdrenoTools.setChecked(preferences.getBoolean("show_adrenotools_unsupported", false));
+        cbShowAdrenoTools.setChecked(preferences.getBoolean("show_adrenotools_unsupported", true));
         cbShowAdrenoTools.setOnCheckedChangeListener((buttonView, isChecked) -> {
             preferences.edit().putBoolean("show_adrenotools_unsupported", isChecked).apply();
             if (getActivity() != null) {
@@ -857,6 +868,10 @@ public class SettingsFragment extends Fragment {
                         }
                         break;
 
+                    case REQUEST_CODE_IMPORT_LOSSLESS_DLL:
+                        importLosslessDll(uri);
+                        break;
+
                     case REQUEST_CODE_IMPORT_BOX64_PRESET:
                         try {
                             Spinner sBox64Preset = getView().findViewById(R.id.SBox64Preset);
@@ -881,6 +896,61 @@ public class SettingsFragment extends Fragment {
                 }
             }
         }
+    }
+
+    private void importLosslessDll(Uri uri) {
+        Activity activity = getActivity();
+        Context context = getContext();
+        if (activity == null || context == null) return;
+
+        PreloaderDialog dialog = new PreloaderDialog(activity);
+        dialog.showOnUiThread(R.string.installing_content);
+        new Thread(() -> {
+            File dll = LsfgNative.dllFile(context);
+            File parent = dll.getParentFile();
+            File temp = new File(parent, "Lossless.dll.import");
+            int status;
+            try {
+                if (!parent.isDirectory() && !parent.mkdirs()) {
+                    throw new IOException("Unable to create LSFG storage directory");
+                }
+                InputStream source = context.getContentResolver().openInputStream(uri);
+                if (source == null) throw new IOException("Unable to open the selected file");
+                try (InputStream input = source; FileOutputStream output = new FileOutputStream(temp)) {
+                    byte[] buffer = new byte[8192];
+                    int count;
+                    while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                }
+
+                status = LsfgNative.validateDll(temp);
+                if (status == LsfgNative.STATUS_OK) {
+                    Files.move(temp.toPath(), dll.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    status = LsfgNative.ensureCache(context, false);
+                }
+            } catch (IOException e) {
+                android.util.Log.e("SettingsFragment", "Failed to import Lossless.dll", e);
+                status = LsfgNative.STATUS_CACHE_UNUSABLE;
+            } finally {
+                if (temp.exists() && !temp.delete()) {
+                    android.util.Log.w("SettingsFragment", "Unable to remove temporary Lossless.dll import");
+                }
+            }
+
+            int result = status;
+            activity.runOnUiThread(() -> {
+                dialog.closeOnUiThread();
+                View currentView = getView();
+                if (currentView != null && LsfgNative.isDllAvailable(context)) {
+                    TextView statusView = currentView.findViewById(R.id.TVLosslessDllStatus);
+                    statusView.setText(R.string.lossless_dll_imported);
+                }
+                if (result == LsfgNative.STATUS_OK) {
+                    AppUtils.showToast(context, "Lossless.dll validated and LSFG cache generated");
+                } else {
+                    AppUtils.showToast(context, "Lossless.dll import/cache failed: " + LsfgNative.explain(result));
+                }
+            });
+        }, "lsfg-dll-import").start();
     }
 
     private void moveFiles(File sourceDir, File targetDir) throws IOException {

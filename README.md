@@ -244,6 +244,14 @@ Winlator Mali stands on the shoulders of brilliant contributors across the open-
 * **GLIBC Fork Contributions**: Reference implementations by [longjunyu2](https://github.com/longjunyu2)
 * **ZeroFG Frame Generation**: Upstream engine by [hy300leosquizz-ctrl](https://github.com/hy300leosquizz-ctrl/ZeroFG)
 * **Touch Controls Styling**: Inspired by [Madeira](https://github.com/willfaust/madeira) by willfaust
+* **Winlator Mali+ local integration**: UI customizations, branding, wrapper integration, and renderer port by [Adesyaefull](https://github.com/adesyaefull)
+* **Vulkan renderer and frame-generation references/adaptations**: [Bannerlator](https://github.com/The412Banner/Bannerlator) by The412Banner
+
+---
+
+## Local Upstream Integration Notes
+
+The local `local-vulkan-port` integration keeps the upstream native EGL/Gladio renderer and ZeroFG path as the default, while adding Vulkan as an optional host-renderer choice for containers and shortcuts. Vulkan-specific renderer settings, native scanout, and LSFG/Win-FG frame generation are configured separately; using Vulkan does not remove the upstream EGL/ZeroFG path.
 
 ---
 

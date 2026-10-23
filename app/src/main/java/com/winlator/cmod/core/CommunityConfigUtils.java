@@ -115,6 +115,15 @@ public class CommunityConfigUtils {
             containerJson.put("showFPS", c.isShowFPS());
             containerJson.put("fullscreenStretched", c.isFullscreenStretched());
             containerJson.put("startupSelection", c.getStartupSelection());
+            containerJson.put("renderer", c.getRenderer());
+            containerJson.put("rendererNative", c.isRendererNative());
+            JSONObject containerRendererExtra = new JSONObject();
+            for (String key : new String[]{"rendererColorOrder", "rendererPresentMode", "rendererDriverId",
+                    "frameGenEnabled", "frameGenEngine", "frameGenMultiplier"}) {
+                String value = c.getExtra(key, null);
+                if (value != null) containerRendererExtra.put(key, value);
+            }
+            containerJson.put("extraData", containerRendererExtra);
 
             // 1.2 additions: RAM Booster, Input & Locale
             containerJson.put("ramBoosterEnabled", c.isRamBoosterEnabled());
@@ -165,7 +174,13 @@ public class CommunityConfigUtils {
             root.put("shortcut", shortcutJson);
 
             return root;
-        } catch (JSONException e) { return null; }
+        } catch (JSONException e) { return null;         }
+    }
+
+    private static boolean isRendererExtraDataKey(String key) {
+        return key.equals("rendererColorOrder") || key.equals("rendererPresentMode")
+                || key.equals("rendererDriverId") || key.equals("frameGenEnabled")
+                || key.equals("frameGenEngine") || key.equals("frameGenMultiplier");
     }
 
     public static void importConfig(Context context, JSONObject root, ContainerManager containerManager, Callback<Boolean> callback) {
@@ -293,6 +308,11 @@ public class CommunityConfigUtils {
                                 containerEnvVars.putAll(new EnvVars(shortcutEnvVarsStr));
                                 containerJson.put("envVars", containerEnvVars.toString());
                             }
+                        } else if (isRendererExtraDataKey(key)) {
+                            JSONObject extraData = containerJson.optJSONObject("extraData");
+                            if (extraData == null) extraData = new JSONObject();
+                            extraData.put(key, shortcutExtra.get(key));
+                            containerJson.put("extraData", extraData);
                         } else {
                             // Don't overwrite presets in container if they were already set to custom during import
                             if (key.equals("box64Preset") || key.equals("fexcorePreset")) {
@@ -303,6 +323,7 @@ public class CommunityConfigUtils {
                                 containerJson.put(key, shortcutExtra.get(key));
                             }
                         }
+
                     }
                 }
             }

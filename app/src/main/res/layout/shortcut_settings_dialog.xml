@@ -166,6 +166,129 @@
                         android:layout_height="wrap_content"
                         android:text="@string/fullscreen_stretched"
                         android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/TVHostRenderer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:layout_marginBottom="4dp"
+                        android:text="@string/host_renderer"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+
+                    <Spinner
+                        android:id="@+id/SHostRenderer"
+                        style="@style/ComboBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="42dp"
+                        android:entries="@array/host_renderer_entries"
+                        android:visibility="gone" />
+
+                    <Button
+                        android:id="@+id/BTConfigureVulkanRenderer"
+                        style="@style/ButtonNeutral"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/vulkan_renderer_settings"
+                        android:visibility="gone" />
+
+                    <LinearLayout
+                        android:id="@+id/LLVulkanRendererSettings"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+                    <CheckBox
+                        android:id="@+id/CBRendererNative"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/native_rendering"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="@string/host_renderer_info"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/renderer_color_order"
+                        android:textSize="13sp" />
+                    <Spinner
+                        android:id="@+id/SRendererColorOrder"
+                        style="@style/ComboBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="42dp"
+                        android:entries="@array/renderer_color_entries" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/renderer_present_mode"
+                        android:textSize="13sp" />
+                    <Spinner
+                        android:id="@+id/SRendererPresentMode"
+                        style="@style/ComboBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="42dp"
+                        android:entries="@array/renderer_present_mode_entries" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/renderer_driver"
+                        android:textSize="13sp" />
+                    <Spinner
+                        android:id="@+id/SRendererDriver"
+                        style="@style/ComboBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="42dp" />
+
+                    <CheckBox
+                        android:id="@+id/CBFrameGenEnabled"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/frame_gen"
+                        android:textSize="14sp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/frame_gen_engine"
+                        android:textSize="13sp" />
+                    <Spinner
+                        android:id="@+id/SFrameGenEngine"
+                        style="@style/ComboBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="42dp"
+                        android:entries="@array/frame_gen_engine_entries" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/frame_gen_multiplier"
+                        android:textSize="13sp" />
+                    <Spinner
+                        android:id="@+id/SFrameGenMultiplier"
+                        style="@style/ComboBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="42dp"
+                        android:entries="@array/frame_gen_multiplier_entries" />
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="@string/frame_gen_info"
+                        android:textSize="12sp" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <!-- CARD 2: GRAPHICS & RENDERING -->

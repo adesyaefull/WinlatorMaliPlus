@@ -601,6 +601,35 @@
                                 style="@style/ListMenuButton"
                                 android:src="@drawable/icon_remove" />
                         </LinearLayout>
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:text="@string/lsfg_native_import_title"
+                            android:textStyle="bold"
+                            android:textSize="13sp"
+                            android:textColor="?android:attr/textColorSecondary" />
+                        <TextView
+                            android:id="@+id/TVLosslessDllStatus"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="@string/lossless_dll_missing"
+                            android:textSize="12sp" />
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="@string/lsfg_native_import_info"
+                            android:textSize="12sp" />
+                        <Button
+                            android:id="@+id/BTImportLosslessDll"
+                            style="@style/ButtonNeutral"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="@string/import_lossless_dll" />
                     </LinearLayout>
                 </LinearLayout>
 

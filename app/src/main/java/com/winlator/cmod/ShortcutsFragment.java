@@ -7,11 +7,15 @@ import android.content.SharedPreferences;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
 import android.content.res.Configuration;
+import android.graphics.Color;
+import android.graphics.RenderEffect;
+import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -21,6 +25,7 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.util.TypedValue;
 import android.widget.PopupMenu;
 import android.widget.TextView;
@@ -30,28 +35,39 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
+import androidx.appcompat.widget.Toolbar;
 import androidx.core.widget.TextViewCompat;
 import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
-import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.LinearSnapHelper;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.cardview.widget.CardView;
 
 import com.bumptech.glide.Glide;
 import com.winlator.cmod.container.Container;
 import com.winlator.cmod.container.ContainerManager;
 import com.winlator.cmod.container.Shortcut;
 import com.winlator.cmod.contentdialog.ContentDialog;
+import com.winlator.cmod.contentdialog.GraphicsDriverConfigDialog;
 import com.winlator.cmod.contentdialog.ShortcutSettingsDialog;
+import com.winlator.cmod.box64.Box64Preset;
+import com.winlator.cmod.box64.Box64PresetManager;
+import com.winlator.cmod.contents.WrapperCatalogManager;
+import com.winlator.cmod.fexcore.FEXCorePreset;
+import com.winlator.cmod.fexcore.FEXCorePresetManager;
 import com.winlator.cmod.core.AppUtils;
 import com.winlator.cmod.core.CommunityConfigManager;
 import com.winlator.cmod.core.CommunityConfigUtils;
+import com.winlator.cmod.core.CoverArtManager;
 import com.winlator.cmod.core.FileUtils;
-import com.winlator.cmod.core.ImageUtils;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import com.winlator.cmod.core.steamgrid.SteamGridDBApi;
 import com.winlator.cmod.core.steamgrid.SteamGridGameDetailsResponse;
@@ -60,8 +76,27 @@ import com.winlator.cmod.core.steamgrid.SteamGridSearchResponse;
 public class ShortcutsFragment extends Fragment {
     private ContainerManager manager;
     private RecyclerView recyclerView;
+    private TextView dxvkDetails;
+    private TextView rendererDetails;
+    private TextView frameGenDetails;
+    private TextView wrapperDetails;
+    private TextView fexDetails;
+    private TextView box64Details;
     private Shortcut currentShortcut;
+    private Shortcut selectedShortcut;
     private ShortcutsAdapter adapter;
+    private final Set<String> coverArtRequests = new HashSet<>();
+    private int shortcutCardWidthPx;
+    private int shortcutCoverHeightPx;
+    private boolean isLaunchingShortcut;
+    private static long lastShortcutLaunchTime;
+    private LinearSnapHelper snapHelper;
+    private RecyclerView.OnScrollListener snapScrollListener;
+    private View carouselArea;
+    private View.OnLayoutChangeListener carouselLayoutChangeListener;
+    private int lastCarouselWidth;
+    private int lastCarouselHeight;
+    private Drawable previousToolbarBackground;
     private static final int REQUEST_CODE_CUSTOM_COVER_ART = 1;
     private static final int REQUEST_CODE_CUSTOM_HERO_ART = 6;
     private static final int REQUEST_CODE_IMPORT_SHORTCUT = 1002;
@@ -89,11 +124,39 @@ public class ShortcutsFragment extends Fragment {
         ThemeManager.applyThemeToView(view, getContext());
         androidx.appcompat.app.ActionBar actionBar = ((AppCompatActivity)getActivity()).getSupportActionBar();
         if (actionBar != null) {
-            actionBar.setTitle("");
+            actionBar.setTitle(R.string.shortcut_library_title);
+        }
+        Toolbar toolbar = view.findViewById(R.id.Toolbar);
+        if (toolbar == null && getActivity() != null) toolbar = getActivity().findViewById(R.id.Toolbar);
+        if (toolbar != null) {
+            previousToolbarBackground = toolbar.getBackground();
+            toolbar.setBackgroundResource(R.drawable.shortcut_toolbar_glass);
+            toolbar.setTitleTextColor(Color.WHITE);
         }
 
         recyclerView = view.findViewById(R.id.RecyclerView);
+        recyclerView.setItemAnimator(null);
+        carouselArea = view.findViewById(R.id.CarouselArea);
+        carouselLayoutChangeListener = (changedView, left, top, right, bottom,
+                                       oldLeft, oldTop, oldRight, oldBottom) -> {
+            int width = right - left;
+            int height = bottom - top;
+            if ((width != lastCarouselWidth || height != lastCarouselHeight)
+                    && width > 0 && height > 0) {
+                lastCarouselWidth = width;
+                lastCarouselHeight = height;
+                changedView.post(this::refreshCarouselLayout);
+            }
+        };
+        carouselArea.addOnLayoutChangeListener(carouselLayoutChangeListener);
+        dxvkDetails = view.findViewById(R.id.TVDxvkDetails);
+        rendererDetails = view.findViewById(R.id.TVRendererDetails);
+        frameGenDetails = view.findViewById(R.id.TVFrameGenDetails);
+        wrapperDetails = view.findViewById(R.id.TVWrapperDetails);
+        fexDetails = view.findViewById(R.id.TVFEXDetails);
+        box64Details = view.findViewById(R.id.TVBox64Details);
         updateGridLayout();
+        recyclerView.post(this::updateGridLayout);
 
         loadShortcutsList();
     }
@@ -188,12 +251,60 @@ public class ShortcutsFragment extends Fragment {
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        updateGridLayout();
         if (recyclerView != null) {
-            recyclerView.getRecycledViewPool().clear();
-            if (recyclerView.getAdapter() != null) {
-                recyclerView.getAdapter().notifyDataSetChanged();
+            recyclerView.postOnAnimation(() ->
+                    recyclerView.postOnAnimation(this::refreshCarouselLayout));
+        }
+    }
+
+    private void refreshCarouselLayout() {
+        if (recyclerView == null || carouselArea == null || carouselArea.getWidth() == 0) return;
+        updateGridLayout();
+        if (adapter != null) adapter.notifyDataSetChanged();
+        recyclerView.post(this::centerSelectedShortcut);
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (getActivity() instanceof AppCompatActivity) {
+            androidx.appcompat.app.ActionBar actionBar = ((AppCompatActivity) getActivity()).getSupportActionBar();
+            if (actionBar != null) actionBar.setTitle("");
+            Toolbar toolbar = getActivity().findViewById(R.id.Toolbar);
+            if (toolbar != null && previousToolbarBackground != null) {
+                toolbar.setBackground(previousToolbarBackground);
             }
+        }
+        if (snapHelper != null) {
+            snapHelper.attachToRecyclerView(null);
+            snapHelper = null;
+        }
+        if (recyclerView != null && snapScrollListener != null) {
+            recyclerView.removeOnScrollListener(snapScrollListener);
+        }
+        snapScrollListener = null;
+        if (carouselArea != null && carouselLayoutChangeListener != null) {
+            carouselArea.removeOnLayoutChangeListener(carouselLayoutChangeListener);
+        }
+        carouselLayoutChangeListener = null;
+        carouselArea = null;
+        dxvkDetails = null;
+        rendererDetails = null;
+        frameGenDetails = null;
+        wrapperDetails = null;
+        fexDetails = null;
+        box64Details = null;
+        recyclerView = null;
+        previousToolbarBackground = null;
+        super.onDestroyView();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        isLaunchingShortcut = false;
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+            for (Shortcut shortcut : adapter.data) requestCloudCoverArt(shortcut);
         }
     }
 
@@ -206,19 +317,236 @@ public class ShortcutsFragment extends Fragment {
     private void updateGridLayout() {
         if (recyclerView == null) return;
         Configuration config = getResources().getConfiguration();
-        int columns = config.orientation == Configuration.ORIENTATION_LANDSCAPE ? 5 : 2;
         float density = getResources().getDisplayMetrics().density;
-        int padding = (int) (8 * density);
-
-        recyclerView.setPadding(padding, 0, padding, 0);
+        int screenWidth = getResources().getDisplayMetrics().widthPixels;
+        int screenHeight = getResources().getDisplayMetrics().heightPixels;
+        boolean landscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE;
+        float maxCardDp = landscape ? 190f : 180f;
+        int contentHeight = carouselArea != null ? carouselArea.getHeight() : 0;
+        int contentWidth = carouselArea != null && carouselArea.getWidth() > 0
+                ? carouselArea.getWidth() : screenWidth;
+        float availableWidthDp = contentWidth / density;
+        if (landscape) {
+            maxCardDp = Math.max(150f, availableWidthDp / 3f - 16f);
+        } else {
+            maxCardDp = Math.min(maxCardDp, availableWidthDp * 0.62f);
+        }
+        float availableHeightDp = contentHeight > 0
+                ? contentHeight / density
+                : Math.max(160f, screenHeight / density - 112f);
+        float maxCardHeightDp = Math.max(100f, availableHeightDp - 96f);
+        float cardWidthDp = landscape ? maxCardDp : Math.min(maxCardDp, maxCardHeightDp);
+        int sideInsetPx = Math.round(16f * density);
+        int cardWidth = Math.max(1, Math.min(Math.round(cardWidthDp * density), contentWidth - sideInsetPx * 2));
+        shortcutCardWidthPx = cardWidth;
+        float coverHeightDp = landscape
+                ? Math.min(126f, Math.max(92f, availableHeightDp * 0.48f))
+                : Math.min(cardWidthDp, Math.max(120f, availableHeightDp - 170f));
+        shortcutCoverHeightPx = Math.round(coverHeightDp * density);
+        int cardSlotWidth = cardWidth + Math.round(16f * density);
+        int recyclerWidth = landscape
+                ? Math.min(contentWidth, cardSlotWidth * 3)
+                : contentWidth;
+        ViewGroup.LayoutParams params = recyclerView.getLayoutParams();
+        params.width = recyclerWidth;
+        params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+        recyclerView.setLayoutParams(params);
+        recyclerView.setTranslationY(0f);
+        int centerPadding = Math.max(0, (recyclerWidth - cardSlotWidth) / 2);
+        recyclerView.setPadding(centerPadding, Math.round(16f * density),
+                centerPadding, Math.round(16f * density));
         recyclerView.setClipToPadding(false);
         RecyclerView.LayoutManager lm = recyclerView.getLayoutManager();
-        if (lm instanceof GridLayoutManager) {
-            ((GridLayoutManager) lm).setSpanCount(columns);
+        if (lm instanceof LinearLayoutManager
+                && ((LinearLayoutManager) lm).getOrientation() == LinearLayoutManager.HORIZONTAL) {
+            ((LinearLayoutManager) lm).setOrientation(LinearLayoutManager.HORIZONTAL);
         } else {
-            recyclerView.setLayoutManager(new GridLayoutManager(getContext(), columns));
+            recyclerView.setLayoutManager(new LinearLayoutManager(getContext(), LinearLayoutManager.HORIZONTAL, false));
+        }
+        if (snapHelper == null) {
+            snapHelper = new LinearSnapHelper();
+            snapHelper.attachToRecyclerView(recyclerView);
+            snapScrollListener = new RecyclerView.OnScrollListener() {
+                @Override
+                public void onScrollStateChanged(@NonNull RecyclerView view, int newState) {
+                    if (newState != RecyclerView.SCROLL_STATE_IDLE || snapHelper == null) return;
+                    View snappedView = snapHelper.findSnapView(view.getLayoutManager());
+                    if (snappedView == null || adapter == null) return;
+                    int position = view.getChildAdapterPosition(snappedView);
+                    if (position >= 0 && position < adapter.data.size()) {
+                        adapter.selectShortcut(adapter.data.get(position));
+                    }
+                }
+
+                @Override
+                public void onScrolled(@NonNull RecyclerView view, int dx, int dy) {
+                    applyCarouselEffects();
+                }
+            };
+            recyclerView.addOnScrollListener(snapScrollListener);
         }
         recyclerView.invalidateItemDecorations();
+        centerSelectedShortcut();
+    }
+
+    private void centerSelectedShortcut() {
+        if (recyclerView == null || adapter == null || selectedShortcut == null) return;
+        int position = adapter.data.indexOf(selectedShortcut);
+        if (position >= 0 && recyclerView.getLayoutManager() instanceof LinearLayoutManager) {
+            ((LinearLayoutManager) recyclerView.getLayoutManager()).scrollToPositionWithOffset(
+                    position, 0);
+            recyclerView.post(() -> {
+                applyCarouselEffects();
+                updateSelectedShortcutDetails();
+            });
+        }
+    }
+
+    private void applyCarouselEffects() {
+        if (recyclerView == null) return;
+        float center = (recyclerView.getPaddingLeft()
+                + recyclerView.getWidth() - recyclerView.getPaddingRight()) / 2f;
+        float maxDistance = Math.max(1, shortcutCardWidthPx + recyclerView.getPaddingLeft());
+        float density = getResources().getDisplayMetrics().density;
+        for (int i = 0; i < recyclerView.getChildCount(); i++) {
+            View child = recyclerView.getChildAt(i);
+            float childCenter = (child.getLeft() + child.getRight()) / 2f;
+            float distance = Math.min(1f, Math.abs(childCenter - center) / maxDistance);
+            float scale = 1f - distance * 0.12f;
+            child.setScaleX(scale);
+            child.setScaleY(scale);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                float blurRadius = distance * 6.6f * density;
+                child.setRenderEffect(blurRadius > 0.75f
+                        ? RenderEffect.createBlurEffect(blurRadius, blurRadius, Shader.TileMode.CLAMP)
+                        : null);
+            }
+            child.setAlpha(1f - distance * 0.4f);
+        }
+    }
+
+    private void updateSelectedShortcutDetails() {
+        if (dxvkDetails == null || rendererDetails == null || frameGenDetails == null
+                || wrapperDetails == null || fexDetails == null || box64Details == null) return;
+        if (selectedShortcut == null || selectedShortcut.container == null) {
+            dxvkDetails.setText("");
+            rendererDetails.setText("");
+            frameGenDetails.setText("");
+            wrapperDetails.setText("");
+            fexDetails.setText("");
+            box64Details.setText("");
+            return;
+        }
+
+        Shortcut shortcut = selectedShortcut;
+        Container container = shortcut.container;
+        Context context = getContext();
+        if (context == null) return;
+
+        String dxWrapper = shortcut.getExtra("dxwrapper", container.getDXWrapper());
+        String dxConfig = shortcut.getExtra("dxwrapperConfig", container.getDXWrapperConfig());
+        String dxVersion = getConfigValue(dxConfig, "version");
+        String dxLabel = dxWrapper.replace('+', ' ').trim();
+        if (!dxVersion.isEmpty()) dxLabel += " " + dxVersion;
+        dxvkDetails.setText(getString(R.string.shortcut_dxvk_details,
+                dxLabel.isEmpty() ? "Default" : dxLabel));
+
+        String renderer = shortcut.getExtra("renderer", container.getRenderer());
+        String rendererDriver = shortcut.getExtra("rendererDriverId",
+                container.getExtra("rendererDriverId", ""));
+        String rendererLabel = "vulkan".equalsIgnoreCase(renderer) ? "Vulkan" : "OpenGL";
+        if (container.isRendererNative()) rendererLabel += " · Native";
+        if (!rendererDriver.isEmpty()) rendererLabel += " · " + rendererDriver;
+        String colorOrder = shortcut.getExtra("rendererColorOrder",
+                container.getExtra("rendererColorOrder", ""));
+        String presentMode = shortcut.getExtra("rendererPresentMode",
+                container.getExtra("rendererPresentMode", ""));
+        if (!colorOrder.isEmpty()) rendererLabel += " · " + colorOrder.toUpperCase(java.util.Locale.ROOT);
+        if (!presentMode.isEmpty()) rendererLabel += " · " + presentMode;
+        rendererDetails.setText(getString(R.string.shortcut_renderer_details, rendererLabel));
+
+        boolean frameGenEnabled = "1".equals(shortcut.getExtra("frameGenEnabled",
+                container.getExtra("frameGenEnabled", "0")));
+        String engine = shortcut.getExtra("frameGenEngine",
+                container.getExtra("frameGenEngine", "lsfg"));
+        String multiplier = shortcut.getExtra("frameGenMultiplier",
+                container.getExtra("frameGenMultiplier", "2"));
+        String frameGenLabel = frameGenEnabled
+                ? ("winfg".equalsIgnoreCase(engine) ? "Win-FG" : "LSFG") + " ×" + multiplier
+                : getString(R.string.disabled);
+        frameGenDetails.setText(getString(R.string.shortcut_frame_gen_details, frameGenLabel));
+
+        String graphicsDriverConfig = shortcut.getExtra("graphicsDriverConfig",
+                container.getGraphicsDriverConfig());
+        java.util.HashMap<String, String> graphicsDriver =
+                GraphicsDriverConfigDialog.parseGraphicsDriverConfig(
+                        graphicsDriverConfig != null ? graphicsDriverConfig : "");
+        String wrapperId = shortcut.getExtra("graphicsWrapperId",
+                graphicsDriver.getOrDefault("wrapperId", "apex-wrapper"));
+        String wrapperName = WrapperCatalogManager.getInstalledWrapperName(context, wrapperId);
+        wrapperDetails.setText(getString(R.string.shortcut_wrapper_details, wrapperName));
+
+        String fexVersion = shortcut.getExtra("fexcoreVersion", container.getFEXCoreVersion());
+        String fexPresetId = shortcut.getExtra("fexcorePreset", container.getFEXCorePreset());
+        FEXCorePreset fexPreset = fexPresetId == null || fexPresetId.isEmpty()
+                ? null : FEXCorePresetManager.getPreset(context, fexPresetId);
+        String fexPresetName = fexPreset != null ? fexPreset.name : displayValue(fexPresetId);
+        fexDetails.setText(getString(R.string.shortcut_fex_details,
+                displayValue(fexVersion), fexPresetName));
+
+        String box64Version = shortcut.getExtra("box64Version", container.getBox64Version());
+        String box64PresetId = shortcut.getExtra("box64Preset", container.getBox64Preset());
+        Box64Preset box64Preset = box64PresetId == null || box64PresetId.isEmpty()
+                ? null : Box64PresetManager.getPreset("box64", context, box64PresetId);
+        String box64PresetName = box64Preset != null
+                ? box64Preset.name : displayValue(box64PresetId);
+        box64Details.setText(getString(R.string.shortcut_box64_details,
+                displayValue(box64Version), box64PresetName));
+    }
+
+    private String displayValue(String value) {
+        return value == null || value.trim().isEmpty() ? "Default" : value;
+    }
+
+    private void requestCloudCoverArt(Shortcut shortcut) {
+        if (shortcut == null || shortcut.container == null
+                || !shortcut.getCustomCoverArtPath().isEmpty() || getContext() == null) return;
+        String requestKey = shortcut.container.id + ":" + shortcut.name;
+        synchronized (coverArtRequests) {
+            if (!coverArtRequests.add(requestKey)) return;
+        }
+
+        CoverArtManager.fetchDefaultCoverArt(getContext(), shortcut, new CoverArtManager.DownloadCallback() {
+            @Override
+            public void onCompleted(android.graphics.Bitmap bitmap) {
+                Activity activity = getActivity();
+                if (activity == null) return;
+                activity.runOnUiThread(() -> {
+                    if (!isAdded() || adapter == null) return;
+                    int position = adapter.data.indexOf(shortcut);
+                    if (position >= 0) adapter.notifyItemChanged(position);
+                    if (selectedShortcut == shortcut) updateSelectedShortcutDetails();
+                });
+            }
+
+            @Override
+            public void onFailed(CoverArtManager.ErrorReason reason) {
+                synchronized (coverArtRequests) {
+                    coverArtRequests.remove(requestKey);
+                }
+                android.util.Log.w("ShortcutsFragment",
+                        "Unable to fetch cloud cover art for " + shortcut.name + ": " + reason);
+            }
+        });
+    }
+
+    private String getConfigValue(String config, String key) {
+        if (config == null || config.isEmpty()) return "";
+        for (String entry : config.split(",")) {
+            String[] pair = entry.trim().split("=", 2);
+            if (pair.length == 2 && key.equalsIgnoreCase(pair[0].trim())) return pair[1].trim();
+        }
+        return "";
     }
 
     private final java.util.concurrent.ExecutorService shortcutLoaderExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
@@ -247,6 +575,9 @@ public class ShortcutsFragment extends Fragment {
                     if (recyclerView != null) {
                         adapter = new ShortcutsAdapter(shortcuts);
                         recyclerView.setAdapter(adapter);
+                        updateGridLayout();
+                        centerSelectedShortcut();
+                        updateSelectedShortcutDetails();
                         adapter.updateEmptyState();
                     }
                 });
@@ -418,6 +749,7 @@ public class ShortcutsFragment extends Fragment {
             this.currentQuery = query != null ? query.trim().toLowerCase() : "";
             applyFilterAndSort();
             notifyDataSetChanged();
+            updateGridLayout();
             updateEmptyState();
         }
 
@@ -425,6 +757,7 @@ public class ShortcutsFragment extends Fragment {
             this.currentSortOrder = sortOrder;
             applyFilterAndSort();
             notifyDataSetChanged();
+            centerSelectedShortcut();
         }
 
         private void applyFilterAndSort() {
@@ -488,6 +821,33 @@ public class ShortcutsFragment extends Fragment {
                     data.sort((a, b) -> a.name.compareToIgnoreCase(b.name));
                     break;
             }
+            if (selectedShortcut == null || !data.contains(selectedShortcut)) {
+                selectedShortcut = data.isEmpty() ? null : data.get(0);
+            }
+            updateSelectedShortcutDetails();
+        }
+
+        private void selectShortcut(Shortcut shortcut) {
+            int previousPosition = data.indexOf(selectedShortcut);
+            selectedShortcut = shortcut;
+            int selectedPosition = data.indexOf(shortcut);
+            if (previousPosition >= 0) notifyItemChanged(previousPosition);
+            if (selectedPosition >= 0 && selectedPosition != previousPosition) notifyItemChanged(selectedPosition);
+            updateSelectedShortcutDetails();
+            applyCarouselEffects();
+            centerShortcutIfNeeded(selectedPosition);
+        }
+
+        private void centerShortcutIfNeeded(int position) {
+            if (recyclerView == null || recyclerView.isComputingLayout() || position < 0) return;
+            RecyclerView.LayoutManager layoutManager = recyclerView.getLayoutManager();
+            View card = layoutManager != null ? layoutManager.findViewByPosition(position) : null;
+            if (card == null) return;
+            float cardCenter = (card.getLeft() + card.getRight()) / 2f;
+            float viewportCenter = recyclerView.getWidth() / 2f;
+            if (Math.abs(cardCenter - viewportCenter) > Math.round(4f * getResources().getDisplayMetrics().density)) {
+                recyclerView.smoothScrollToPosition(position);
+            }
         }
 
         public void updateEmptyState() {
@@ -518,12 +878,26 @@ public class ShortcutsFragment extends Fragment {
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             Shortcut item = data.get(position);
             holder.title.setText(item.name);
+            requestCloudCoverArt(item);
 
-            boolean isLandscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
-            float titleSize = isLandscape ? 12.5f : 15.0f;
+            boolean landscape = getResources().getConfiguration().orientation
+                    == Configuration.ORIENTATION_LANDSCAPE;
+            float titleSize = landscape ? 14.0f : 15.0f;
 
             if (holder.title != null) {
+                holder.title.setMaxLines(landscape ? 2 : 1);
                 holder.title.setTextSize(TypedValue.COMPLEX_UNIT_SP, titleSize);
+            }
+
+            ViewGroup.LayoutParams itemParams = holder.cardRoot.getLayoutParams();
+            if (itemParams != null && shortcutCardWidthPx > 0 && itemParams.width != shortcutCardWidthPx) {
+                itemParams.width = shortcutCardWidthPx;
+                holder.cardRoot.setLayoutParams(itemParams);
+            }
+            ViewGroup.LayoutParams coverParams = holder.coverFrame.getLayoutParams();
+            if (coverParams != null && shortcutCoverHeightPx > 0 && coverParams.height != shortcutCoverHeightPx) {
+                coverParams.height = shortcutCoverHeightPx;
+                holder.coverFrame.setLayoutParams(coverParams);
             }
 
             String rawWine = item.getExtra("wineVersion", item.container.getWineVersion());
@@ -544,32 +918,60 @@ public class ShortcutsFragment extends Fragment {
                 holder.version.setVisibility(View.GONE);
             }
 
-            String remoteUrl = item.getCoverArtUrl();
-            if (item.getCustomCoverArtPath().isEmpty() && remoteUrl != null) {
-                Glide.with(getContext())
-                    .load(remoteUrl)
-                    .placeholder(R.drawable.cover_art_placeholder)
-                    .centerCrop()
-                    .into(holder.coverArt);
-            } else {
-                Glide.with(getContext())
+            Glide.with(holder.coverArt)
                     .load(item.getCoverArt())
                     .placeholder(R.drawable.cover_art_placeholder)
                     .centerCrop()
                     .into(holder.coverArt);
-            }
 
             if (getContext() != null) {
                 int accent = ThemeManager.getAccentColor(getContext());
                 holder.menuButton.setImageTintList(android.content.res.ColorStateList.valueOf(accent));
+                boolean selected = item == selectedShortcut;
+                float density = getResources().getDisplayMetrics().density;
+                holder.cardRoot.setCardBackgroundColor(selected ? Color.rgb(48, 146, 255) : Color.rgb(35, 57, 92));
+                holder.cardRoot.setCardElevation((selected ? 24f : 8f) * density);
+                holder.playButton.setImageTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
             }
+            holder.cardRoot.setAlpha(1f);
 
             holder.menuButton.setOnClickListener((v) -> showListItemMenu(v, item));
-            holder.innerArea.setOnClickListener((v) -> runFromShortcut(item));
+            holder.playButton.setContentDescription(getString(R.string.start_game_named, item.name));
+            holder.playButton.setEnabled(!isLaunchingShortcut);
+            holder.playButton.setOnClickListener(v -> launchShortcut(item));
+            holder.playButton.setVisibility(landscape ? View.GONE : View.VISIBLE);
+            holder.landscapePlayButton.setContentDescription(getString(R.string.start_game_named, item.name));
+            holder.landscapePlayButton.setEnabled(!isLaunchingShortcut);
+            holder.landscapePlayButton.setVisibility(landscape ? View.VISIBLE : View.GONE);
+            holder.landscapePlayButton.setOnClickListener(v -> launchShortcut(item));
+            holder.cardRoot.setOnClickListener((v) -> selectShortcut(item));
+            holder.cardRoot.setOnKeyListener((v, keyCode, event) -> {
+                if (event.getAction() == android.view.KeyEvent.ACTION_UP
+                        && (keyCode == android.view.KeyEvent.KEYCODE_ENTER || keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER)) {
+                    selectShortcut(item);
+                    return true;
+                }
+                return false;
+            });
+            holder.innerArea.setOnClickListener((v) -> selectShortcut(item));
+            holder.cardRoot.setContentDescription(item.name);
             holder.innerArea.setOnLongClickListener((v) -> {
                 showListItemMenu(holder.menuButton, item);
                 return true;
             });
+            if (recyclerView != null) {
+                recyclerView.postOnAnimation(ShortcutsFragment.this::applyCarouselEffects);
+            }
+        }
+
+        private void launchShortcut(Shortcut shortcut) {
+            long now = SystemClock.elapsedRealtime();
+            if (isLaunchingShortcut
+                    || (lastShortcutLaunchTime > 0 && now - lastShortcutLaunchTime < 1500L)) return;
+            isLaunchingShortcut = true;
+            lastShortcutLaunchTime = now;
+            if (adapter != null) adapter.notifyDataSetChanged();
+            runFromShortcut(shortcut);
         }
 
         private void adjustTextSizeToFit(TextView textView, String text, float maxSp, float minSp) {
@@ -669,9 +1071,6 @@ public class ShortcutsFragment extends Fragment {
                 }
                 else if (itemId == R.id.shortcut_export) {
                     exportShortcut(shortcut);
-                }
-                else if (itemId == R.id.shortcut_share_community) {
-                    shareShortcutToCommunity(shortcut);
                 }
                 else if (itemId == R.id.shortcut_properties) {
                     showShortcutProperties(shortcut);
@@ -1205,20 +1604,28 @@ public class ShortcutsFragment extends Fragment {
         }
 
         class ViewHolder extends RecyclerView.ViewHolder {
+            private final CardView cardRoot;
+            private final FrameLayout coverFrame;
             private final ImageView coverArt;
             private final TextView title;
             private final TextView subtitle;
             private final TextView version;
             private final ImageButton menuButton;
+            private final ImageButton playButton;
+            private final ImageButton landscapePlayButton;
             private final View innerArea;
 
             public ViewHolder(View view) {
                 super(view);
+                cardRoot = view.findViewById(R.id.CardRoot);
+                coverFrame = view.findViewById(R.id.FLShortcutCover);
                 coverArt = view.findViewById(R.id.ImageView);
                 title = view.findViewById(R.id.TVTitle);
                 subtitle = view.findViewById(R.id.TVSubtitle);
                 version = view.findViewById(R.id.TVVersion);
                 menuButton = view.findViewById(R.id.BTMenu);
+                playButton = view.findViewById(R.id.BTPlay);
+                landscapePlayButton = view.findViewById(R.id.BTPlayLandscape);
                 innerArea = view.findViewById(R.id.LLInnerArea);
             }
         }

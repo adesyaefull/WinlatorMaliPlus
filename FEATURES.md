@@ -4,7 +4,7 @@ This document inventories the Winlator Mali+ changes layered onto upstream Winla
 
 ## Integration baseline
 
-- The local integration branch is `local-vulkan-port`, based on upstream Winlator Mali 1.2 commit `e34f1e87f875fa143bf5bca6bd37fc2f781528d9`.
+- The local integration branch is `bionic-mali-1.2`, based on upstream Winlator Mali 1.2 commit `e34f1e87f875fa143bf5bca6bd37fc2f781528d9`.
 - The integration commit is `ceb730481bf3f7f146c19947bd161445a4a721ad`.
 - Keep the upstream native EGL/Gladio renderer and ZeroFG path. Vulkan host rendering is an additional choice, not a replacement for those defaults.
 - The original Mali+ source branch is `bionic-mali-1.0`; use it as a historical reference when a change is not documented here. Do not merge old files wholesale over newer upstream files: the renderer and UI APIs have changed.

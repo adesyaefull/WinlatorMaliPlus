@@ -5,7 +5,7 @@
 # Winlator Mali+ (Bionic Edition)
 
 [![Release](https://img.shields.io/badge/Release-Local%20Integration-blue.svg)](https://github.com/adesyaefull/WinlatorMaliPlus/releases)
-[![Default Branch](https://img.shields.io/badge/Branch-local--vulkan--port-brightgreen.svg)](https://github.com/adesyaefull/WinlatorMaliPlus/tree/local-vulkan-port)
+[![Default Branch](https://img.shields.io/badge/Branch-bionic--mali--1.2-brightgreen.svg)](https://github.com/adesyaefull/WinlatorMaliPlus/tree/bionic-mali-1.2)
 [![Android Support](https://img.shields.io/badge/Android-8.0%2B%20(SDK%2026--34)-orange.svg)](https://developer.android.com)
 [![Architecture](https://img.shields.io/badge/Architecture-ARM64--v8a-purple.svg)](https://en.wikipedia.org/wiki/AArch64)
 [![License](https://img.shields.io/badge/License-GPL%20v3%20%2F%20LGPL%20v2.1%20%2F%20MIT-lightgrey.svg)](LICENSE)
@@ -206,7 +206,7 @@ cd WinlatorMali
 For the Mali+ integration branch, clone the personal fork instead:
 
 ```bash
-git clone https://github.com/adesyaefull/WinlatorMaliPlus.git -b local-vulkan-port
+git clone https://github.com/adesyaefull/WinlatorMaliPlus.git -b bionic-mali-1.2
 cd WinlatorMaliPlus
 ```
 
@@ -284,7 +284,7 @@ Winlator Mali stands on the shoulders of brilliant contributors across the open-
 
 ## Local Upstream Integration Notes
 
-The local `local-vulkan-port` integration keeps the upstream native EGL/Gladio renderer and ZeroFG path as the default, while adding Vulkan as an optional host-renderer choice for containers and shortcuts. Vulkan-specific renderer settings, native scanout, and LSFG/Win-FG frame generation are configured separately; using Vulkan does not remove the upstream EGL/ZeroFG path.
+The local `bionic-mali-1.2` integration keeps the upstream native EGL/Gladio renderer and ZeroFG path as the default, while adding Vulkan as an optional host-renderer choice for containers and shortcuts. Vulkan-specific renderer settings, native scanout, and LSFG/Win-FG frame generation are configured separately; using Vulkan does not remove the upstream EGL/ZeroFG path.
 
 ---
 

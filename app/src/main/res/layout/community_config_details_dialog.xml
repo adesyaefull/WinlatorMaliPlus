@@ -100,8 +100,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textColor="#2196F3"
-            android:background="#102196F3"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/liquid_glass_surface"
             android:padding="12dp"
             android:visibility="gone"/>
 

@@ -118,6 +118,7 @@ public final class WrapperCatalogManager {
                 JSONObject item = wrappers.optJSONObject(i);
                 if (item == null) continue;
                 String id = item.optString("id", "").trim();
+                if (isUnreliableBcnWrapper(id)) continue;
                 String url = item.optString("url", "").trim();
                 if (!SAFE_ID.matcher(id).matches() || !isAllowedDownloadUrl(url)) continue;
                 String name = item.optString("name", id).trim();
@@ -151,6 +152,12 @@ public final class WrapperCatalogManager {
         }
     }
 
+    private static boolean isUnreliableBcnWrapper(String id) {
+        return "bannerlator-bcn-leegao".equalsIgnoreCase(id)
+                || "bannerlator-compat-bcn".equalsIgnoreCase(id)
+                || "wmali-bcn-fcharan".equalsIgnoreCase(id);
+    }
+
     private static boolean isAllowedDownloadUrl(String value) {
         try {
             URL url = new URL(value);
@@ -175,6 +182,14 @@ public final class WrapperCatalogManager {
             for (File directory : directories) {
                 File wrapperFile = new File(directory, id + ".tzst");
                 if (wrapperFile.isFile()) return wrapperFile;
+            }
+        }
+        File[] candidates = driverDirectory.listFiles(File::isDirectory);
+        if (candidates != null) {
+            for (File directory : candidates) {
+                File[] archives = directory.listFiles((parent, name) ->
+                        name.equalsIgnoreCase(id + ".tzst"));
+                if (archives != null && archives.length > 0 && archives[0].isFile()) return archives[0];
             }
         }
         return null;

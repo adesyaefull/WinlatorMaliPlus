@@ -377,6 +377,7 @@
         <!-- Frame Generation                                             -->
         <!-- ============================================================ -->
         <LinearLayout
+            android:id="@+id/LLZeroFrameGen"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/bordered_panel_dark"
@@ -446,6 +447,61 @@
                 android:layout_width="match_parent"
                 android:layout_height="42dp"
                 android:layout_marginTop="2dp"
+                android:spinnerMode="dropdown" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/LLNativeFrameGen"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bordered_panel_dark"
+            android:orientation="vertical"
+            android:padding="12dp"
+            android:layout_marginBottom="10dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Vulkan Frame Generation"
+                android:textStyle="bold"
+                android:textSize="13sp"
+                android:layout_marginBottom="6dp" />
+
+            <CheckBox
+                android:id="@+id/CBNativeFrameGen"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Enable Win-FG / LSFG" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Engine"
+                android:textSize="11sp"
+                android:layout_marginTop="6dp" />
+
+            <Spinner
+                android:id="@+id/SNativeFrameGenEngine"
+                style="@style/ComboBox"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:entries="@array/frame_gen_engine_entries"
+                android:spinnerMode="dropdown" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Multiplier"
+                android:textSize="11sp"
+                android:layout_marginTop="6dp" />
+
+            <Spinner
+                android:id="@+id/SNativeFrameGenMultiplier"
+                style="@style/ComboBox"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:entries="@array/frame_gen_multiplier_entries"
                 android:spinnerMode="dropdown" />
         </LinearLayout>
 

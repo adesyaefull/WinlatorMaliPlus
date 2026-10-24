@@ -3,6 +3,7 @@ package com.winlator.cmod;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.SharedPreferences;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
@@ -66,7 +67,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.winlator.cmod.core.steamgrid.SteamGridDBApi;
@@ -86,6 +89,9 @@ public class ShortcutsFragment extends Fragment {
     private Shortcut selectedShortcut;
     private ShortcutsAdapter adapter;
     private final Set<String> coverArtRequests = new HashSet<>();
+    private final Set<String> coverArtPromptsShown = new HashSet<>();
+    private final Map<String, Integer> coverArtRetryCounts = new HashMap<>();
+    private final Set<String> pendingShortcutImageUpdates = new HashSet<>();
     private int shortcutCardWidthPx;
     private int shortcutCoverHeightPx;
     private boolean isLaunchingShortcut;
@@ -100,6 +106,7 @@ public class ShortcutsFragment extends Fragment {
     private static final int REQUEST_CODE_CUSTOM_COVER_ART = 1;
     private static final int REQUEST_CODE_CUSTOM_HERO_ART = 6;
     private static final int REQUEST_CODE_IMPORT_SHORTCUT = 1002;
+    private static final int REQUEST_CODE_ADD_GAME_EXE = 1003;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -210,6 +217,11 @@ public class ShortcutsFragment extends Fragment {
                 }
             });
         }
+        MenuItem landscapeItem = menu.findItem(R.id.shortcuts_menu_toggle_landscape);
+        if (landscapeItem != null && getResources().getConfiguration().orientation
+                == Configuration.ORIENTATION_LANDSCAPE) {
+            landscapeItem.setTitle("Portrait mode");
+        }
         super.onCreateOptionsMenu(menu, inflater);
     }
 
@@ -221,6 +233,15 @@ public class ShortcutsFragment extends Fragment {
             return true;
         } else if (id == R.id.shortcuts_menu_sort) {
             showSortDialog();
+            return true;
+        } else if (id == R.id.shortcuts_menu_toggle_landscape) {
+            Activity activity = getActivity();
+            if (activity != null) {
+                activity.setRequestedOrientation(getResources().getConfiguration().orientation
+                        == Configuration.ORIENTATION_LANDSCAPE
+                        ? ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        : ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            }
             return true;
         } else if (id == R.id.shortcuts_menu_refresh) {
             loadShortcutsList();
@@ -304,7 +325,7 @@ public class ShortcutsFragment extends Fragment {
         isLaunchingShortcut = false;
         if (adapter != null) {
             adapter.notifyDataSetChanged();
-            for (Shortcut shortcut : adapter.data) requestCloudCoverArt(shortcut);
+            loadShortcutsList();
         }
     }
 
@@ -327,7 +348,7 @@ public class ShortcutsFragment extends Fragment {
                 ? carouselArea.getWidth() : screenWidth;
         float availableWidthDp = contentWidth / density;
         if (landscape) {
-            maxCardDp = Math.max(150f, availableWidthDp / 3f - 16f);
+            maxCardDp = Math.min(200f, Math.max(170f, availableWidthDp * 0.23f));
         } else {
             maxCardDp = Math.min(maxCardDp, availableWidthDp * 0.62f);
         }
@@ -340,8 +361,9 @@ public class ShortcutsFragment extends Fragment {
         int cardWidth = Math.max(1, Math.min(Math.round(cardWidthDp * density), contentWidth - sideInsetPx * 2));
         shortcutCardWidthPx = cardWidth;
         float coverHeightDp = landscape
-                ? Math.min(126f, Math.max(92f, availableHeightDp * 0.48f))
+                ? Math.min(cardWidthDp * 0.95f, Math.max(80f, availableHeightDp - 112f))
                 : Math.min(cardWidthDp, Math.max(120f, availableHeightDp - 170f));
+        coverHeightDp += landscape ? 60f : 83f;
         shortcutCoverHeightPx = Math.round(coverHeightDp * density);
         int cardSlotWidth = cardWidth + Math.round(16f * density);
         int recyclerWidth = landscape
@@ -396,6 +418,7 @@ public class ShortcutsFragment extends Fragment {
             ((LinearLayoutManager) recyclerView.getLayoutManager()).scrollToPositionWithOffset(
                     position, 0);
             recyclerView.post(() -> {
+                if (adapter != null) adapter.centerShortcutIfNeeded(position);
                 applyCarouselEffects();
                 updateSelectedShortcutDetails();
             });
@@ -412,16 +435,27 @@ public class ShortcutsFragment extends Fragment {
             View child = recyclerView.getChildAt(i);
             float childCenter = (child.getLeft() + child.getRight()) / 2f;
             float distance = Math.min(1f, Math.abs(childCenter - center) / maxDistance);
+            float easedDistance = distance * distance * (3f - 2f * distance);
+            float blurRadius = easedDistance * 6.6f * density;
             float scale = 1f - distance * 0.12f;
             child.setScaleX(scale);
             child.setScaleY(scale);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                float blurRadius = distance * 6.6f * density;
-                child.setRenderEffect(blurRadius > 0.75f
-                        ? RenderEffect.createBlurEffect(blurRadius, blurRadius, Shader.TileMode.CLAMP)
-                        : null);
+                RecyclerView.ViewHolder holder = recyclerView.getChildViewHolder(child);
+                View blurTarget = holder instanceof ShortcutsAdapter.ViewHolder
+                        ? ((ShortcutsAdapter.ViewHolder) holder).innerArea : child;
+                blurTarget.setRenderEffect(blurRadius > 0.05f
+                        ? RenderEffect.createBlurEffect(blurRadius, blurRadius, Shader.TileMode.CLAMP) : null);
             }
             child.setAlpha(1f - distance * 0.4f);
+            RecyclerView.ViewHolder holder = recyclerView.getChildViewHolder(child);
+            if (holder instanceof ShortcutsAdapter.AddGameViewHolder) {
+                ShortcutsAdapter.AddGameViewHolder addHolder =
+                        (ShortcutsAdapter.AddGameViewHolder) holder;
+                addHolder.card.setEnabled(true);
+                addHolder.card.setClickable(true);
+                addHolder.card.setFocusable(true);
+            }
         }
     }
 
@@ -476,13 +510,7 @@ public class ShortcutsFragment extends Fragment {
                 : getString(R.string.disabled);
         frameGenDetails.setText(getString(R.string.shortcut_frame_gen_details, frameGenLabel));
 
-        String graphicsDriverConfig = shortcut.getExtra("graphicsDriverConfig",
-                container.getGraphicsDriverConfig());
-        java.util.HashMap<String, String> graphicsDriver =
-                GraphicsDriverConfigDialog.parseGraphicsDriverConfig(
-                        graphicsDriverConfig != null ? graphicsDriverConfig : "");
-        String wrapperId = shortcut.getExtra("graphicsWrapperId",
-                graphicsDriver.getOrDefault("wrapperId", "apex-wrapper"));
+        String wrapperId = shortcut.getExtra("graphicsDriver", container.getGraphicsDriver());
         String wrapperName = WrapperCatalogManager.getInstalledWrapperName(context, wrapperId);
         wrapperDetails.setText(getString(R.string.shortcut_wrapper_details, wrapperName));
 
@@ -510,8 +538,10 @@ public class ShortcutsFragment extends Fragment {
 
     private void requestCloudCoverArt(Shortcut shortcut) {
         if (shortcut == null || shortcut.container == null
-                || !shortcut.getCustomCoverArtPath().isEmpty() || getContext() == null) return;
-        String requestKey = shortcut.container.id + ":" + shortcut.name;
+                || shortcut.hasPrimaryCoverArt()
+                || !shortcut.getExtra("coverArtSelectionPending").isEmpty()
+                || getContext() == null) return;
+        String requestKey = shortcut.file.getAbsolutePath();
         synchronized (coverArtRequests) {
             if (!coverArtRequests.add(requestKey)) return;
         }
@@ -519,6 +549,10 @@ public class ShortcutsFragment extends Fragment {
         CoverArtManager.fetchDefaultCoverArt(getContext(), shortcut, new CoverArtManager.DownloadCallback() {
             @Override
             public void onCompleted(android.graphics.Bitmap bitmap) {
+                synchronized (coverArtRequests) {
+                    coverArtRequests.remove(requestKey);
+                    coverArtRetryCounts.remove(requestKey);
+                }
                 Activity activity = getActivity();
                 if (activity == null) return;
                 activity.runOnUiThread(() -> {
@@ -531,11 +565,24 @@ public class ShortcutsFragment extends Fragment {
 
             @Override
             public void onFailed(CoverArtManager.ErrorReason reason) {
+                boolean retry;
                 synchronized (coverArtRequests) {
                     coverArtRequests.remove(requestKey);
+                    int attempts = coverArtRetryCounts.getOrDefault(requestKey, 0);
+                    retry = (reason == CoverArtManager.ErrorReason.NETWORK_UNAVAILABLE
+                            || reason == CoverArtManager.ErrorReason.UNKNOWN) && attempts < 2;
+                    if (retry) coverArtRetryCounts.put(requestKey, attempts + 1);
                 }
                 android.util.Log.w("ShortcutsFragment",
                         "Unable to fetch cloud cover art for " + shortcut.name + ": " + reason);
+                if (retry && recyclerView != null) {
+                    recyclerView.postDelayed(() -> {
+                        if (isAdded() && !shortcut.hasPrimaryCoverArt()
+                                && shortcut.getExtra("coverArtSelectionPending").isEmpty()) {
+                            requestCloudCoverArt(shortcut);
+                        }
+                    }, 3000L);
+                }
             }
         });
     }
@@ -553,17 +600,10 @@ public class ShortcutsFragment extends Fragment {
 
     public void loadShortcutsList() {
         com.winlator.cmod.container.Shortcut.setOnShortcutLoadedListener(shortcut -> {
-            if (getActivity() != null && recyclerView != null) {
-                getActivity().runOnUiThread(() -> {
-                    if (adapter != null && adapter.data != null) {
-                        for (int i = 0; i < adapter.data.size(); i++) {
-                            Shortcut s = adapter.data.get(i);
-                            if (s != null && s.file != null && s.file.equals(shortcut.file)) {
-                                adapter.notifyItemChanged(i);
-                                break;
-                            }
-                        }
-                    }
+            Activity activity = getActivity();
+            if (activity != null) {
+                activity.runOnUiThread(() -> {
+                    notifyShortcutImageUpdated(shortcut);
                 });
             }
         });
@@ -575,14 +615,57 @@ public class ShortcutsFragment extends Fragment {
                     if (recyclerView != null) {
                         adapter = new ShortcutsAdapter(shortcuts);
                         recyclerView.setAdapter(adapter);
+                        flushPendingShortcutImageUpdates();
                         updateGridLayout();
                         centerSelectedShortcut();
                         updateSelectedShortcutDetails();
                         adapter.updateEmptyState();
+                        for (Shortcut shortcut : adapter.data) {
+                            if ("1".equals(shortcut.getExtra("coverArtSelectionPending"))
+                                    && coverArtPromptsShown.add(shortcut.file.getAbsolutePath())) {
+                                shortcut.putExtra("coverArtSelectionPending", "prompted");
+                                shortcut.saveData();
+                                showSearchPrompt(shortcut, shortcut.name, false);
+                            } else {
+                                requestCloudCoverArt(shortcut);
+                            }
+                        }
                     }
                 });
             }
         });
+    }
+
+    private void notifyShortcutImageUpdated(Shortcut shortcut) {
+        if (shortcut == null || shortcut.file == null) return;
+        String path = shortcut.file.getAbsolutePath();
+        if (adapter != null && adapter.data != null) {
+            for (int i = 0; i < adapter.data.size(); i++) {
+                Shortcut current = adapter.data.get(i);
+                if (current != null && current.file != null
+                        && path.equals(current.file.getAbsolutePath())) {
+                    adapter.notifyItemChanged(i);
+                    return;
+                }
+            }
+        }
+        synchronized (pendingShortcutImageUpdates) {
+            pendingShortcutImageUpdates.add(path);
+        }
+    }
+
+    private void flushPendingShortcutImageUpdates() {
+        if (adapter == null || adapter.data == null) return;
+        synchronized (pendingShortcutImageUpdates) {
+            if (pendingShortcutImageUpdates.isEmpty()) return;
+            for (int i = 0; i < adapter.data.size(); i++) {
+                Shortcut shortcut = adapter.data.get(i);
+                if (shortcut != null && shortcut.file != null
+                        && pendingShortcutImageUpdates.remove(shortcut.file.getAbsolutePath())) {
+                    adapter.notifyItemChanged(i);
+                }
+            }
+        }
     }
 
     @Override
@@ -613,7 +696,282 @@ public class ShortcutsFragment extends Fragment {
             if (uri != null) {
                 handleImportedFile(uri);
             }
+        } else if (requestCode == REQUEST_CODE_ADD_GAME_EXE
+                && resultCode == Activity.RESULT_OK && data != null) {
+            Uri uri = data.getData();
+            if (uri != null) createGameShortcut(uri);
         }
+    }
+
+    private void browseForGameExecutable() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.setType("*/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        try {
+            startActivityForResult(intent, REQUEST_CODE_ADD_GAME_EXE);
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "No file browser found.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void createGameShortcut(Uri uri) {
+        Context context = getContext();
+        if (context == null || manager == null) return;
+        String selectedName = getDisplayName(uri);
+        if (selectedName == null || !selectedName.toLowerCase(java.util.Locale.ROOT).endsWith(".exe")) {
+            Toast.makeText(context, "Select a Windows .exe file.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        ArrayList<Container> containers = new ArrayList<>(manager.getContainers());
+        if (containers.isEmpty()) {
+            ContentDialog.alert(context, "No containers available. Please create a container first.", null);
+            return;
+        }
+        String[] names = new String[containers.size()];
+        for (int i = 0; i < containers.size(); i++) names[i] = containers.get(i).getName();
+        ContentDialog.showSingleChoiceList(context, "Target Container", names,
+                index -> {
+                    Container container = containers.get(index);
+                    File source = resolveSelectedExecutable(uri);
+                    if (source != null) {
+                        createShortcutForExecutable(source, container);
+                    } else {
+                        android.util.Log.w("ShortcutsFragment",
+                                "Selected executable URI has no direct filesystem path; copying into the container");
+                        copyGameIntoContainer(uri, selectedName, container);
+                    }
+                });
+    }
+
+    @Nullable
+    private File resolveSelectedExecutable(Uri uri) {
+        Context context = getContext();
+        if (context == null) return null;
+        if ("file".equalsIgnoreCase(uri.getScheme()) && uri.getPath() != null) {
+            File file = new File(uri.getPath());
+            return file.isFile() ? file : null;
+        }
+
+        String path = com.winlator.cmod.core.FileUtils.getFilePathFromUriUsingSAF(context, uri);
+        if (path == null || path.isEmpty()) return null;
+        File file = new File(path);
+        return file.isFile() ? file : null;
+    }
+
+    private void createShortcutForExecutable(File executable, Container container) {
+        Context context = getContext();
+        if (context == null) return;
+        if (!executable.isFile()) {
+            Toast.makeText(context, "The selected executable is no longer available.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        String displayName = executable.getName();
+        if (displayName.toLowerCase(java.util.Locale.ROOT).endsWith(".exe")) {
+            displayName = displayName.substring(0, displayName.length() - 4);
+        }
+        displayName = displayName.trim();
+        if (displayName.isEmpty()) displayName = "Game";
+
+        File desktopDir = container.getDesktopDir();
+        if (!desktopDir.exists() && !desktopDir.mkdirs()) {
+            Toast.makeText(context, "Could not create the container desktop folder.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        String uniqueName = displayName;
+        for (int suffix = 2; new File(desktopDir, uniqueName + ".desktop").exists(); suffix++) {
+            uniqueName = displayName + " (" + suffix + ")";
+        }
+        String windowsPath = executableToWindowsPath(executable, container);
+        String workingDirectory = executableWorkingDirectory(executable, container);
+        File desktopFile = new File(desktopDir, uniqueName + ".desktop");
+        String winePrefix = getContainerWineHome(container) + "/.wine";
+        try (java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.FileWriter(desktopFile))) {
+            writer.println("[Desktop Entry]");
+            writer.println("Name=" + uniqueName);
+            writer.println("Exec=env WINEPREFIX=\"" + winePrefix + "\" wine "
+                    + com.winlator.cmod.core.StringUtils.escapeFileDOSPath(windowsPath));
+            writer.println("Type=Application");
+            if (!workingDirectory.isEmpty()) writer.println("Path=" + workingDirectory);
+            writer.println("Icon=" + uniqueName);
+            writer.println("container_id:" + container.id);
+            writer.println();
+            writer.println("[Extra Data]");
+            writer.println("coverArtSelectionPending=1");
+        } catch (java.io.IOException e) {
+            android.util.Log.e("ShortcutsFragment", "Unable to create direct game shortcut", e);
+            Toast.makeText(context, "Failed to create the game shortcut.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        File iconDir = container.getIconsDir(64);
+        if (!iconDir.exists() && !iconDir.mkdirs()) {
+            android.util.Log.w("ShortcutsFragment", "Unable to create icon directory: " + iconDir);
+        } else {
+            com.winlator.cmod.core.ExeIconExtractor.extractAsync(executable,
+                    new File(iconDir, uniqueName + ".png"), false, null);
+        }
+        Toast.makeText(context, "Game shortcut added using the executable's original folder.",
+                Toast.LENGTH_LONG).show();
+        loadShortcutsList();
+    }
+
+    private String executableToWindowsPath(File executable, Container container) {
+        String path = executable.getAbsolutePath();
+        File driveC = new File(container.getRootDir(), ".wine/drive_c");
+        String driveCPath = driveC.getAbsolutePath();
+        if (isSameOrChildPath(path, driveCPath)) {
+            return "C:\\" + path.substring(driveCPath.length())
+                    .replace(File.separatorChar, '\\').replaceFirst("^\\\\", "");
+        }
+        for (String[] drive : container.drivesIterator()) {
+            if (drive == null || drive.length < 2 || drive[0] == null || drive[1] == null) continue;
+            String driveRoot = new File(drive[1]).getAbsolutePath();
+            if (isSameOrChildPath(path, driveRoot)) {
+                return drive[0].replace(":", "").toUpperCase(java.util.Locale.ROOT) + ":\\"
+                        + path.substring(driveRoot.length())
+                        .replace(File.separatorChar, '\\').replaceFirst("^\\\\", "");
+            }
+        }
+        return "Z:" + path.replace(File.separatorChar, '\\');
+    }
+
+    private String executableWorkingDirectory(File executable, Container container) {
+        File parent = executable.getParentFile();
+        if (parent == null) return "";
+        String path = parent.getAbsolutePath();
+        for (String[] drive : container.drivesIterator()) {
+            if (drive == null || drive.length < 2 || drive[0] == null || drive[1] == null) continue;
+            String driveRoot = new File(drive[1]).getAbsolutePath();
+            if (isSameOrChildPath(path, driveRoot)) {
+                String relativePath = path.substring(driveRoot.length())
+                        .replace(File.separatorChar, '/').replaceFirst("^/", "");
+                return getContainerWineHome(container) + "/.wine/dosdevices/"
+                        + drive[0].replace(":", "").toLowerCase(java.util.Locale.ROOT) + ":/"
+                        + relativePath;
+            }
+        }
+        return path;
+    }
+
+    private boolean isSameOrChildPath(String path, String root) {
+        return path.equals(root) || path.startsWith(root.endsWith(File.separator)
+                ? root : root + File.separator);
+    }
+
+    private String getContainerWineHome(Container container) {
+        Context context = getContext();
+        if (context == null) return "/home/" + com.winlator.cmod.xenvironment.ImageFs.USER;
+        String rootPath = container.getRootDir().getAbsolutePath();
+        String imageFsPath = new File(context.getFilesDir(), "imagefs").getAbsolutePath();
+        return rootPath.startsWith(imageFsPath)
+                ? rootPath.substring(imageFsPath.length())
+                : "/home/" + com.winlator.cmod.xenvironment.ImageFs.USER;
+    }
+
+    private String getDisplayName(Uri uri) {
+        Context context = getContext();
+        if (context == null) return null;
+        try (android.database.Cursor cursor = context.getContentResolver()
+                .query(uri, null, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                if (index >= 0) return cursor.getString(index);
+            }
+        } catch (Exception e) {
+            android.util.Log.e("ShortcutsFragment", "Unable to read selected executable name", e);
+        }
+        return null;
+    }
+
+    private void copyGameIntoContainer(Uri uri, String selectedName, Container container) {
+        Context context = getContext();
+        if (context == null) return;
+        String fileName = new File(selectedName).getName()
+                .replaceAll("[<>:\"/\\\\|?*]", "_").trim();
+        String baseName = fileName.substring(0, fileName.length() - 4).trim();
+        if (baseName.isEmpty()) baseName = "Game";
+
+        File programFiles = new File(container.getRootDir(), ".wine/drive_c/Program Files");
+        File gameDir = new File(programFiles, baseName);
+        for (int suffix = 2; gameDir.exists()
+                || new File(container.getDesktopDir(), gameDir.getName() + ".desktop").exists(); suffix++) {
+            gameDir = new File(programFiles, baseName + " (" + suffix + ")");
+        }
+        if (!gameDir.mkdirs()) {
+            Toast.makeText(context, "Could not create the game's program folder.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        File executable = new File(gameDir, fileName);
+        if (!com.winlator.cmod.core.FileUtils.copy(context, uri, executable)) {
+            executable.delete();
+            gameDir.delete();
+            Toast.makeText(context, "Failed to copy the selected executable.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (!createDesktopShortcut(executable, container)) {
+            executable.delete();
+            gameDir.delete();
+            return;
+        }
+        Toast.makeText(context, "Game added to " + container.getName() + " shortcuts.", Toast.LENGTH_LONG).show();
+        loadShortcutsList();
+    }
+
+    private boolean createDesktopShortcut(File executable, Container container) {
+        Context context = getContext();
+        if (context == null) return false;
+        String displayName = executable.getParentFile().getName();
+        File desktopDir = container.getDesktopDir();
+        if (!desktopDir.exists() && !desktopDir.mkdirs()) {
+            Toast.makeText(context, "Could not create the container desktop folder.", Toast.LENGTH_LONG).show();
+            return false;
+        }
+        File desktopFile = new File(desktopDir, displayName + ".desktop");
+        if (desktopFile.exists()) {
+            Toast.makeText(context, "A shortcut named '" + displayName + "' already exists.", Toast.LENGTH_LONG).show();
+            return false;
+        }
+
+        File driveC = new File(container.getRootDir(), ".wine/drive_c");
+        String relativePath = executable.getAbsolutePath().substring(driveC.getAbsolutePath().length())
+                .replace('/', '\\');
+        if (relativePath.startsWith("\\")) relativePath = relativePath.substring(1);
+        String windowsPath = "C:\\" + relativePath;
+        String imageFsPath = new File(context.getFilesDir(), "imagefs").getAbsolutePath();
+        String containerHome = container.getRootDir().getAbsolutePath().startsWith(imageFsPath)
+                ? container.getRootDir().getAbsolutePath().substring(imageFsPath.length())
+                : "/home/" + com.winlator.cmod.xenvironment.ImageFs.USER;
+        String winePrefix = containerHome + "/.wine";
+        String workingDirectory = winePrefix + "/dosdevices/c:/"
+                + relativePath.substring(0, relativePath.lastIndexOf('\\')).replace('\\', '/');
+
+        try (java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.FileWriter(desktopFile))) {
+            writer.println("[Desktop Entry]");
+            writer.println("Name=" + displayName);
+            writer.println("Exec=env WINEPREFIX=\"" + winePrefix + "\" wine "
+                    + com.winlator.cmod.core.StringUtils.escapeFileDOSPath(windowsPath));
+            writer.println("Type=Application");
+            writer.println("Path=" + workingDirectory);
+            writer.println("Icon=" + displayName);
+            writer.println("container_id:" + container.id);
+            writer.println();
+            writer.println("[Extra Data]");
+            writer.println("coverArtSelectionPending=1");
+        } catch (java.io.IOException e) {
+            android.util.Log.e("ShortcutsFragment", "Unable to create game desktop shortcut", e);
+            Toast.makeText(context, "Failed to create the game shortcut.", Toast.LENGTH_LONG).show();
+            return false;
+        }
+
+        File iconDir = container.getIconsDir(64);
+        if (!iconDir.exists() && !iconDir.mkdirs()) {
+            android.util.Log.w("ShortcutsFragment", "Unable to create icon directory: " + iconDir);
+        } else {
+            com.winlator.cmod.core.ExeIconExtractor.extractAsync(executable,
+                    new File(iconDir, displayName + ".png"), false, null);
+        }
+        return true;
     }
 
     private void importShortcutWorkflow() {
@@ -729,7 +1087,9 @@ public class ShortcutsFragment extends Fragment {
         }
     }
 
-    private class ShortcutsAdapter extends RecyclerView.Adapter<ShortcutsAdapter.ViewHolder> {
+    private class ShortcutsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+        private static final int VIEW_TYPE_SHORTCUT = 0;
+        private static final int VIEW_TYPE_ADD_GAME = 1;
         final List<Shortcut> originalData;
         final List<Shortcut> data;
         private String currentQuery = "";
@@ -855,27 +1215,66 @@ public class ShortcutsFragment extends Fragment {
             if (view == null) return;
             View emptyView = view.findViewById(R.id.TVEmptyText);
             if (emptyView instanceof TextView) {
-                TextView tv = (TextView) emptyView;
-                if (originalData.isEmpty()) {
-                    tv.setText(R.string.no_items_to_display);
-                    tv.setVisibility(View.VISIBLE);
-                } else if (data.isEmpty()) {
-                    tv.setText("No matching shortcuts found");
-                    tv.setVisibility(View.VISIBLE);
-                } else {
-                    tv.setVisibility(View.GONE);
-                }
+                emptyView.setVisibility(View.GONE);
             }
+        }
+
+        @Override
+        public int getItemViewType(int position) {
+            return position == data.size() ? VIEW_TYPE_ADD_GAME : VIEW_TYPE_SHORTCUT;
         }
 
         @NonNull
         @Override
-        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            return new ViewHolder(LayoutInflater.from(parent.getContext()).inflate(R.layout.shortcut_list_item, parent, false));
+        public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            LayoutInflater inflater = LayoutInflater.from(parent.getContext());
+            if (viewType == VIEW_TYPE_ADD_GAME) {
+                return new AddGameViewHolder(inflater.inflate(R.layout.shortcut_add_game_card, parent, false));
+            }
+            return new ViewHolder(inflater.inflate(R.layout.shortcut_list_item, parent, false));
         }
 
         @Override
-        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        public void onBindViewHolder(@NonNull RecyclerView.ViewHolder recyclerHolder, int position) {
+            if (recyclerHolder instanceof AddGameViewHolder) {
+                AddGameViewHolder holder = (AddGameViewHolder) recyclerHolder;
+                ViewGroup.LayoutParams params = holder.card.getLayoutParams();
+                if (params != null && shortcutCardWidthPx > 0) {
+                    params.width = shortcutCardWidthPx;
+                    holder.card.setLayoutParams(params);
+                }
+                holder.card.setOnClickListener(v -> {
+                    int itemPosition = holder.getBindingAdapterPosition();
+                    if (itemPosition == RecyclerView.NO_POSITION || recyclerView == null) return;
+                    float cardCenter = (v.getLeft() + v.getRight()) / 2f;
+                    float viewportCenter = (recyclerView.getPaddingLeft()
+                            + recyclerView.getWidth() - recyclerView.getPaddingRight()) / 2f;
+                    float maxDistance = Math.max(1f,
+                            shortcutCardWidthPx + recyclerView.getPaddingLeft());
+                    float distance = Math.min(1f,
+                            Math.abs(cardCenter - viewportCenter) / maxDistance);
+                    if (distance > 0.12f) {
+                        recyclerView.smoothScrollToPosition(itemPosition);
+                        return;
+                    }
+                    Context context = getContext();
+                    if (context == null || manager == null) return;
+                    if (manager.getContainers().isEmpty()) {
+                        ContentDialog.alert(context,
+                                "Create a container before adding a game shortcut.", null);
+                    } else {
+                        browseForGameExecutable();
+                    }
+                });
+                holder.card.setClickable(true);
+                holder.card.setFocusable(true);
+                holder.card.setContentDescription("Add game shortcut");
+                if (recyclerView != null) {
+                    recyclerView.postOnAnimation(ShortcutsFragment.this::applyCarouselEffects);
+                }
+                return;
+            }
+            ViewHolder holder = (ViewHolder) recyclerHolder;
             Shortcut item = data.get(position);
             holder.title.setText(item.name);
             requestCloudCoverArt(item);
@@ -921,19 +1320,30 @@ public class ShortcutsFragment extends Fragment {
             Glide.with(holder.coverArt)
                     .load(item.getCoverArt())
                     .placeholder(R.drawable.cover_art_placeholder)
+                    .error(R.drawable.cover_art_placeholder)
+                    .fallback(R.drawable.cover_art_placeholder)
                     .centerCrop()
                     .into(holder.coverArt);
+            holder.coverArt.setImageTintList(null);
+            holder.coverArt.clearColorFilter();
 
             if (getContext() != null) {
                 int accent = ThemeManager.getAccentColor(getContext());
                 holder.menuButton.setImageTintList(android.content.res.ColorStateList.valueOf(accent));
                 boolean selected = item == selectedShortcut;
                 float density = getResources().getDisplayMetrics().density;
-                holder.cardRoot.setCardBackgroundColor(selected ? Color.rgb(48, 146, 255) : Color.rgb(35, 57, 92));
-                holder.cardRoot.setCardElevation((selected ? 24f : 8f) * density);
+                holder.cardRoot.setCardBackgroundColor(selected
+                        ? Color.argb(110, 255, 255, 255)
+                        : Color.argb(60, 255, 255, 255));
+                holder.cardRoot.setCardElevation((selected ? 11f : 7f) * density);
+                holder.cardRoot.setMaxCardElevation(14f * density);
                 holder.playButton.setImageTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
             }
             holder.cardRoot.setAlpha(1f);
+            holder.cardRoot.setEnabled(true);
+            holder.cardRoot.setClickable(true);
+            holder.innerArea.setEnabled(true);
+            holder.innerArea.setClickable(true);
 
             holder.menuButton.setOnClickListener((v) -> showListItemMenu(v, item));
             holder.playButton.setContentDescription(getString(R.string.start_game_named, item.name));
@@ -1013,7 +1423,7 @@ public class ShortcutsFragment extends Fragment {
 
         @Override
         public int getItemCount() {
-            return data.size();
+            return data.size() + 1;
         }
 
         private void showListItemMenu(View anchorView, final Shortcut shortcut) {
@@ -1088,8 +1498,11 @@ public class ShortcutsFragment extends Fragment {
                         }
                         else if (index == 2) {
                             shortcut.removeCustomCoverArt();
+                            shortcut.putExtra("coverArtSelectionPending", "prompted");
+                            shortcut.saveData();
+                            coverArtPromptsShown.add(shortcut.file.getAbsolutePath());
                             loadShortcutsList();
-                            Toast.makeText(context, "Cover art reset.", Toast.LENGTH_SHORT).show();
+                            showSearchPrompt(shortcut, shortcut.name, false);
                         }
                     });
                 }
@@ -1627,6 +2040,15 @@ public class ShortcutsFragment extends Fragment {
                 playButton = view.findViewById(R.id.BTPlay);
                 landscapePlayButton = view.findViewById(R.id.BTPlayLandscape);
                 innerArea = view.findViewById(R.id.LLInnerArea);
+            }
+        }
+
+        class AddGameViewHolder extends RecyclerView.ViewHolder {
+            private final CardView card;
+
+            AddGameViewHolder(View view) {
+                super(view);
+                card = (CardView) view;
             }
         }
     }

@@ -48,6 +48,7 @@ import com.winlator.cmod.contentdialog.ShortcutSettingsDialog;
 import com.winlator.cmod.contentdialog.WineD3DConfigDialog;
 import com.winlator.cmod.contents.ContentProfile;
 import com.winlator.cmod.contents.ContentsManager;
+import com.winlator.cmod.contents.WrapperCatalogManager;
 import com.winlator.cmod.core.AppUtils;
 import com.winlator.cmod.core.Callback;
 import com.winlator.cmod.core.DefaultVersion;
@@ -569,10 +570,9 @@ public class ContainerDetailFragment extends Fragment {
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
-        String selectedDriver = sGraphicsDriver.getSelectedItem().toString();
-        List<String> sGraphicsItemsList = new ArrayList<>(Arrays.asList(context.getResources().getStringArray(R.array.graphics_driver_entries)));
-        sGraphicsDriver.setAdapter(new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, sGraphicsItemsList));
-        AppUtils.setSpinnerSelectionFromValue(sGraphicsDriver, selectedDriver);
+        String selectedDriver = StringUtils.parseGraphicsDriverIdentifier(sGraphicsDriver.getSelectedItem());
+        updateGraphicsDriverSpinner(context, sGraphicsDriver);
+        AppUtils.setSpinnerSelectionFromIdentifier(sGraphicsDriver, selectedDriver);
 
 
         final CPUListView cpuListView = view.findViewById(R.id.CPUListView);
@@ -1187,8 +1187,10 @@ public class ContainerDetailFragment extends Fragment {
     public static void updateGraphicsDriverSpinner(Context context, Spinner spinner) {
         String[] originalItems = context.getResources().getStringArray(R.array.graphics_driver_entries);
         List<String> itemList = new ArrayList<>(Arrays.asList(originalItems));
-        
-        // Set the adapter with the combined list
+        for (WrapperCatalogManager.Entry entry : WrapperCatalogManager.getInstalledWrappers(context)) {
+            String id = entry.id.toLowerCase(java.util.Locale.ROOT);
+            if (!itemList.contains(id)) itemList.add(id);
+        }
         spinner.setAdapter(new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, itemList));
     }
 

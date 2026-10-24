@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/CardRoot"
+    android:layout_width="220dp"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="8dp"
+    android:layout_marginEnd="8dp"
+    android:layout_marginTop="10dp"
+    android:layout_marginBottom="10dp"
+    android:clickable="true"
+    android:clipChildren="false"
+    android:clipToOutline="true"
+    android:focusable="true"
+    android:foreground="?android:selectableItemBackground"
+    app:cardBackgroundColor="#66383D43"
+    app:cardCornerRadius="18dp"
+    app:cardElevation="7dp">
+
+    <FrameLayout
+        android:id="@+id/LLInnerArea"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:clipChildren="false">
+
+        <FrameLayout
+            android:id="@+id/FLShortcutCover"
+            android:layout_width="match_parent"
+            android:layout_height="178dp"
+            android:background="@drawable/shortcut_cover_frame"
+            android:clipToOutline="true">
+
+            <ImageView
+                android:id="@+id/ImageView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/shortcut_cover_art"
+                android:scaleType="centerCrop"
+                android:src="@drawable/cover_art_placeholder" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:background="@drawable/shortcut_info_blur"
+                android:orientation="vertical"
+                android:paddingStart="9dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="9dp"
+                android:paddingBottom="5dp">
+
+                <TextView
+                    android:id="@+id/TVTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="1"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <androidx.appcompat.widget.AppCompatTextView
+                        android:id="@+id/TVSubtitle"
+                        android:layout_width="0dp"
+                        android:layout_height="20dp"
+                        android:layout_weight="1"
+                        android:background="@android:color/transparent"
+                        android:ellipsize="end"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center_vertical"
+                        android:maxLines="1"
+                        android:paddingStart="2dp"
+                        android:paddingEnd="6dp"
+                        android:textColor="#E8E8E8"
+                        android:textSize="9sp" />
+
+                    <androidx.appcompat.widget.AppCompatTextView
+                        android:id="@+id/TVVersion"
+                        android:layout_width="wrap_content"
+                        android:layout_height="20dp"
+                        android:layout_marginStart="5dp"
+                        android:background="@android:color/transparent"
+                        android:ellipsize="end"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:maxLines="1"
+                        android:paddingStart="3dp"
+                        android:paddingEnd="3dp"
+                        android:textColor="#FFFFFF"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/BTPlay"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_marginStart="5dp"
+                        android:background="@drawable/shortcut_play_button"
+                        android:contentDescription="@string/play_shortcut"
+                        android:padding="8dp"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/icon_play"
+                        app:tint="#FFFFFF" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/BTMenu"
+                style="@style/ListMenuButton"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="top|end"
+                android:layout_margin="7dp"
+                android:background="@drawable/glass_menu_button"
+                android:contentDescription="@string/more_options"
+                android:padding="7dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/icon_list_item_menu"
+                app:tint="#FFFFFF" />
+
+            <ImageButton
+                android:id="@+id/BTPlayLandscape"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="top|start"
+                android:layout_margin="7dp"
+                android:background="@drawable/shortcut_play_button"
+                android:contentDescription="@string/play_shortcut"
+                android:padding="9dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/icon_play"
+                android:visibility="gone"
+                app:tint="#FFFFFF" />
+        </FrameLayout>
+    </FrameLayout>
+</androidx.cardview.widget.CardView>

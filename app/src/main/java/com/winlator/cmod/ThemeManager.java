@@ -136,6 +136,7 @@ public final class ThemeManager {
         if (theme == null) return;
         int index = getSelectedPresetIndex(context);
         theme.applyStyle(DARK_STYLES[index], true);
+        theme.applyStyle(R.style.LiquidGlassTheme, true);
     }
 
     public static int getAccentColor(Context context) {
@@ -170,6 +171,7 @@ public final class ThemeManager {
 
     public static void applyThemeToView(View view, Context context) {
         if (view == null || context == null) return;
+        view.setBackgroundColor(android.graphics.Color.TRANSPARENT);
         ThemePreset preset = getSelectedPreset(context);
         int onSurface = preset.onSurface;
         int onSurfaceVariant = preset.onSurfaceVariant;
@@ -238,7 +240,9 @@ public final class ThemeManager {
                 iv.setImageTintList(ColorStateList.valueOf(onSurfaceVariant));
             } else {
                 View parent = (View) iv.getParent();
-                boolean isCardArt = parent != null && (parent.getId() == R.id.LLInnerArea || parent instanceof androidx.cardview.widget.CardView);
+                boolean isCardArt = parent != null && (parent.getId() == R.id.LLInnerArea
+                        || parent.getId() == R.id.FLShortcutCover
+                        || parent instanceof androidx.cardview.widget.CardView);
                 boolean isIconOrButton = (id == R.id.BTRun || id == R.id.BTMenu || id == R.id.IVIcon || id == R.id.BTRefresh ||
                         id == R.id.BTAdd || id == R.id.BTAddDrive || id == R.id.BTAddEnvVar || id == R.id.BTAddProfile ||
                         id == R.id.BTAddWheel || id == R.id.BTBCNConfig ||
@@ -363,15 +367,15 @@ public final class ThemeManager {
             // Modern Glassmorphic Accent Button (Harmonized with Cancel glass card)
             android.graphics.drawable.StateListDrawable sld = new android.graphics.drawable.StateListDrawable();
             android.graphics.drawable.GradientDrawable normal = new android.graphics.drawable.GradientDrawable();
-            int normalBg = androidx.core.graphics.ColorUtils.setAlphaComponent(accent, isDarkMode ? 50 : 35);
-            int strokeColor = accent;
+            int normalBg = isDarkMode ? 0x1AFFFFFF : 0x22FFFFFF;
+            int strokeColor = isDarkMode ? 0x99FFFFFF : 0x66000000;
             int strokeWidthAccent = (int) Math.max(1, com.winlator.cmod.core.UnitUtils.dpToPx(1.5f));
             normal.setColor(normalBg);
             normal.setStroke(strokeWidthAccent, strokeColor);
             normal.setCornerRadius(cornerRadius);
 
             android.graphics.drawable.GradientDrawable pressed = new android.graphics.drawable.GradientDrawable();
-            int pressedBg = androidx.core.graphics.ColorUtils.setAlphaComponent(accent, isDarkMode ? 120 : 80);
+            int pressedBg = isDarkMode ? 0x40FFFFFF : 0x44FFFFFF;
             pressed.setColor(pressedBg);
             pressed.setStroke(strokeWidthAccent, strokeColor);
             pressed.setCornerRadius(cornerRadius);
@@ -389,15 +393,15 @@ public final class ThemeManager {
             // Modern Tonal/Outlined Cancel Button (1:1 identical structure/stroke/weight to OK button)
             android.graphics.drawable.StateListDrawable sld = new android.graphics.drawable.StateListDrawable();
             android.graphics.drawable.GradientDrawable normal = new android.graphics.drawable.GradientDrawable();
-            int normalBg = isDarkMode ? 0x1AFFFFFF : 0x0F000000;
-            int strokeColor = isDarkMode ? 0x4DFFFFFF : 0x33000000;
+            int normalBg = isDarkMode ? 0x1AFFFFFF : 0x22FFFFFF;
+            int strokeColor = isDarkMode ? 0x80FFFFFF : 0x66000000;
             int strokeWidthCancel = (int) Math.max(1, com.winlator.cmod.core.UnitUtils.dpToPx(1.5f));
             normal.setColor(normalBg);
             normal.setStroke(strokeWidthCancel, strokeColor);
             normal.setCornerRadius(cornerRadius);
 
             android.graphics.drawable.GradientDrawable pressed = new android.graphics.drawable.GradientDrawable();
-            int pressedBg = isDarkMode ? 0x33FFFFFF : 0x1F000000;
+            int pressedBg = isDarkMode ? 0x40FFFFFF : 0x44FFFFFF;
             pressed.setColor(pressedBg);
             pressed.setStroke(strokeWidthCancel, strokeColor);
             pressed.setCornerRadius(cornerRadius);
@@ -415,14 +419,14 @@ public final class ThemeManager {
             // Modern Semi-Translucent Accent Outlined Button (Add, Download, Refresh, etc.)
             android.graphics.drawable.StateListDrawable sld = new android.graphics.drawable.StateListDrawable();
             android.graphics.drawable.GradientDrawable normal = new android.graphics.drawable.GradientDrawable();
-            int normalBg = androidx.core.graphics.ColorUtils.setAlphaComponent(accent, isDarkMode ? 35 : 25);
-            int strokeColor = androidx.core.graphics.ColorUtils.setAlphaComponent(accent, isDarkMode ? 120 : 90);
+            int normalBg = isDarkMode ? 0x1AFFFFFF : 0x22FFFFFF;
+            int strokeColor = isDarkMode ? 0x80FFFFFF : 0x66000000;
             normal.setColor(normalBg);
             normal.setStroke(strokeWidth, strokeColor);
             normal.setCornerRadius(cornerRadius);
 
             android.graphics.drawable.GradientDrawable pressed = new android.graphics.drawable.GradientDrawable();
-            int pressedBg = androidx.core.graphics.ColorUtils.setAlphaComponent(accent, isDarkMode ? 70 : 50);
+            int pressedBg = isDarkMode ? 0x40FFFFFF : 0x44FFFFFF;
             pressed.setColor(pressedBg);
             pressed.setStroke(strokeWidth, strokeColor);
             pressed.setCornerRadius(cornerRadius);

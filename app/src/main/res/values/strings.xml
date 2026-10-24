@@ -696,6 +696,15 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="install_drivers">Install Drivers</string>
     <string name="install_drivers_message">You will now be prompted to pick a driver. These must be the same ones used in other emulators like Yuzu, Dolphin, Citra, etc.</string>
     <string name="install_drivers_warning">Be warned that because of limitations of current PC emulators, Qualcomm Drivers may not work on chipsets below 8 Gen2 without getting patched.</string>
+    <string name="panvk_download_releases">Browse / refresh PanVK driver releases</string>
+    <string name="panvk_experimental_warning">PanVK is experimental. It may be less smooth or stable than the built-in system driver, and compatibility depends on your GPU, device, and kernel. Use at your own risk; switch back to System if you encounter problems.</string>
+    <string name="panvk_release_list_title">PanVK Driver Releases</string>
+    <string name="panvk_fetching_releases">Checking GitHub for the latest PanVK releases…</string>
+    <string name="panvk_no_releases">No Adrenotools-compatible PanVK ZIP releases were found.</string>
+    <string name="panvk_download_confirm">Repository: @%1$s/%2$s\nFile: %3$s\nPublished: %4$s\nTested devices: %5$s\n\nThis is an experimental driver and may be less smooth or stable than the built-in System driver. Download and import it?</string>
+    <string name="panvk_downloading">Downloading and verifying PanVK ZIP…</string>
+    <string name="panvk_download_failed">Unable to download or import this PanVK driver. The ZIP may be incompatible, incomplete, or already installed.</string>
+    <string name="panvk_import_complete">PanVK driver imported: %1$s</string>
     <string name="enable_vulkan_api_dump">Enable dumping of Vulkan api calls to file.</string>
     <string name="dll_emulator">32bit Emulator</string>
     <string name="open_with_android_browser">Open Android Browser in Wine</string>

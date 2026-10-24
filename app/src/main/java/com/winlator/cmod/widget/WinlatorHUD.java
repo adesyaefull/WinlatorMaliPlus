@@ -119,6 +119,7 @@ public class WinlatorHUD extends View {
     private final SharedPreferences prefs;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private HudDataSource dataSource;
+    private java.util.function.Supplier<float[]> frameGenStatsProvider;
 
     private final AtomicInteger frameAccum = new AtomicInteger(0);
     private long lastFpsNs = 0;
@@ -336,6 +337,10 @@ public class WinlatorHUD extends View {
         if (dataSource != null && userEnabled) dataSource.start();
     }
 
+    public void setFrameGenStatsProvider(java.util.function.Supplier<float[]> provider) {
+        frameGenStatsProvider = provider;
+    }
+
     private void snapshot() {
         long now = System.nanoTime();
         if (lastFpsNs == 0) lastFpsNs = now;
@@ -349,7 +354,8 @@ public class WinlatorHUD extends View {
             strFps = String.valueOf(Math.round(snapFps));
             // Frame generation: the frames shown, the game's own rate times the multiplier, and the cost of one generated frame.
             try {
-                float[] fg = XServerView.nativeGetFrameGenStats();
+                float[] fg = frameGenStatsProvider != null
+                        ? frameGenStatsProvider.get() : XServerView.nativeGetFrameGenStats();
                 if (fg != null && fg[0] > 1) {
                     // A target makes the multiplier fractional (24 x 2.5 = 60); whole ones show without decimals.
                     String multiplier = Math.abs(fg[0] - Math.round(fg[0])) < 0.05f ? String.valueOf(Math.round(fg[0])) : String.format(java.util.Locale.US, "%.1f", fg[0]);

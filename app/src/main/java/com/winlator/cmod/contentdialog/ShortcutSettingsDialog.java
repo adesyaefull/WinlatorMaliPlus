@@ -437,10 +437,9 @@ public class ShortcutSettingsDialog extends ContentDialog {
             popupMenu.show();
         });
 
-        String selectedDriver = sGraphicsDriver.getSelectedItem().toString();
-        List<String> sGraphicsItemsList = new ArrayList<>(Arrays.asList(context.getResources().getStringArray(R.array.graphics_driver_entries)));
-        sGraphicsDriver.setAdapter(new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, sGraphicsItemsList));
-        AppUtils.setSpinnerSelectionFromValue(sGraphicsDriver, selectedDriver);
+        String selectedDriver = StringUtils.parseGraphicsDriverIdentifier(sGraphicsDriver.getSelectedItem());
+        ContainerDetailFragment.updateGraphicsDriverSpinner(context, sGraphicsDriver);
+        AppUtils.setSpinnerSelectionFromIdentifier(sGraphicsDriver, selectedDriver);
 
         final Spinner sStartupSelection = findViewById(R.id.SStartupSelection);
         sStartupSelection.setSelection(Integer.parseInt(shortcut.getExtra("startupSelection", String.valueOf(shortcut.container.getStartupSelection()))));

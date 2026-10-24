@@ -80,20 +80,26 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         applyOrientationSystemUi();
         setContentView(R.layout.main_activity);
+        applyOrientationSystemUi();
+        androidx.appcompat.widget.Toolbar toolbar = findViewById(R.id.Toolbar);
+        if (toolbar != null) toolbar.setBackgroundResource(R.drawable.shortcut_toolbar_glass);
         com.winlator.cmod.core.ControllerNavigation.attach(getWindow());
 
         drawerLayout = findViewById(R.id.DrawerLayout);
+        getSupportFragmentManager().registerFragmentLifecycleCallbacks(
+                new FragmentManager.FragmentLifecycleCallbacks() {
+                    @Override
+                    public void onFragmentViewCreated(@NonNull FragmentManager fm, @NonNull Fragment fragment,
+                                                      @NonNull View view, @Nullable Bundle savedInstanceState) {
+                        ThemeManager.applyThemeToView(view, MainActivity.this);
+                    }
+                }, true);
         NavigationView navigationView = findViewById(R.id.NavigationView);
         navigationView.setNavigationItemSelectedListener(this);
 
-        boolean forceShowAdreno = sharedPreferences.getBoolean("show_adrenotools_unsupported", true);
-        if (!forceShowAdreno && !com.winlator.cmod.core.GPUInformation.isAdrenoGPU(this)) {
-            navigationView.getMenu().findItem(R.id.main_menu_adrenotools_gpu_drivers).setVisible(false);
-        } else {
-            navigationView.getMenu().findItem(R.id.main_menu_adrenotools_gpu_drivers).setVisible(true);
-        }
+        navigationView.getMenu().findItem(R.id.main_menu_adrenotools_gpu_drivers).setVisible(true);
 
-        androidx.appcompat.widget.Toolbar toolbar = findViewById(R.id.Toolbar);
+        toolbar = findViewById(R.id.Toolbar);
         setSupportActionBar(toolbar);
         ActionBar actionBar = getSupportActionBar();
         int accentColor = ThemeManager.getAccentColor(this);
@@ -106,6 +112,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             // keyboard cluster, so a controller could never reach the hamburger or toolbar actions (e.g. +).
             toolbar.setTouchscreenBlocksFocus(false);
             toolbar.setKeyboardNavigationCluster(false);
+            toolbar.setBackgroundResource(R.drawable.shortcut_toolbar_glass);
             toolbar.setTitleTextColor(isDarkMode ? Color.WHITE : Color.BLACK);
             if (toolbar.getOverflowIcon() != null) {
                 Drawable overflow = toolbar.getOverflowIcon().mutate();
@@ -203,6 +210,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         applyOrientationSystemUi();
+        invalidateOptionsMenu();
     }
 
     private void applyOrientationSystemUi() {
@@ -221,17 +229,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     protected void onResume() {
         super.onResume();
+        NavigationView navigationView = findViewById(R.id.NavigationView);
+        if (navigationView != null) {
+            MenuItem item = navigationView.getMenu().findItem(R.id.main_menu_adrenotools_gpu_drivers);
+            if (item != null) item.setVisible(true);
+        }
         if (checkStoragePermissions()) {
             if (!ImageFsInstaller.installIfNeeded(this)) {
                 com.winlator.cmod.contents.WineDownloader.checkFirstLaunchWineSetup(this);
-            }
-        }
-        NavigationView navigationView = findViewById(R.id.NavigationView);
-        if (navigationView != null) {
-            boolean forceShowAdreno = PreferenceManager.getDefaultSharedPreferences(this).getBoolean("show_adrenotools_unsupported", true);
-            MenuItem item = navigationView.getMenu().findItem(R.id.main_menu_adrenotools_gpu_drivers);
-            if (item != null) {
-                item.setVisible(forceShowAdreno || com.winlator.cmod.core.GPUInformation.isAdrenoGPU(this));
             }
         }
     }

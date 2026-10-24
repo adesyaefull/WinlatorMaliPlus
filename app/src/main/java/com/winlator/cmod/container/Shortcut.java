@@ -46,13 +46,13 @@ public class Shortcut {
     public File iconFile;
     public final String wmClass;
     private final JSONObject extraData = new JSONObject();
-    private Bitmap coverArt;
-    private Bitmap fallbackCoverArt;
+    private volatile Bitmap coverArt;
+    private volatile Bitmap fallbackCoverArt;
     private String customCoverArtPath;
     // The wide (16:9-ish) hero art the fullscreen loading screen uses behind its UI -- a separate image from the
     // portrait coverArt above (that one's for the shortcut grid/list, too narrow to look right stretched fullscreen).
-    private Bitmap heroArt;
-    private Bitmap fallbackHeroArt;
+    private volatile Bitmap heroArt;
+    private volatile Bitmap fallbackHeroArt;
     private String customHeroArtPath;
 
     private static final String COVER_ART_DIR = "app_data/cover_arts/";
@@ -66,7 +66,7 @@ public class Shortcut {
         void onShortcutLoaded(Shortcut shortcut);
     }
 
-    private static OnShortcutLoadedListener onShortcutLoadedListener;
+    private static volatile OnShortcutLoadedListener onShortcutLoadedListener;
 
     public static void setOnShortcutLoadedListener(OnShortcutLoadedListener listener) {
         onShortcutLoadedListener = listener;
@@ -410,15 +410,32 @@ public class Shortcut {
                 options.inSampleSize = ImageUtils.calculateInSampleSize(options, 800, 800);
                 options.inJustDecodeBounds = false;
                 this.coverArt = BitmapFactory.decodeFile(path, options);
-                changed = true;
-            } else {
+                if (this.coverArt == null) {
+                    Log.w("Shortcut", "Removing unreadable cover art: " + path);
+                    new File(path).delete();
+                    path = null;
+                } else {
+                    changed = true;
+                }
+            }
+
+            if (path == null) {
                 File fallbackFile = new File(new File(container.getRootDir(), FALLBACK_COVER_ART_DIR), this.name + ".png");
-                if (!fallbackFile.exists()) {
+                if (!fallbackFile.exists() || this.fallbackCoverArt == null) {
+                    Bitmap fallback = null;
+                    if (fallbackFile.isFile()) {
+                        fallback = BitmapFactory.decodeFile(fallbackFile.getPath());
+                    }
+                    if (fallback == null) {
+                        fallback = generateFallbackCoverArt(600, 900);
+                        saveFallbackCoverArt(fallback);
+                    }
+                    this.fallbackCoverArt = fallback;
+                    changed = true;
+                }
+                if (this.fallbackCoverArt == null) {
                     this.fallbackCoverArt = generateFallbackCoverArt(600, 900);
                     saveFallbackCoverArt(this.fallbackCoverArt);
-                    changed = true;
-                } else if (this.fallbackCoverArt == null) {
-                    this.fallbackCoverArt = BitmapFactory.decodeFile(fallbackFile.getPath());
                     changed = true;
                 }
             }
@@ -534,7 +551,14 @@ public class Shortcut {
     }
 
     public String getCustomCoverArtPath() {
-        return customCoverArtPath;
+        if (customCoverArtPath == null || customCoverArtPath.isEmpty()) return "";
+        return new File(customCoverArtPath).isFile() ? customCoverArtPath : "";
+    }
+
+    public boolean hasPrimaryCoverArt() {
+        if (!getCustomCoverArtPath().isEmpty()) return true;
+        if (container == null) return false;
+        return new File(container.getRootDir(), COVER_ART_DIR + name + ".png").isFile();
     }
 
     public void setCustomCoverArtPath(String path) {
@@ -645,23 +669,30 @@ public class Shortcut {
         }
     }
 
-    public void saveCustomCoverArt(Bitmap coverArt) {
+    public boolean saveCustomCoverArt(Bitmap coverArt) {
+        if (coverArt == null) return false;
         try {
             File dir = new File(container.getRootDir(), COVER_ART_DIR);
             if (!dir.exists() && !dir.mkdirs()) {
                 Log.e("Shortcut", "Failed to create cover art directory: " + dir.getAbsolutePath());
+                return false;
             }
 
             File file = new File(dir, this.name + ".png");
             if (FileUtils.saveBitmapToFile(coverArt, file)) {
                 this.coverArt = coverArt;
                 setCustomCoverArtPath(file.getPath());
+                putExtra("coverArtSelectionPending", null);
+                saveData();
                 Log.d("Shortcut", "Custom cover art saved at: " + file.getPath());
+                return true;
             } else {
                 Log.e("Shortcut", "Failed to save custom cover art.");
+                return false;
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e("Shortcut", "Failed to save custom cover art.", e);
+            return false;
         }
     }
 

@@ -48,7 +48,6 @@ public class GraphicsDriverConfigDialog extends ContentDialog {
 
     private String selectedVulkanVersion;
     private String selectedVersion;
-    private String selectedWrapperId = "apex-wrapper";
     private String blacklistedExtensions = "";
     private String selectedGPUName;
     private String selectedDeviceMemory;
@@ -124,8 +123,6 @@ public class GraphicsDriverConfigDialog extends ContentDialog {
         config.put("disablePresentWait", isDisablePresentWait);
         config.put("resourceType", selectedResourceType);
         config.put("gpuName", selectedGPUName);
-        config.put("wrapperId", selectedWrapperId);
-
         String graphicsDriverConfig = toGraphicsDriverConfig(config);
         Log.i(TAG, "Written config " + graphicsDriverConfig);
         return graphicsDriverConfig;
@@ -162,7 +159,6 @@ public class GraphicsDriverConfigDialog extends ContentDialog {
 
         String vulkanVersion = config.get("vulkanVersion");
         String initialVersion = config.get("version");
-        String initialWrapperId = config.getOrDefault("wrapperId", "apex-wrapper");
         String blExtensions = config.get("blacklistedExtensions");
         String gpuName = config.get("gpuName");
         String maxDeviceMemory = config.get("maxDeviceMemory");
@@ -170,8 +166,6 @@ public class GraphicsDriverConfigDialog extends ContentDialog {
         String disablePresentWait = config.get("disablePresentWait");
         String presentMode = config.get("presentMode");
         String resourceType = config.get("resourceType");
-
-        selectedWrapperId = initialWrapperId;
 
         // Update the selectedVersion whenever the user selects a different version
         sVersion.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {

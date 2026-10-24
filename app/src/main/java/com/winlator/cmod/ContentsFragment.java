@@ -176,7 +176,7 @@ public class ContentsFragment extends Fragment {
                     View v = super.getDropDownView(position, convertView, parent);
                     if (v instanceof TextView) {
                         ((TextView) v).setTextColor(isDarkMode ? Color.WHITE : Color.BLACK);
-                        v.setBackgroundColor(isDarkMode ? 0xFF2A2A2A : 0xFFFFFFFF);
+                        v.setBackgroundResource(R.drawable.liquid_glass_surface);
                     }
                     return v;
                 }
@@ -257,7 +257,7 @@ public class ContentsFragment extends Fragment {
                     View v = super.getDropDownView(position, convertView, parent);
                     if (v instanceof TextView) {
                         ((TextView) v).setTextColor(isDarkMode ? Color.WHITE : Color.BLACK);
-                        v.setBackgroundColor(isDarkMode ? 0xFF2A2A2A : 0xFFFFFFFF);
+                        v.setBackgroundResource(R.drawable.liquid_glass_surface);
                     }
                     return v;
                 }
@@ -448,7 +448,7 @@ public class ContentsFragment extends Fragment {
                 View v = super.getDropDownView(position, convertView, parent);
                 if (v instanceof TextView) {
                     ((TextView) v).setTextColor(isDarkMode ? Color.WHITE : Color.BLACK);
-                    v.setBackgroundColor(isDarkMode ? 0xFF2A2A2A : 0xFFFFFFFF);
+                    v.setBackgroundResource(R.drawable.liquid_glass_surface);
                 }
                 return v;
             }

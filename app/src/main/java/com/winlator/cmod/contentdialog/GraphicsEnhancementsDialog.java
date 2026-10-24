@@ -41,6 +41,11 @@ public class GraphicsEnhancementsDialog extends ContentDialog {
     private final SeekBar sbUpscalerSharpness;
     private final CheckBox cbFitGameWindow;
     private final CheckBox cbFrameGen;
+    private final View llZeroFrameGen;
+    private final View llNativeFrameGen;
+    private final CheckBox cbNativeFrameGen;
+    private final Spinner sNativeFrameGenEngine;
+    private final Spinner sNativeFrameGenMultiplier;
     private final Spinner sColorPreset;
     private final Spinner sFrameGenTarget;
     private final Spinner sFrameGenQuality;
@@ -85,6 +90,11 @@ public class GraphicsEnhancementsDialog extends ContentDialog {
         sbUpscalerSharpness = findViewById(R.id.SBUpscalerSharpness);
         cbFitGameWindow = findViewById(R.id.CBFitGameWindow);
         cbFrameGen = findViewById(R.id.CBFrameGen);
+        llZeroFrameGen = findViewById(R.id.LLZeroFrameGen);
+        llNativeFrameGen = findViewById(R.id.LLNativeFrameGen);
+        cbNativeFrameGen = findViewById(R.id.CBNativeFrameGen);
+        sNativeFrameGenEngine = findViewById(R.id.SNativeFrameGenEngine);
+        sNativeFrameGenMultiplier = findViewById(R.id.SNativeFrameGenMultiplier);
         sColorPreset = findViewById(R.id.SColorPreset);
         sFrameGenTarget = findViewById(R.id.SFrameGenTarget);
         sFrameGenQuality = findViewById(R.id.SFrameGenQuality);
@@ -115,6 +125,20 @@ public class GraphicsEnhancementsDialog extends ContentDialog {
         sColorPreset.setAdapter(createAdapter(activity, PostProcessing.PRESET_NAMES));
         sFrameGenTarget.setAdapter(createAdapter(activity, FG_TARGET_NAMES));
         sFrameGenQuality.setAdapter(createAdapter(activity, FG_QUALITY_NAMES));
+        boolean vulkanActive = activity.getXServerView() != null
+                && activity.getXServerView().isVulkanRendererActive();
+        llZeroFrameGen.setVisibility(vulkanActive ? View.GONE : View.VISIBLE);
+        llNativeFrameGen.setVisibility(vulkanActive ? View.VISIBLE : View.GONE);
+        String frameGenEngine = activity.getRendererSetting("frameGenEngine", "lsfg");
+        String frameGenMultiplier = activity.getRendererSetting("frameGenMultiplier", "2");
+        boolean frameGenArmed = "1".equals(activity.getRendererSetting("frameGenEnabled", "0"));
+        if (vulkanActive && activity.getXServerView().getVulkanRenderer() != null) {
+            frameGenArmed = activity.getXServerView().getVulkanRenderer().isFrameGenArmed();
+        }
+        cbNativeFrameGen.setChecked(frameGenArmed);
+        sNativeFrameGenEngine.setSelection("winfg".equalsIgnoreCase(frameGenEngine) ? 1 : 0);
+        sNativeFrameGenMultiplier.setSelection("4".equals(frameGenMultiplier) ? 2
+                : "3".equals(frameGenMultiplier) ? 1 : 0);
         sSharpenMode.setAdapter(createAdapter(activity, PostProcessing.SHARPEN_MODES));
         sbUpscalerSharpness.setSuffix("%");
         sbPresetStrength.setSuffix("%");
@@ -123,6 +147,25 @@ public class GraphicsEnhancementsDialog extends ContentDialog {
         settings.fpsLimit = initialFpsLimit;
         updateUI();
         setupListeners();
+        cbNativeFrameGen.setEnabled(vulkanActive);
+        sNativeFrameGenEngine.setEnabled(vulkanActive && cbNativeFrameGen.isChecked());
+        sNativeFrameGenMultiplier.setEnabled(vulkanActive && cbNativeFrameGen.isChecked());
+        cbNativeFrameGen.setOnCheckedChangeListener((button, checked) -> {
+            sNativeFrameGenEngine.setEnabled(vulkanActive && checked);
+            sNativeFrameGenMultiplier.setEnabled(vulkanActive && checked);
+            if (!updatingUI) applyNativeFrameGenFromUI();
+        });
+        AdapterView.OnItemSelectedListener nativeFgListener = new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (!updatingUI) applyNativeFrameGenFromUI();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        };
+        sNativeFrameGenEngine.setOnItemSelectedListener(nativeFgListener);
+        sNativeFrameGenMultiplier.setOnItemSelectedListener(nativeFgListener);
 
         // Advanced starts collapsed unless something in it is already in use.
         setAdvancedExpanded(settings.hasAdvancedOptions());
@@ -135,11 +178,13 @@ public class GraphicsEnhancementsDialog extends ContentDialog {
         btSaveForGame.setVisibility(activity.hasShortcut() ? View.VISIBLE : View.GONE);
         btSaveForGame.setOnClickListener(v -> {
             activity.savePostProcessing(settings.toString(), true);
+            if (vulkanActive) saveNativeFrameGen(true);
             AppUtils.showToast(activity, "Saved for this game");
         });
 
         findViewById(R.id.BTSaveAsDefault).setOnClickListener(v -> {
             activity.savePostProcessing(settings.toString(), false);
+            if (vulkanActive) saveNativeFrameGen(false);
             AppUtils.showToast(activity, "Saved as container default");
         });
 
@@ -152,15 +197,42 @@ public class GraphicsEnhancementsDialog extends ContentDialog {
         setOnConfirmCallback(() -> {
             applySettings();
             applyFpsLimit();
+            if (vulkanActive) saveNativeFrameGen(activity.hasShortcut());
         });
 
         setOnCancelCallback(() -> {
             if (xServerView != null) xServerView.setPostProcessing(initialConfig);
             if (xServer != null) xServer.setFpsLimit(initialFpsLimit);
+            if (vulkanActive) {
+                String engine = activity.getRendererSetting("frameGenEngine", "lsfg");
+                String multiplier = activity.getRendererSetting("frameGenMultiplier", "2");
+                activity.applyNativeFrameGeneration(
+                        "1".equals(activity.getRendererSetting("frameGenEnabled", "0")),
+                        engine, "4".equals(multiplier) ? 4 : "3".equals(multiplier) ? 3 : 2);
+            }
             PostProcessing initial = new PostProcessing(initialConfig);
             initial.fpsLimit = initialFpsLimit;
             com.winlator.cmod.core.RefreshRateUtils.setFrameCadence(activity, initial.displayCadence());
         });
+    }
+
+    private void applyNativeFrameGenFromUI() {
+        boolean enabled = cbNativeFrameGen.isChecked();
+        String engine = sNativeFrameGenEngine.getSelectedItemPosition() == 1 ? "winfg" : "lsfg";
+        int multiplier = sNativeFrameGenMultiplier.getSelectedItemPosition() == 2 ? 4
+                : sNativeFrameGenMultiplier.getSelectedItemPosition() == 1 ? 3 : 2;
+        if (!activity.applyNativeFrameGeneration(enabled, engine, multiplier)) {
+            updatingUI = true;
+            cbNativeFrameGen.setChecked(false);
+            updatingUI = false;
+        }
+    }
+
+    private void saveNativeFrameGen(boolean forGame) {
+        String engine = sNativeFrameGenEngine.getSelectedItemPosition() == 1 ? "winfg" : "lsfg";
+        int multiplier = sNativeFrameGenMultiplier.getSelectedItemPosition() == 2 ? 4
+                : sNativeFrameGenMultiplier.getSelectedItemPosition() == 1 ? 3 : 2;
+        activity.saveFrameGenerationSettings(cbNativeFrameGen.isChecked(), engine, multiplier, forGame);
     }
 
     private void setAdvancedExpanded(boolean expanded) {

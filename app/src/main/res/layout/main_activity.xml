@@ -7,49 +7,59 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <LinearLayout
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:layout_height="match_parent">
 
-        <androidx.appcompat.widget.Toolbar
+        <com.winlator.cmod.widget.PlayStationWaveBackgroundView
             android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:id="@+id/Toolbar"
-            android:background="?attr/gamingToolbarColor"
-            android:elevation="0dp"
-            app:layout_scrollFlags="enterAlways|scroll"
-            app:title=""
-            app:titleTextColor="#ffffff"
-            app:titleTextAppearance="@style/TextAppearance.Winlator.Toolbar.Title" />
+            android:layout_height="match_parent" />
 
-        <FrameLayout
-            android:id="@+id/FLFragmentContainer"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            app:layout_behavior="@string/appbar_scrolling_view_behavior"/>
+            android:layout_height="match_parent"
+            android:orientation="vertical">
 
-        <!-- Button hints, shown only while a game controller is connected (see ControllerNavigation). -->
-        <HorizontalScrollView
-            android:id="@+id/HSVControllerHints"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="?attr/gamingToolbarColor"
-            android:scrollbars="none"
-            android:focusable="false"
-            android:visibility="gone">
+            <androidx.appcompat.widget.Toolbar
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:id="@+id/Toolbar"
+                android:background="?attr/gamingToolbarColor"
+                android:elevation="0dp"
+                app:layout_scrollFlags="enterAlways|scroll"
+                app:title=""
+                app:titleTextColor="#ffffff"
+                app:titleTextAppearance="@style/TextAppearance.Winlator.Toolbar.Title" />
 
-            <LinearLayout
-                android:id="@+id/LLControllerHints"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp" />
-        </HorizontalScrollView>
-    </LinearLayout>
+            <FrameLayout
+                android:id="@+id/FLFragmentContainer"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                app:layout_behavior="@string/appbar_scrolling_view_behavior"/>
+
+            <!-- Button hints, shown only while a game controller is connected (see ControllerNavigation). -->
+            <HorizontalScrollView
+                android:id="@+id/HSVControllerHints"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/gamingToolbarColor"
+                android:fillViewport="true"
+                android:scrollbars="none"
+                android:focusable="false"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:id="@+id/LLControllerHints"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:orientation="horizontal"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp" />
+            </HorizontalScrollView>
+        </LinearLayout>
+    </FrameLayout>
 
     <com.google.android.material.navigation.NavigationView
         android:layout_width="280dp"
@@ -57,8 +67,9 @@
         android:layout_gravity="start"
         android:id="@+id/NavigationView"
         android:fitsSystemWindows="true"
-        android:background="?attr/semanticSurface"
+        android:background="@drawable/navigation_drawer_glass"
         app:headerLayout="@layout/main_menu_header"
+        app:itemBackground="@drawable/navigation_item_background"
         app:itemShapeInsetStart="12dp"
         app:itemShapeInsetEnd="12dp"
         app:itemShapeInsetTop="3dp"

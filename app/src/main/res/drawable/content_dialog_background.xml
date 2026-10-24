@@ -1,7 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <corners android:radius="16dp" />
-    <solid android:color="#FF181D24" />
-    <stroke android:width="1.2dp" android:color="#303A48" />
-</shape>
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/liquid_glass_surface"
+    android:inset="0dp" />

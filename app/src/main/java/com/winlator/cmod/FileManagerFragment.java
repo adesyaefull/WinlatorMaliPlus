@@ -600,6 +600,9 @@ public class FileManagerFragment extends Fragment {
                 if (!workDir.isEmpty()) writer.println("Path=" + workDir);
                 writer.println("Icon=" + displayName);
                 writer.println("container_id:" + container.id);
+                writer.println();
+                writer.println("[Extra Data]");
+                writer.println("coverArtSelectionPending=1");
             }
             Toast.makeText(getContext(), "Shortcut created on container desktop!", Toast.LENGTH_SHORT).show();
 
@@ -608,6 +611,16 @@ public class FileManagerFragment extends Fragment {
                 if (!iconDir64.exists()) iconDir64.mkdirs();
                 File iconDest = new File(iconDir64, displayName + ".png");
                 ExeIconExtractor.extractAsync(file, iconDest, false, null);
+            }
+            if (getActivity() instanceof MainActivity) {
+                MainActivity activity = (MainActivity) getActivity();
+                com.google.android.material.navigation.NavigationView navigationView =
+                        activity.findViewById(R.id.NavigationView);
+                if (navigationView != null) {
+                    android.view.MenuItem shortcutsItem =
+                            navigationView.getMenu().findItem(R.id.main_menu_shortcuts);
+                    if (shortcutsItem != null) activity.onNavigationItemSelected(shortcutsItem);
+                }
             }
         } catch (IOException e) {
             Toast.makeText(getContext(), "Failed to create shortcut", Toast.LENGTH_SHORT).show();
@@ -1250,9 +1263,9 @@ public class FileManagerFragment extends Fragment {
             }
 
             if (selectedFiles.contains(file)) {
-                holder.itemView.setBackgroundColor(0x332196f3);
+                holder.itemView.setBackgroundResource(R.drawable.liquid_glass_surface);
             } else {
-                holder.itemView.setBackgroundColor(0);
+                holder.itemView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
             }
 
             holder.btFileMenu.setVisibility(View.GONE);

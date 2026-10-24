@@ -362,14 +362,19 @@ public abstract class FileUtils {
 
         String documentId;
         try {
-            documentId = DocumentsContract.getTreeDocumentId(uri);
+            documentId = DocumentsContract.isTreeUri(uri)
+                    ? DocumentsContract.getTreeDocumentId(uri)
+                    : DocumentsContract.getDocumentId(uri);
         } catch (IllegalArgumentException e) {
             Log.e(TAG, "Invalid URI: " + uri.toString(), e);
             return null;
         }
 
         Log.d(TAG, "Document ID: " + documentId);
-        String[] split = documentId.split(":");
+        if (documentId.startsWith("raw:")) {
+            return documentId.substring("raw:".length());
+        }
+        String[] split = documentId.split(":", 2);
         String type = split[0];
         String path = split.length > 1 ? split[1] : "";
 
@@ -380,11 +385,15 @@ public abstract class FileUtils {
             return null;
         }
 
-        if ("primary".equalsIgnoreCase(type)) {
+        if ("com.android.externalstorage.documents".equals(uri.getAuthority())
+                && "primary".equalsIgnoreCase(type)) {
             return Environment.getExternalStorageDirectory() + "/" + path;
-        } else {
+        } else if ("com.android.externalstorage.documents".equals(uri.getAuthority())) {
             return "/mnt/media_rw/" + type + "/" + path;
         }
+        if ("com.android.providers.downloads.documents".equals(uri.getAuthority())
+                && path.startsWith("/")) return path;
+        return null;
     }
 
 

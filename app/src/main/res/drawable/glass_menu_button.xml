@@ -5,11 +5,10 @@
     <item>
         <shape
             android:shape="oval">
-            <solid
-                android:color="#66000000" />
+            <solid android:color="#66383D43" />
             <stroke
-                android:width="1.2dp"
-                android:color="#4Dffffff" />
+                android:width="1dp"
+                android:color="#99FFFFFF" />
         </shape>
     </item>
 </ripple>

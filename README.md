@@ -2,10 +2,10 @@
   <img src="logo.png" width="376" height="128" alt="Winlator Mali Logo" />
 </p>
 
-# Winlator Mali (Bionic Edition)
+# Winlator Mali+ (Bionic Edition)
 
-[![Release](https://img.shields.io/badge/Release-1.2%20Bionic-blue.svg)](https://github.com/GunaCharanTeja/WinlatorMali/releases)
-[![Default Branch](https://img.shields.io/badge/Branch-bionic--mali--1.2-brightgreen.svg)](https://github.com/GunaCharanTeja/WinlatorMali/tree/bionic-mali-1.2)
+[![Release](https://img.shields.io/badge/Release-Local%20Integration-blue.svg)](https://github.com/adesyaefull/WinlatorMaliPlus/releases)
+[![Default Branch](https://img.shields.io/badge/Branch-local--vulkan--port-brightgreen.svg)](https://github.com/adesyaefull/WinlatorMaliPlus/tree/local-vulkan-port)
 [![Android Support](https://img.shields.io/badge/Android-8.0%2B%20(SDK%2026--34)-orange.svg)](https://developer.android.com)
 [![Architecture](https://img.shields.io/badge/Architecture-ARM64--v8a-purple.svg)](https://en.wikipedia.org/wiki/AArch64)
 [![License](https://img.shields.io/badge/License-GPL%20v3%20%2F%20LGPL%20v2.1%20%2F%20MIT-lightgrey.svg)](LICENSE)
@@ -13,6 +13,22 @@
 **Winlator Mali** is a dedicated Windows (x86 and x86_64) emulation environment for Android, specifically architected and optimized to bring PC gaming to devices powered by **ARM Mali and Immortalis GPUs** (MediaTek Dimensity, Samsung Exynos, and Google Tensor SoCs), while retaining full compatibility with Qualcomm Adreno devices.
 
 Built upon the high-performance **Android Bionic C runtime** (originating from Pipetto Cripto's Winlator Bionic fork), Winlator Mali bypasses traditional PRoot container and syscall-translation overhead, achieving near-native execution speed, reduced CPU bottlenecking, and superior thermal efficiency.
+
+## Winlator Mali+ Local Integration
+
+This repository also contains the **Winlator Mali+** integration branch maintained by [Adesyaefull](https://github.com/adesyaefull). It builds on Winlator Mali 1.2 while retaining the upstream EGL/Gladio and ZeroFG paths.
+
+Highlights in the local integration:
+
+* Optional Vulkan host rendering, Vulkan native-rendering/scanout support, and Vulkan LSFG/Win-FG controls, alongside the upstream renderer paths.
+* An online Bannerlator wrapper catalog with installed-wrapper selection and validation.
+* A live PanVK release browser in Adrenotools GPU Drivers. It refreshes GitHub Releases from three upstream projects, offers only recognized Adrenotools ZIP packages, verifies downloads, and imports them into the existing driver manager.
+* Shortcut library improvements: full-cover portrait/landscape cards, per-game cover-art handling and selection, container-aware `.exe` shortcut creation, and selected-game graphics details.
+* Animated PlayStation-inspired backgrounds and a shared liquid-glass treatment across app and in-game surfaces.
+
+**PanVK is experimental.** It may be less smooth or stable than the built-in System driver, and compatibility depends on the device, Mali GPU, and kernel. Review the device notes shown with each release and switch back to System if issues occur. A successful build or ZIP import does not guarantee runtime compatibility.
+
+See [FEATURES.md](FEATURES.md) for implementation locations, integration constraints, validation status, and a checklist for porting these changes to a newer upstream source.
 
 ---
 
@@ -162,13 +178,14 @@ Before the Bionic migration, Winlator Mali began as an experimental PRoot and GL
 
 ## Product Flavors
 
-Winlator Mali is built with three distinct application flavors in [app/build.gradle](app/build.gradle):
+Winlator Mali+ is built with four application flavors in [app/build.gradle](app/build.gradle):
 
 | Flavor | Package ID | Application Name | Purpose |
 |---|---|---|---|
-| `standard` | `com.winlator.mali` | **Winlator Mali** | Main release for general gaming |
-| `ludashi` | `com.ludashi.benchmark` | **Winlator Mali Ludashi** | Benchmark identification profile |
-| `antutu` | `com.antutu.ABenchMark` | **Winlator Mali AnTuTu** | Performance benchmarking profile |
+| `standard` | `com.winlator.mali.plus` | **Winlator Mali+** | Main release for general gaming |
+| `ludashi` | `com.ludasi.benchmark` | **Winlator Mali+** | Ludashi identification profile |
+| `antutu` | `com.antutu.ABenchMark` | **Winlator Mali+** | AnTuTu identification profile |
+| `futuremark` | `com.futuremark.dmandroid.application` | **Winlator Mali+** | Futuremark identification profile |
 
 ---
 
@@ -186,6 +203,13 @@ git clone https://github.com/GunaCharanTeja/WinlatorMali.git -b bionic-mali-1.2
 cd WinlatorMali
 ```
 
+For the Mali+ integration branch, clone the personal fork instead:
+
+```bash
+git clone https://github.com/adesyaefull/WinlatorMaliPlus.git -b local-vulkan-port
+cd WinlatorMaliPlus
+```
+
 Build all signed release flavors using Gradle:
 
 **Windows (PowerShell):**
@@ -199,16 +223,25 @@ chmod +x ./gradlew
 ./gradlew assembleRelease
 ```
 
+Build all four APKs with Gradle:
+
+```bash
+./gradlew assembleStandardRelease assembleLudashiRelease assembleAntutuRelease assembleFuturemarkRelease
+```
+
 The compiled APKs will be generated at:
 * `app/build/outputs/apk/standard/release/app-standard-release.apk`
 * `app/build/outputs/apk/ludashi/release/app-ludashi-release.apk`
 * `app/build/outputs/apk/antutu/release/app-antutu-release.apk`
+* `app/build/outputs/apk/futuremark/release/app-futuremark-release.apk`
+
+Release signing uses `keystore/release.jks` when configured. Without that private release keystore, the project falls back to the Android debug signing key; such APKs are suitable for testing but may not update an installation signed with another key.
 
 ---
 
 ## Installation & Setup
 
-1. Download the latest **Winlator Mali 1.2 Bionic** release APK from [GitHub Releases](https://github.com/GunaCharanTeja/WinlatorMali/releases).
+1. Download the latest **Winlator Mali+** release APK from [Mali+ GitHub Releases](https://github.com/adesyaefull/WinlatorMaliPlus/releases).
 2. Install the APK and grant required storage permissions.
 3. On first launch, the app will automatically unpack the bundled root filesystem (`imagefs.tzst`).
 4. **Container Recommendations**:

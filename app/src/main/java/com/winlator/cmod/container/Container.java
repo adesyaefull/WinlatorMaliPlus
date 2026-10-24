@@ -46,7 +46,9 @@ public class Container {
     public static final String[] WRAPPER_DRIVERS = {"wrapper", "wrapper-1.1", "wrapper-v2", "wrapper-leegao", "wrapper-gamenative"};
 
     public static boolean isSupportedGraphicsDriver(String graphicsDriver) {
-        return graphicsDriver != null && java.util.Arrays.asList(WRAPPER_DRIVERS).contains(graphicsDriver);
+        return graphicsDriver != null
+                && (java.util.Arrays.asList(WRAPPER_DRIVERS).contains(graphicsDriver)
+                || graphicsDriver.matches("[A-Za-z0-9._-]+"));
     }
     public static final String DEFAULT_AUDIO_DRIVER = "pulseaudio-gn";
     public static final String DEFAULT_EMULATOR = "FEXCore";

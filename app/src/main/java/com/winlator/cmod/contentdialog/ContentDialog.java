@@ -67,12 +67,6 @@ public class ContentDialog extends Dialog {
         int accentColor = com.winlator.cmod.ThemeManager.getAccentColor(context);
         int textColor = com.winlator.cmod.ThemeManager.getOnSurfaceTextColor(context);
 
-        int surfaceColor = com.winlator.cmod.ThemeManager.getSurfaceColor(context);
-        android.graphics.drawable.GradientDrawable dialogBg = new android.graphics.drawable.GradientDrawable();
-        dialogBg.setColor(surfaceColor);
-        dialogBg.setCornerRadius(com.winlator.cmod.core.UnitUtils.dpToPx(14));
-        contentView.setBackground(dialogBg);
-
         TextView tvTitle = contentView.findViewById(R.id.TVTitle);
         if (tvTitle != null) tvTitle.setTextColor(accentColor);
 
@@ -90,6 +84,7 @@ public class ContentDialog extends Dialog {
         }
 
         com.winlator.cmod.ThemeManager.applyThemeToView(contentView, context);
+        contentView.setBackgroundResource(R.drawable.liquid_glass_surface);
 
         View confirmButton = contentView.findViewById(R.id.BTConfirm);
         confirmButton.setOnClickListener((v) -> {
@@ -104,6 +99,9 @@ public class ContentDialog extends Dialog {
         });
 
         setContentView(contentView);
+        if (getWindow() != null) {
+            getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
     }
 
     public View getInflatedLayout() {

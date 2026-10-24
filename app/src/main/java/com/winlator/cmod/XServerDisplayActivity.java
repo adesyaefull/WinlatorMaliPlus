@@ -1128,7 +1128,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             hudDataSource = new HudDataSource(this);
             frameRating = new WinlatorHUD(this);
             frameRating.setDataSource(hudDataSource);
-            frameRating.setWrapperName(graphicsDriver);
+            configureHudFrameGenerationStats(frameRating);
+            frameRating.setWrapperName(xServerView != null && xServerView.isVulkanRendererActive()
+                    ? "Vulkan" : graphicsDriver);
             xServer.setWinlatorHUD(frameRating);
             rootView.addView(frameRating);
 
@@ -1580,10 +1582,53 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         return Math.max(0.25f, Math.min(1.0f, flowScale));
     }
 
-    private String getRendererSetting(String key, String defaultValue) {
+    public String getRendererSetting(String key, String defaultValue) {
         return shortcut != null
                 ? shortcut.getExtra(key, container.getExtra(key, defaultValue))
                 : container.getExtra(key, defaultValue);
+    }
+
+    public boolean applyNativeFrameGeneration(boolean enabled, String engineName, int multiplier) {
+        if (xServerView == null || !xServerView.isVulkanRendererActive()) {
+            if (enabled) AppUtils.showToast(this, "Win-FG and LSFG require the Vulkan screen renderer");
+            return !enabled;
+        }
+        com.winlator.cmod.renderer.vulkan.VulkanRenderer renderer = xServerView.getVulkanRenderer();
+        boolean winFg = "winfg".equalsIgnoreCase(engineName);
+        if (enabled && !winFg) {
+            if (com.winlator.cmod.core.LsfgNative.isCacheValid(this)) {
+                renderer.setLsfgCachePath(
+                        com.winlator.cmod.core.LsfgNative.cacheFile(this).getAbsolutePath());
+            } else {
+                AppUtils.showToast(this,
+                        "LSFG Native requires a valid Lossless.dll imported in Settings");
+                renderer.setFrameGenArmed(false, multiplier);
+                return false;
+            }
+        }
+        renderer.setFrameGenEngine(winFg
+                ? com.winlator.cmod.renderer.vulkan.VulkanRenderer.FG_ENGINE_WINFG
+                : com.winlator.cmod.renderer.vulkan.VulkanRenderer.FG_ENGINE_LSFG);
+        renderer.setFrameGenTuning(winFg
+                        ? parseFrameGenFlowScale(getRendererSetting("frameGenFlowScale", "1.0")) : 1.0f,
+                getRefreshRate());
+        renderer.setFrameGenArmed(enabled, multiplier);
+        return true;
+    }
+
+    public void saveFrameGenerationSettings(boolean enabled, String engineName, int multiplier,
+                                            boolean forGame) {
+        if (forGame && shortcut != null) {
+            shortcut.putExtra("frameGenEnabled", enabled ? "1" : "0");
+            shortcut.putExtra("frameGenEngine", engineName);
+            shortcut.putExtra("frameGenMultiplier", String.valueOf(multiplier));
+            shortcut.saveData();
+        } else if (container != null) {
+            container.putExtra("frameGenEnabled", enabled ? "1" : "0");
+            container.putExtra("frameGenEngine", engineName);
+            container.putExtra("frameGenMultiplier", String.valueOf(multiplier));
+            container.saveData();
+        }
     }
 
     private void configureVulkanRenderer() {
@@ -1735,7 +1780,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             hudDataSource = new HudDataSource(this);
             frameRating = new WinlatorHUD(this);
             frameRating.setDataSource(hudDataSource);
-            frameRating.setWrapperName(graphicsDriver);
+            configureHudFrameGenerationStats(frameRating);
+            frameRating.setWrapperName(xServerView != null && xServerView.isVulkanRendererActive()
+                    ? "Vulkan" : graphicsDriver);
 
             xServer.setWinlatorHUD(frameRating);
             frameRating.enableByUser();
@@ -2350,12 +2397,23 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         Log.d("XServerDisplayActivity", "Extracting graphics driver files");
         // The selected wrapper build; all of them install as the same ICD, so the chosen one is written each launch.
-        String driverFile = "graphics_driver/" + (Container.isSupportedGraphicsDriver(graphicsDriver) ? graphicsDriver : Container.DEFAULT_GRAPHICS_DRIVER) + ".tzst";
+        String builtInDriver = java.util.Arrays.asList(Container.WRAPPER_DRIVERS).contains(graphicsDriver)
+                ? graphicsDriver : Container.DEFAULT_GRAPHICS_DRIVER;
+        String driverFile = "graphics_driver/" + builtInDriver + ".tzst";
         // Two of the 1.1-era archives were packed on macOS and carry ._* / .DS_Store metadata; keep it out of imagefs.
         com.winlator.cmod.core.OnExtractFileListener skipMacMetadata = (file, size) ->
             file.getName().startsWith("._") || file.getName().equals(".DS_Store") ? null : file;
 
-        File internalDriverFile = new File(getFilesDir(), driverFile);
+        String selectedWrapperId = graphicsDriver;
+        File catalogWrapperFile = com.winlator.cmod.contents.WrapperCatalogManager
+                .getInstalledWrapperFile(this, selectedWrapperId);
+        File internalDriverFile = catalogWrapperFile != null
+                && !"apex-wrapper".equals(selectedWrapperId)
+                ? catalogWrapperFile : new File(getFilesDir(), driverFile);
+        if (!"apex-wrapper".equals(selectedWrapperId) && catalogWrapperFile == null) {
+            Log.w("GraphicsDriverExtraction", "Selected catalog wrapper '" + selectedWrapperId
+                    + "' is not installed; using " + driverFile);
+        }
         if (internalDriverFile.exists()) {
             TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, internalDriverFile, rootDir, skipMacMetadata);
         } else {
@@ -2770,6 +2828,10 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         return xServerView;
     }
 
+    public boolean isVulkanRendererActive() {
+        return xServerView != null && xServerView.isVulkanRendererActive();
+    }
+
     public Container getContainer() {
         return container;
     }
@@ -2916,6 +2978,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     private void changeFrameRatingVisibility(Window window, Property property) {
         if (frameRating == null) return;
+        if (xServerView != null && xServerView.isVulkanRendererActive()) return;
 
         if (property != null) {
             String propName = property.nameAsString();
@@ -2925,6 +2988,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                         frameRatingWindowId = window.id;
                         Log.d("XServerDisplayActivity", "HUD owner is now " + window.getName());
                     }
+
                 }
             }
             if (propName.contains("_MESA_DRV_ENGINE_NAME")) {
@@ -2935,6 +2999,21 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             frameRatingWindowId = -1;
             runOnUiThread(() -> frameRating.onRendererGone());
         }
+    }
+
+    private void configureHudFrameGenerationStats(WinlatorHUD hud) {
+        if (xServerView == null || !xServerView.isVulkanRendererActive()) {
+            hud.setFrameGenStatsProvider(null);
+            return;
+        }
+        hud.onRendererDetected("Vulkan");
+        hud.setFrameGenStatsProvider(() -> {
+            com.winlator.cmod.renderer.vulkan.VulkanRenderer renderer =
+                    xServerView == null ? null : xServerView.getVulkanRenderer();
+            float[] stats = renderer == null ? null : renderer.getFrameGenStats();
+            if (stats == null || stats.length < 6 || stats[1] <= 0) return null;
+            return new float[]{1.0f + stats[1], stats[2], stats[3], stats[5]};
+        });
     }
 
     private void registerGyroscope() {
@@ -3130,5 +3209,3 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         return createThemedSpinnerAdapter(context, java.util.Arrays.asList(items), isDarkMode);
     }
 }
-
-

@@ -239,7 +239,8 @@ public class CoverArtManager {
     }
 
     public static void fetchDefaultCoverArt(Context context, Shortcut shortcut, DownloadCallback callback) {
-        if (context == null || shortcut == null || !shortcut.getCustomCoverArtPath().isEmpty()) return;
+        if (context == null || shortcut == null || !shortcut.getCustomCoverArtPath().isEmpty()
+                || !shortcut.getExtra("coverArtSelectionPending").isEmpty()) return;
         if (!AppUtils.isNetworkAvailable(context)) {
             if (callback != null) callback.onFailed(ErrorReason.NETWORK_UNAVAILABLE);
             return;
@@ -253,6 +254,8 @@ public class CoverArtManager {
     private static void searchDefaultCoverArt(SteamGridDBApi api, String auth, Shortcut shortcut,
                                               List<String> queries, int queryIndex,
                                               DownloadCallback callback) {
+        if (!shortcut.getCustomCoverArtPath().isEmpty()
+                || !shortcut.getExtra("coverArtSelectionPending").isEmpty()) return;
         if (queryIndex >= queries.size()) {
             Log.w("CoverArtManager", "No SteamGridDB no-logo cover found for " + shortcut.name);
             if (callback != null) callback.onFailed(ErrorReason.NOT_FOUND);
@@ -289,6 +292,8 @@ public class CoverArtManager {
     private static void fetchDefaultGrid(SteamGridDBApi api, String auth, Shortcut shortcut,
                                          int gameId, List<String> queries, int queryIndex,
                                          DownloadCallback callback) {
+        if (!shortcut.getCustomCoverArtPath().isEmpty()
+                || !shortcut.getExtra("coverArtSelectionPending").isEmpty()) return;
         api.getGridsByGameId(auth, gameId, "no_logo", "600x900,342x482", "static")
                 .enqueue(new Callback<SteamGridGridsResponse>() {
                     @Override
@@ -304,8 +309,9 @@ public class CoverArtManager {
                         }
                         SteamGridGridsResponse.GridData cover = findNoLogoGrid(response.body());
                         if (cover != null) {
-                            if (shortcut.getCustomCoverArtPath().isEmpty()) {
-                                downloadSelectedCoverArt(cover.url, shortcut, callback);
+                            if (shortcut.getCustomCoverArtPath().isEmpty()
+                                    && shortcut.getExtra("coverArtSelectionPending").isEmpty()) {
+                                downloadDefaultCoverArt(cover.url, shortcut, callback);
                             }
                             return;
                         }
@@ -316,8 +322,9 @@ public class CoverArtManager {
                                                            Response<SteamGridGridsResponse> response) {
                                         SteamGridGridsResponse.GridData cover = findNoLogoGrid(response.body());
                                         if (cover != null) {
-                                            if (shortcut.getCustomCoverArtPath().isEmpty()) {
-                                                downloadSelectedCoverArt(cover.url, shortcut, callback);
+                                            if (shortcut.getCustomCoverArtPath().isEmpty()
+                                                    && shortcut.getExtra("coverArtSelectionPending").isEmpty()) {
+                                                downloadDefaultCoverArt(cover.url, shortcut, callback);
                                             }
                                         } else {
                                             searchDefaultCoverArt(api, auth, shortcut, queries,
@@ -352,6 +359,16 @@ public class CoverArtManager {
 
     public static void downloadSelectedCoverArt(String url, Shortcut shortcut, DownloadCallback callback) {
         downloadInto(url, bitmap -> shortcut.saveCustomCoverArt(bitmap), callback);
+    }
+
+    private static void downloadDefaultCoverArt(String url, Shortcut shortcut, DownloadCallback callback) {
+        downloadInto(url, bitmap -> {
+            if (shortcut.getCustomCoverArtPath().isEmpty()
+                    && shortcut.getExtra("coverArtSelectionPending").isEmpty()) {
+                return shortcut.saveCustomCoverArt(bitmap);
+            }
+            return false;
+        }, callback);
     }
 
     public static void fetchHeroArtOptions(Context context, Shortcut shortcut, String searchQuery, HeroOptionsCallback callback) {
@@ -437,11 +454,14 @@ public class CoverArtManager {
     }
 
     public static void downloadSelectedHeroArt(String url, Shortcut shortcut, DownloadCallback callback) {
-        downloadInto(url, bitmap -> shortcut.saveCustomHeroArt(bitmap), callback);
+        downloadInto(url, bitmap -> {
+            shortcut.saveCustomHeroArt(bitmap);
+            return true;
+        }, callback);
     }
 
     private interface BitmapSink {
-        void accept(Bitmap bitmap);
+        boolean accept(Bitmap bitmap);
     }
 
     private static void downloadInto(String url, BitmapSink sink, DownloadCallback callback) {
@@ -458,8 +478,11 @@ public class CoverArtManager {
                     try (InputStream input = connection.getInputStream()) {
                         Bitmap bitmap = BitmapFactory.decodeStream(input);
                         if (bitmap != null) {
-                            sink.accept(bitmap);
-                            if (callback != null) callback.onCompleted(bitmap);
+                            if (sink.accept(bitmap)) {
+                                if (callback != null) callback.onCompleted(bitmap);
+                            } else if (callback != null) {
+                                callback.onFailed(ErrorReason.UNKNOWN);
+                            }
                         } else if (callback != null) callback.onFailed(ErrorReason.UNKNOWN);
                     }
                 } else if (callback != null) {

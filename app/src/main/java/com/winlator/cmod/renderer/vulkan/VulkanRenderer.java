@@ -524,7 +524,10 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
             }
         }
 
-        if (nativeMode) {
+        boolean directScanoutHasFrame = nativeMode
+                && nativeIsScanoutActive(nativeHandle)
+                && nativeIsGameFrameDelivered(nativeHandle);
+        if (directScanoutHasFrame) {
             ArrayList<RenderableWindow> ns = new ArrayList<>();
             for (int i = start; i < list.size(); i++) {
                 RenderableWindow rw = list.get(i);
@@ -600,13 +603,16 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
                 if (g != null) {
                     long ahbPtr = g.hardwareBufferPtr;
                     if (ahbPtr != 0) {
+                        boolean scanoutReady = nativeMode && nativeIsScanoutActive(nativeHandle)
+                                && nativeIsGameFrameDelivered(nativeHandle);
                         if (nativeMode && pixmap.isDirectScanout() && nativeIsScanoutActive(nativeHandle)) {
                             int fence = g.unlock();
                             nativeScanoutSetBuffer(nativeHandle, ahbPtr,
                                 rx, ry, pixmap.width, pixmap.height, fence);
                             g.lock();
                             pixmap.refreshDataFromTexture();
-                        } else {
+                        }
+                        if (!scanoutReady || !pixmap.isDirectScanout()) {
                             long contentId = did(window.getContent());
                             nativeUpdateWindowContentAHB(nativeHandle, contentId, ahbPtr,
                                 pixmap.width, pixmap.height, rx, ry);
@@ -668,7 +674,8 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
                                 classicHudRef.post(classicHudRef);
                             }
                             if (classicHudRef != null && classicHudRef.isAttachedToWindow()) classicHudRef.post(classicHudRef);
-                        } else if (!scanoutNow) {
+                        } else if (!scanoutNow || !nativeIsGameFrameDelivered(nativeHandle)
+                                || !drawable.isDirectScanout()) {
                             nativeUpdateWindowContentAHB(nativeHandle, did(drawable), ahbPtr,
                                 drawable.width, drawable.height, rx, ry);
                         }

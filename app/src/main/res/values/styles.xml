@@ -16,10 +16,10 @@
         <item name="android:popupMenuStyle">@style/PopupMenu</item>
         <item name="popupMenuStyle">@style/PopupMenu</item>
 
-        <item name="gamingSurfaceColor">@color/gaming_surface_light</item>
+        <item name="gamingSurfaceColor">#66383D43</item>
         <item name="gamingCardSubtitleColor">#b3000000</item>
-        <item name="gamingPopupColor">#f2eceff1</item>
-        <item name="gamingToolbarColor">@color/colorPrimary</item>
+        <item name="gamingPopupColor">#CC3B4046</item>
+        <item name="gamingToolbarColor">#B83B4046</item>
 
         <item name="semanticSurface">#ffffff</item>
         <item name="semanticOnSurface">#121212</item>
@@ -47,11 +47,11 @@
         <item name="android:popupMenuStyle">@style/PopupMenu.Dark</item>
         <item name="popupMenuStyle">@style/PopupMenu.Dark</item>
 
-        <item name="gamingSurfaceColor">@color/gaming_surface_dark</item>
+        <item name="gamingSurfaceColor">#66383D43</item>
         <item name="gamingCardSubtitleColor">#b3ffffff</item>
         <item name="tabStyle">@style/CustomTabLayout.Dark</item>
-        <item name="gamingPopupColor">#f2263238</item>
-        <item name="gamingToolbarColor">@color/colorPrimaryDarkMode</item>
+        <item name="gamingPopupColor">#CC3B4046</item>
+        <item name="gamingToolbarColor">#B83B4046</item>
 
         <item name="semanticSurface">#1e1e1e</item>
         <item name="semanticOnSurface">#e0e0e0</item>
@@ -60,6 +60,16 @@
         <item name="semanticDivider">#383838</item>
         <item name="semanticAccentDim">#4080d8ff</item>
         <item name="semanticSurfaceContainer">#252525</item>
+    </style>
+
+    <style name="LiquidGlassTheme">
+        <item name="gamingSurfaceColor">#684C3865</item>
+        <item name="gamingToolbarColor">#B8493860</item>
+        <item name="gamingPopupColor">#D1493860</item>
+        <item name="semanticSurface">#D1493860</item>
+        <item name="semanticSurfaceVariant">#AA5C4770</item>
+        <item name="semanticSurfaceContainer">#B84F3D64</item>
+        <item name="semanticDivider">#8CF7EEFF</item>
     </style>
 
     <!-- Light Theme Fullscreen -->
@@ -970,4 +980,3 @@
     </resources>
 
 -->
-

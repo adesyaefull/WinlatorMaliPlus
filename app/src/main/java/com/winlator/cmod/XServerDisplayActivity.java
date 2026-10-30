@@ -104,6 +104,7 @@ import com.winlator.cmod.math.XForm;
 import com.winlator.cmod.midi.MidiHandler;
 import com.winlator.cmod.midi.MidiManager;
 import com.winlator.cmod.renderer.PostProcessing;
+import com.winlator.cmod.renderer.ViewTransformation;
 import com.winlator.cmod.widget.HudDataSource;
 import com.winlator.cmod.widget.WinlatorHUD;
 import com.winlator.cmod.widget.InputControlsView;
@@ -329,6 +330,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         ThemeManager.applyTheme(this);
 
         super.onCreate(savedInstanceState);
+        com.winlator.cmod.logs.SessionLog.installCrashHandler(this);
         com.winlator.cmod.core.ProcessHelper.killAllWineProcesses();
         AppUtils.hideSystemUI(this);
         AppUtils.keepScreenOn(this);
@@ -431,7 +433,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             navigationView.setBackgroundResource(R.drawable.content_dialog_background_dark);
         }
 
-        boolean enableLogs = preferences.getBoolean("enable_wine_debug", false) || preferences.getBoolean("enable_box64_logs", false);
+        boolean enableLogs = com.winlator.cmod.logs.LogFiles.isOn(this, "enable_wine_debug") || com.winlator.cmod.logs.LogFiles.isOn(this, "enable_box64_logs");
         Menu menu = navigationView.getMenu();
         menu.findItem(R.id.main_menu_logs).setVisible(enableLogs);
         navigationView.setNavigationItemSelectedListener(this);
@@ -548,6 +550,16 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         if (enableLogs) {
             LogView.setFilename(getExecutable());
             ProcessHelper.addDebugCallback(debugDialog = new DebugDialog(this));
+        }
+        // Log Manager: this session's logs go to <log root>/<game>/ (shortcut name, else container name; the
+        // previous run archived): Wine/Box64 output when on, DXVK/VKD3D logs, and logcat when the session ends.
+        {
+            com.winlator.cmod.logs.SessionLog.start(this, shortcut != null ? shortcut.name : container.getName(),
+                "Container: " + container.getName() + " (id " + container.id + ")\n"
+                + "Wine: " + wineVersion + "\n"
+                + "Graphics driver: " + container.getGraphicsDriver() + "\n"
+                + "DX wrapper: " + container.getDXWrapper() + " / " + container.getDXWrapperConfig() + "\n"
+                + (shortcut != null ? "Executable: " + shortcut.path + "\n" : "Executable: File Manager\n"));
         }
 
         graphicsDriver = container.getGraphicsDriver();
@@ -965,6 +977,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 } catch (InterruptedException e) {}
             }
 
+            // Log Manager: close this session's log and save logcat now; the process restart below skips onDestroy.
+            com.winlator.cmod.logs.SessionLog.stopAndWait(this);
+
             runOnUiThread(() -> {
                 // Hand the controller back to Android before the process restart, which may skip onDestroy.
                 if (usbRumbleClaimed) {
@@ -979,6 +994,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     protected void onDestroy() {
+        // Log Manager: close this session's log and dump the app's logcat next to it.
+        com.winlator.cmod.logs.SessionLog.stop(this, true);
         if (usbRumbleClaimed) {
             usbRumbleClaimed = false;
             com.winlator.cmod.inputcontrols.DirectGamepHidRumbleEngine.getInstance(this).releaseClaim();
@@ -1322,6 +1339,32 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     //         Log.d("XServerDisplayActivity", "Failed to extract input dlls");
     // }
 
+    // Copy assets/<exeName> into this container's drive_c\windows when the marker beside it doesn't
+    // match version. Temp file + rename so a failed copy never leaves a truncated exe. Best-effort.
+    private void stageBundledWindowsExe(String exeName, String markerName, String version) {
+        try {
+            File windowsDir = new File(container.getRootDir(), ".wine/drive_c/windows");
+            if (!windowsDir.isDirectory()) return;
+            File exeFile = new File(windowsDir, exeName);
+            File marker = new File(windowsDir, markerName);
+            if (exeFile.isFile() && marker.isFile() && version.equals(FileUtils.readString(marker).trim())) return;
+
+            File tmp = new File(windowsDir, exeName + ".tmp");
+            try (java.io.InputStream in = getAssets().open(exeName);
+                 java.io.FileOutputStream out = new java.io.FileOutputStream(tmp)) {
+                byte[] buf = new byte[65536];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            }
+            if (tmp.length() == 0) { tmp.delete(); return; }
+            if (exeFile.exists()) exeFile.delete();
+            if (!tmp.renameTo(exeFile)) { tmp.delete(); return; }
+            FileUtils.writeString(marker, version);
+        } catch (Exception e) {
+            Log.w("XServerDisplayActivity", "stageBundledWindowsExe " + exeName + ": " + e.getMessage());
+        }
+    }
+
     private void setupWineSystemFiles() {
         String appVersion = String.valueOf(AppUtils.getVersionCode(this));
         String imgVersion = String.valueOf(imageFs.getVersion());
@@ -1367,6 +1410,15 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         WineStartMenuCreator.create(this, container);
         WineUtils.createDosdevicesSymlinks(container);
+        WineUtils.setWinebusOptions(container);
+
+        // The wfm.exe in container_pattern_common hangs on x86_64 Wine (loops on NtQueryDirectoryObject),
+        // so File Manager never opens and blocks other programs. Bannerlator's newer wfm.exe and winhandler.exe
+        // ship in assets and are copied into every container on launch, as Bannerlator does.
+        // wfm.exe imports libcdio.dll (ISO/CD support); without it the loader fails and File Manager never opens.
+        stageBundledWindowsExe("libcdio.dll", ".libcdio_version", "banner-1");
+        stageBundledWindowsExe("wfm.exe", ".wfm_version", "banner-1.2.1");
+        stageBundledWindowsExe("winhandler.exe", ".winhandler_version", "banner-1-no-unmaximize");
         // Configure Wine joystick registry keys based on Automated Emulation Mode
         UnifiedInputState.EmulationMode mode = container.getEmulationMode();
         if (shortcut != null) {
@@ -1407,12 +1459,24 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         envVars.put("LC_ALL", lc_all);
         envVars.put("WINEPREFIX", imageFs.wineprefix);
 
-        boolean enableWineDebug = preferences.getBoolean("enable_wine_debug", false);
+        boolean enableWineDebug = com.winlator.cmod.logs.LogFiles.isOn(this, "enable_wine_debug");
         String wineDebugChannels = preferences.getString("wine_debug_channels", SettingsFragment.DEFAULT_WINE_DEBUG_CHANNELS);
         envVars.put("WINEDEBUG", enableWineDebug && !wineDebugChannels.isEmpty()
                 ? "+" + wineDebugChannels.replace(",", ",+")
                 : "-all"
         );
+
+        // Log Manager "DXVK & VKD3D": on, their logs go into this session's log folder; off, the wrappers stay silent
+        // (DXVK logs by default otherwise, into the game's own folder). A user's own variables win either way.
+        File sessionLogDir = com.winlator.cmod.logs.SessionLog.currentDir();
+        if (sessionLogDir != null && com.winlator.cmod.logs.LogFiles.isOn(this, com.winlator.cmod.logs.LogFiles.PREF_DXVK)) {
+            if (!envVars.has("DXVK_LOG_PATH")) envVars.put("DXVK_LOG_PATH", sessionLogDir.getAbsolutePath());
+            if (!envVars.has("VKD3D_LOG_FILE")) envVars.put("VKD3D_LOG_FILE", new File(sessionLogDir, "vkd3d-proton.log").getAbsolutePath());
+        }
+        else if (!com.winlator.cmod.logs.LogFiles.isOn(this, com.winlator.cmod.logs.LogFiles.PREF_DXVK)) {
+            if (!envVars.has("DXVK_LOG_LEVEL")) envVars.put("DXVK_LOG_LEVEL", "none");
+            if (!envVars.has("VKD3D_DEBUG")) envVars.put("VKD3D_DEBUG", "none");
+        }
 
         // Clear any temporary directory
         String rootPath = imageFs.getRootDir().getPath();
@@ -1470,6 +1534,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             envVars.putAll(overrideEnvVars);
             overrideEnvVars.clear(); // Clear overrideEnvVars as per smali logic
         }
+
 
         // Create our overall XEnvironment with various components
         environment = new XEnvironment(this, imageFs);
@@ -1803,11 +1868,18 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             shouldStretch = true;
         }
 
-        if (shouldStretch) {
-            // Toggle fullscreen mode based on the final decision
-            xServerView.toggleFullscreen();
-            touchpadView.toggleFullscreen();
-        }
+        // Fullscreen mode (Fit / Stretch / Fill / Integer) and screen alignment: the shortcut's, else the container's.
+        // Older settings only have the Stretch checkbox.
+        int fullscreenMode = shouldStretch ? ViewTransformation.MODE_STRETCH : ViewTransformation.MODE_FIT;
+        String modeExtra = shortcut != null ? shortcut.getExtra("fullscreenMode") : "";
+        if (modeExtra.isEmpty() && shortcutFullscreenStretched == null && container != null) modeExtra = container.getExtra("fullscreenMode");
+        try { if (!modeExtra.isEmpty()) fullscreenMode = Integer.parseInt(modeExtra); } catch (NumberFormatException ignored) {}
+        String alignExtra = shortcut != null ? shortcut.getExtra("screenAlignment") : "";
+        if (alignExtra.isEmpty() && container != null) alignExtra = container.getExtra("screenAlignment");
+        int screenAlignment = ViewTransformation.ALIGN_CENTER;
+        try { if (!alignExtra.isEmpty()) screenAlignment = Integer.parseInt(alignExtra); } catch (NumberFormatException ignored) {}
+
+        applyScreenMode(fullscreenMode, screenAlignment, false);
 
         if (shortcut != null) {
             String controlsProfile = shortcut.getExtra("controlsProfile");
@@ -1889,6 +1961,37 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
     }
 
+    private int currentFullscreenMode = ViewTransformation.MODE_FIT;
+    private int currentScreenAlignment = ViewTransformation.ALIGN_CENTER;
+
+    /** Fit / Stretch / Fill / Integer and Center / Top / Bottom, live; saved for this game (or the container) when asked. */
+    private void applyScreenMode(int fullscreenMode, int screenAlignment, boolean save) {
+        if (fullscreenMode == currentFullscreenMode && screenAlignment == currentScreenAlignment && save
+                && xServerView.isFullscreen() == (fullscreenMode == ViewTransformation.MODE_STRETCH)) return;
+        currentFullscreenMode = fullscreenMode;
+        currentScreenAlignment = screenAlignment;
+        int scaleMode = fullscreenMode == ViewTransformation.MODE_STRETCH ? ViewTransformation.MODE_FIT : fullscreenMode;
+        xServerView.setScaleMode(scaleMode, screenAlignment);
+        touchpadView.setScaleMode(scaleMode, screenAlignment);
+        if (xServerView.isFullscreen() != (fullscreenMode == ViewTransformation.MODE_STRETCH)) {
+            xServerView.toggleFullscreen();
+            touchpadView.toggleFullscreen();
+        }
+        if (!save) return;
+        if (shortcut != null) {
+            shortcut.putExtra("fullscreenStretched", fullscreenMode == ViewTransformation.MODE_STRETCH ? "1" : "0");
+            shortcut.putExtra("fullscreenMode", String.valueOf(fullscreenMode));
+            shortcut.putExtra("screenAlignment", String.valueOf(screenAlignment));
+            shortcut.saveData();
+        }
+        else if (container != null) {
+            container.setFullscreenStretched(fullscreenMode == ViewTransformation.MODE_STRETCH);
+            container.putExtra("fullscreenMode", String.valueOf(fullscreenMode));
+            container.putExtra("screenAlignment", String.valueOf(screenAlignment));
+            container.saveData();
+        }
+    }
+
     private void showDisplaySessionDialog() {
         final ContentDialog dialog = new ContentDialog(this, R.layout.display_session_dialog);
         dialog.setTitle(R.string.display_and_session);
@@ -1899,6 +2002,22 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             touchpadView.toggleFullscreen();
             dialog.dismiss();
         });
+
+        final Spinner sFullscreenMode = dialog.findViewById(R.id.SFullscreenMode);
+        final Spinner sScreenAlignment = dialog.findViewById(R.id.SScreenAlignment);
+        sFullscreenMode.setSelection(xServerView.isFullscreen() ? ViewTransformation.MODE_STRETCH : (currentFullscreenMode == ViewTransformation.MODE_STRETCH ? ViewTransformation.MODE_FIT : currentFullscreenMode), false);
+        sScreenAlignment.setSelection(currentScreenAlignment, false);
+        android.widget.AdapterView.OnItemSelectedListener screenModeListener = new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                applyScreenMode(sFullscreenMode.getSelectedItemPosition(), sScreenAlignment.getSelectedItemPosition(), true);
+            }
+
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        };
+        sFullscreenMode.setOnItemSelectedListener(screenModeListener);
+        sScreenAlignment.setOnItemSelectedListener(screenModeListener);
 
         dialog.findViewById(R.id.BTPipMode).setOnClickListener(v -> {
             enterPictureInPictureMode();
@@ -2508,11 +2627,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         String bcnEmulationCache = graphicsDriverConfig.getOrDefault("bcnEmulationCache", "1");
         envVars.put("WRAPPER_USE_BCN_CACHE", bcnEmulationCache);
-        if ("0".equals(bcnEmulationCache)) {
-            envVars.put("BCN_DISABLE_DISK_CACHE", "1");
-        } else {
-            envVars.put("BCN_DISABLE_DISK_CACHE", "0");
-        }
 
         // ENABLE_BCN_COMPUTE loads the layer, DISABLE_BCN_COMPUTE force-stops it (both builds). Qualcomm devices
         // already handle BC natively (Adreno/Turnip), so the layer is skipped there even when enabled.
@@ -2532,6 +2646,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             // The current build (bcn_layer_env.txt): BCN_NATIVE stays at its default (on; off is debug-only and
             // breaks BC textures on stock Mali). BCN_NATIVE_DIRECT=0 is the slower staging-buffer upload, a
             // compatibility fallback for drivers that mishandle the direct one.
+            // BCN_COMPUTE_AUTO lets the layer pick per texture, as fbf43ea sent it; "full" emulation forces compute.
+            envVars.put("BCN_COMPUTE_AUTO", "full".equals(bcnEmulation) ? "0" : "1");
             if ("1".equals(graphicsDriverConfig.getOrDefault("bcnKeepRaw", "0"))) envVars.put("BCN_KEEP_RAW", "1");
             if ("0".equals(graphicsDriverConfig.getOrDefault("bcnNativeDirect", "1"))) envVars.put("BCN_NATIVE_DIRECT", "0");
         }
@@ -2637,6 +2753,17 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             if (ddrawrapper.contains("None")) {
                 Log.d(TAG, "No DDRaw wrapper has been selected, restoring original ddraw files");
                 restoreOriginalDllFiles(new String[]{ "ddraw.dll", "d3dimm.dll" });
+            }
+            else if (ddrawrapper.startsWith("d7vk-")) {
+                ContentProfile d7vkProfile = contentsManager.getProfileByEntryName(ddrawrapper);
+                if (d7vkProfile != null) {
+                    Log.d(TAG, "Applying D7VK content profile: " + ddrawrapper);
+                    contentsManager.applyContent(d7vkProfile);
+                }
+                else {
+                    Log.e(TAG, "D7VK not installed: " + ddrawrapper);
+                    restoreOriginalDllFiles(new String[]{ "ddraw.dll", "d3dimm.dll" });
+                }
             }
             else {
                 if (ddrawrapper.equals("cnc-ddraw"))

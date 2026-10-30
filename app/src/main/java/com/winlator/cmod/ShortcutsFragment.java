@@ -11,6 +11,7 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.RenderEffect;
 import android.graphics.Shader;
+import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
@@ -1472,6 +1473,14 @@ public class ShortcutsFragment extends Fragment {
                         }
                     });
                 }
+                else if (itemId == R.id.shortcut_view_logs) {
+                    // As in Bannerlator: straight to this game's logs in the Log Manager.
+                    getParentFragmentManager().beginTransaction()
+                        .setCustomAnimations(R.anim.slide_in_up, R.anim.slide_out_down, R.anim.slide_in_down, R.anim.slide_out_up)
+                        .addToBackStack(null)
+                        .replace(R.id.FLFragmentContainer, LogManagerFragment.forGame(shortcut.name))
+                        .commit();
+                }
                 else if (itemId == R.id.shortcut_save_manager) {
                     new com.winlator.cmod.saves.SaveManagerDialog(getActivity(), shortcut).show();
                 }
@@ -2061,7 +2070,8 @@ public class ShortcutsFragment extends Fragment {
         Context context = shortcut.container.getManager().getContext();
         ShortcutManager shortcutManager = context.getSystemService(ShortcutManager.class);
         if (shortcutManager != null && shortcutManager.isRequestPinShortcutSupported()) {
-            Icon icon = shortcut.icon != null ? Icon.createWithBitmap(shortcut.icon) : Icon.createWithResource(context, R.drawable.icon_shortcut);
+            Bitmap launcherIcon = shortcut.getLauncherIcon();
+            Icon icon = launcherIcon != null ? Icon.createWithBitmap(launcherIcon) : Icon.createWithResource(context, R.drawable.icon_shortcut);
             ShortcutInfo shortcutInfo = buildScreenShortCut(context, shortcut.name, shortcut.name, shortcut.container.id, shortcut.file.getPath(), icon, shortcut.name);
             shortcutManager.requestPinShortcut(shortcutInfo, null);
         }

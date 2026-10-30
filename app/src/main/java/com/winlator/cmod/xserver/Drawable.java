@@ -101,6 +101,18 @@ public class Drawable extends XResource {
         if (onDrawListener != null) onDrawListener.run();
     }
 
+    // Every CPU write is flushed into the hardware buffer before the redraw is requested, like Pipetto's
+    // lock/write/unlock per call: the GPU never samples stale cache lines (stripes on cached mappings).
+    private void notifyCpuWrite() {
+        if (backingAHB != 0 && gpuImage == null) {
+            synchronized (renderLock) {
+                ByteBuffer moved = flushBuffer(backingAHB, data);
+                if (moved != null) data = moved.order(ByteOrder.LITTLE_ENDIAN);
+            }
+        }
+        if (onDrawListener != null) onDrawListener.run();
+    }
+
     public Callback<Drawable> getOnDestroyListener() {
         return onDestroyListener;
     }
@@ -125,7 +137,7 @@ public class Drawable extends XResource {
         data.rewind();
         this.data.rewind();
 
-        if (onDrawListener != null) onDrawListener.run();
+        notifyCpuWrite();
     }
 
     public ByteBuffer getImage(short x, short y, short width, short height) {
@@ -161,7 +173,7 @@ public class Drawable extends XResource {
         drawable.data.rewind();
         this.data.rewind();
 
-        if (onDrawListener != null) onDrawListener.run();
+        notifyCpuWrite();
     }
 
     public void fillColor(int color) {
@@ -177,7 +189,7 @@ public class Drawable extends XResource {
         fillRect((short)x, (short)y, (short)width, (short)height, color, this.getStride(), this.data);
         this.data.rewind();
 
-        if (onDrawListener != null) onDrawListener.run();
+        notifyCpuWrite();
     }
 
     public void drawLines(int color, int lineWidth, short... points) {
@@ -196,14 +208,14 @@ public class Drawable extends XResource {
 
         this.data.rewind();
 
-        if (onDrawListener != null) onDrawListener.run();
+        notifyCpuWrite();
     }
 
     public void drawAlphaMaskedBitmap(byte foreRed, byte foreGreen, byte foreBlue, byte backRed, byte backGreen, byte backBlue, Drawable srcDrawable, Drawable maskDrawable) {
         drawAlphaMaskedBitmap(foreRed, foreGreen, foreBlue, backRed, backGreen, backBlue, srcDrawable.data, srcDrawable.getStride(), maskDrawable.data, maskDrawable.getStride(), this.width, this.height, this.getStride(), this.data);
         this.data.rewind();
 
-        if (onDrawListener != null) onDrawListener.run();
+        notifyCpuWrite();
     }
 
     private static native void drawBitmap(short width, short height, ByteBuffer srcData, short dstStride, ByteBuffer dstData);
@@ -225,6 +237,8 @@ public class Drawable extends XResource {
     public native ByteBuffer lockBuffer(long ahb);
 
     public native void unlockBuffer(long ahb);
+
+    private static native ByteBuffer flushBuffer(long ahb, ByteBuffer oldData);
 
     /** GPU-copies the current GL read framebuffer into this drawable's hardware buffer (used by GLX/Gladio). */
     public boolean blitReadBuffer(int width, int height, boolean flipY) {

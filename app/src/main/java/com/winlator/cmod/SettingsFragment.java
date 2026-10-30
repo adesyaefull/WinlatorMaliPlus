@@ -203,6 +203,9 @@ public class SettingsFragment extends Fragment {
         // Initialize the cursor lock checkbox
         cbCursorLock = view.findViewById(R.id.CBCursorLock);
         cbCursorLock.setChecked(preferences.getBoolean("cursor_lock", true));
+        final CheckBox cbMoveCursorToTouchpoint = view.findViewById(R.id.CBMoveCursorToTouchpoint);
+        cbMoveCursorToTouchpoint.setChecked(preferences.getBoolean("move_cursor_to_touchpoint", false));
+        cbMoveCursorToTouchpoint.setOnCheckedChangeListener((b, checked) -> preferences.edit().putBoolean("move_cursor_to_touchpoint", checked).apply());
 
         // Initialize the xinput toggle checkbox
         cbXinputToggle = view.findViewById(R.id.CBXinputToggle);
@@ -313,14 +316,16 @@ public class SettingsFragment extends Fragment {
         final CheckBox cbUseDRI3 = view.findViewById(R.id.CBUseDRI3);
         cbUseDRI3.setChecked(preferences.getBoolean("use_dri3", true));
 
-        final CheckBox cbEnableWineDebug = view.findViewById(R.id.CBEnableWineDebug);
-        cbEnableWineDebug.setChecked(preferences.getBoolean("enable_wine_debug", false));
-
-        final ArrayList<String> wineDebugChannels = new ArrayList<>(Arrays.asList(preferences.getString("wine_debug_channels", DEFAULT_WINE_DEBUG_CHANNELS).split(",")));
-        loadWineDebugChannels(view, wineDebugChannels);
-
-        final CheckBox cbEnableBox64Logs = view.findViewById(R.id.CBEnableBox64Logs);
-        cbEnableBox64Logs.setChecked(preferences.getBoolean("enable_box64_logs", false));
+        // Logs: everything is in the Log Manager (it saves its own switches at once).
+        View openLogManager = view.findViewById(R.id.LLOpenLogManager);
+        openLogManager.setOnClickListener(v -> getParentFragmentManager().beginTransaction()
+            .setCustomAnimations(R.anim.slide_in_up, R.anim.slide_out_down, R.anim.slide_in_down, R.anim.slide_out_up)
+            .addToBackStack(null)
+            .replace(R.id.FLFragmentContainer, new LogManagerFragment())
+            .commit());
+        TextView tvLogSummary = view.findViewById(R.id.TVLogManagerSummary);
+        boolean recording = com.winlator.cmod.logs.LogFiles.isOn(context, "enable_wine_debug") || com.winlator.cmod.logs.LogFiles.isOn(context, "enable_box64_logs");
+        tvLogSummary.setText((!com.winlator.cmod.logs.LogFiles.isOn(context, com.winlator.cmod.logs.LogFiles.PREF_ENABLED) ? "Logs off" : recording ? "Recording game logs" : "Game logs off") + "  ·  " + com.winlator.cmod.logs.LogFiles.root(context).getAbsolutePath());
 
         final TextView tvCursorSpeed = view.findViewById(R.id.TVCursorSpeed);
         final SeekBar sbCursorSpeed = view.findViewById(R.id.SBCursorSpeed);
@@ -461,8 +466,6 @@ public class SettingsFragment extends Fragment {
             editor.putString("fexcore_preset", FEXCorePresetManager.getSpinnerSelectedId(sFEXCorePreset));
             editor.putBoolean("use_dri3", cbUseDRI3.isChecked());
             editor.putFloat("cursor_speed", sbCursorSpeed.getProgress() / 100.0f);
-            editor.putBoolean("enable_wine_debug", cbEnableWineDebug.isChecked());
-            editor.putBoolean("enable_box64_logs", cbEnableBox64Logs.isChecked());
             editor.putBoolean("cursor_lock", cbCursorLock.isChecked()); // Save cursor lock state
             editor.putBoolean("xinput_toggle", cbXinputToggle.isChecked()); // Save xinput toggle state
             editor.putBoolean("enable_file_provider", cbEnableFileProvider.isChecked());
@@ -478,12 +481,6 @@ public class SettingsFragment extends Fragment {
             if (cbSamsungBoost != null) editor.putBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_SAMSUNG_PERF_BOOST, cbSamsungBoost.isChecked());
 
             editor.putString("downloadable_contents_url", etDownloadableContentsURL.getText().toString());
-
-            if (!wineDebugChannels.isEmpty()) {
-                editor.putString("wine_debug_channels", String.join(",", wineDebugChannels));
-            } else if (preferences.contains("wine_debug_channels")) {
-                editor.remove("wine_debug_channels");
-            }
 
             saveCustomApiKeySettings(editor);
 
@@ -737,54 +734,6 @@ public class SettingsFragment extends Fragment {
         getActivity().startActivityFromFragment(this, intent, requestCode);
     }
 
-
-    private void loadWineDebugChannels(final View view, final ArrayList<String> debugChannels) {
-        final Context context = getContext();
-        LinearLayout container = view.findViewById(R.id.LLWineDebugChannels);
-        container.removeAllViews();
-
-        LayoutInflater inflater = LayoutInflater.from(context);
-        View itemView = inflater.inflate(R.layout.wine_debug_channel_list_item, container, false);
-        itemView.findViewById(R.id.TextView).setVisibility(View.GONE);
-        itemView.findViewById(R.id.BTRemove).setVisibility(View.GONE);
-
-        View addButton = itemView.findViewById(R.id.BTAdd);
-        addButton.setVisibility(View.VISIBLE);
-        addButton.setOnClickListener((v) -> {
-            JSONArray jsonArray = null;
-            try {
-                jsonArray = new JSONArray(FileUtils.readString(context, "wine_debug_channels.json"));
-            }
-            catch (JSONException e) {}
-
-            final String[] items = ArrayUtils.toStringArray(jsonArray);
-            ContentDialog.showMultipleChoiceList(context, R.string.wine_debug_channel, items, (selectedPositions) -> {
-                for (int selectedPosition : selectedPositions) if (!debugChannels.contains(items[selectedPosition])) debugChannels.add(items[selectedPosition]);
-                loadWineDebugChannels(view, debugChannels);
-            });
-        });
-
-        View resetButton = itemView.findViewById(R.id.BTReset);
-        resetButton.setVisibility(View.VISIBLE);
-        resetButton.setOnClickListener((v) -> {
-            debugChannels.clear();
-            debugChannels.addAll(Arrays.asList(DEFAULT_WINE_DEBUG_CHANNELS.split(",")));
-            loadWineDebugChannels(view, debugChannels);
-        });
-        container.addView(itemView);
-
-        for (int i = 0; i < debugChannels.size(); i++) {
-            itemView = inflater.inflate(R.layout.wine_debug_channel_list_item, container, false);
-            TextView textView = itemView.findViewById(R.id.TextView);
-            textView.setText(debugChannels.get(i));
-            final int index = i;
-            itemView.findViewById(R.id.BTRemove).setOnClickListener((v) -> {
-                debugChannels.remove(index);
-                loadWineDebugChannels(view, debugChannels);
-            });
-            container.addView(itemView);
-        }
-    }
 
     public static void resetEmulatorsVersion(AppCompatActivity activity) {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);

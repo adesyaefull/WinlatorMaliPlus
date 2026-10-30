@@ -83,6 +83,18 @@ void EGLRenderer::resume() {
     renderLock.wait(lock, [&]{ return state == State::NONE; });
 }
 
+// Fit / Fill / Integer scaling and Center / Top / Bottom placement of the X screen (Stretch is the fullscreen flag).
+void EGLRenderer::setScaleMode(int mode, int alignment) {
+    auto lock = renderLock.lock();
+    scaleMode = mode;
+    screenAlignment = alignment;
+    if (surfaceWidth > 0 && surfaceHeight > 0)
+        viewTransformation.update(surfaceWidth, surfaceHeight, windowManager->getRootWindow()->width, windowManager->getRootWindow()->height, scaleMode, screenAlignment);
+    sceneDirty = true;
+    requestUpdate = true;
+    renderLock.notify();
+}
+
 void EGLRenderer::setPostProcessing(const std::string& config) {
     postFX.setConfig(config);
     requestRenderer();
@@ -173,7 +185,7 @@ void EGLRenderer::renderingThreadLoop() {
 
         if (currState == State::CHANGE_SURFACE) {
             printf("Received state CHANGE_SURFACE");
-            viewTransformation.update(surfaceWidth, surfaceHeight, windowManager->getRootWindow()->width, windowManager->getRootWindow()->height);
+            viewTransformation.update(surfaceWidth, surfaceHeight, windowManager->getRootWindow()->width, windowManager->getRootWindow()->height, scaleMode, screenAlignment);
             surfaceChanged = true;
             sizeChanged = true;
             requestUpdate = true;
@@ -486,7 +498,12 @@ EGLBoolean EGLRenderer::drawFrame() {
                     if (ratio < (fgRatio > 0 ? 1.1 : 1.2))
                         ratio = 0;
                 } else if (interval >= 0.020) {
-                    ratio = 2;
+                    // 2x, but never past what the display shows: 40 fps doubled is 80 on a 60 Hz panel, where the
+                    // extra frames are dropped unevenly and the motion looks no smoother. 40 fps there gets 1.5x.
+                    float refresh = xServer->refreshRate;
+                    ratio = refresh >= 30.0f ? std::min(2.0, refresh * interval) : 2.0;
+                    if (ratio < (fgRatio > 0 ? 1.1 : 1.2))
+                        ratio = 0;
                 }
             }
             if (ratio == 0) {

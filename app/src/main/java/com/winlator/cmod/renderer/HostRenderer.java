@@ -15,8 +15,8 @@ public interface HostRenderer {
     float getMagnifierZoom();
     void toggleFullscreen();
     boolean isFullscreen();
-    // Fullscreen aspect-ratio mode (issue #71): Container.FULLSCREEN_OFF/FIT/STRETCH/...
-    // isFullscreen() stays == (mode != OFF) so existing upscaler/magnifier gates behave as before.
+    // Fit/Stretch/Fill/Integer mode, matching ViewTransformation and the shared settings picker.
+    // isFullscreen() is true only for Stretch, which uses the fullscreen scanout path.
     void setFullscreenMode(int mode);
     int getFullscreenMode();
     // Screen alignment (issue #413): Container.ALIGN_CENTER/TOP/BOTTOM — vertical placement of the

@@ -175,6 +175,7 @@ public class ShortcutSettingsDialog extends ContentDialog {
 
         ContainerDetailFragment.setupDXWrapperSpinner(sDXWrapper, vDXWrapperConfig, wineInfo.isArm64EC());
         loadBox64VersionSpinner(context, contentsManager, sBox64Version, wineInfo.isArm64EC());
+        ContainerDetailFragment.applyBox64Labels(getContentView(), wineInfo.isArm64EC());
 
         // Add this part to set the initial spinner selection based on the shortcut
         String currentBox64Version = shortcut.getExtra("box64Version", shortcut.container.getBox64Version());
@@ -202,9 +203,16 @@ public class ShortcutSettingsDialog extends ContentDialog {
             }
         });
 
-        final CheckBox cbFullscreenStretched =  findViewById(R.id.CBFullscreenStretched);
-        boolean fullscreenStretched = shortcut.getExtra("fullscreenStretched", "0").equals("1");
+        final CheckBox cbFullscreenStretched =  findViewById(R.id.CBFullscreenStretched);        boolean fullscreenStretched = shortcut.getExtra("fullscreenStretched", "0").equals("1");
         cbFullscreenStretched.setChecked(fullscreenStretched);
+        // The container's mode and alignment unless this game sets its own (older shortcuts only have the Stretch checkbox).
+        final Spinner sFullscreenMode = findViewById(R.id.SFullscreenMode);
+        final Spinner sScreenAlignment = findViewById(R.id.SScreenAlignment);
+        final int containerFullscreenMode = ContainerDetailFragment.parseIndex(shortcut.container.getExtra("fullscreenMode"), shortcut.container.isFullscreenStretched() ? 1 : 0, 3);
+        final int containerScreenAlignment = ContainerDetailFragment.parseIndex(shortcut.container.getExtra("screenAlignment"), 0, 2);
+        int shortcutMode = shortcut.getExtra("fullscreenStretched").isEmpty() ? containerFullscreenMode : (fullscreenStretched ? 1 : 0);
+        sFullscreenMode.setSelection(ContainerDetailFragment.parseIndex(shortcut.getExtra("fullscreenMode"), shortcutMode, 3));
+        sScreenAlignment.setSelection(ContainerDetailFragment.parseIndex(shortcut.getExtra("screenAlignment"), containerScreenAlignment, 2));
 
         final TextView tvHostRenderer = findViewById(R.id.TVHostRenderer);
         final Spinner sHostRenderer = findViewById(R.id.SHostRenderer);
@@ -531,7 +539,12 @@ public class ShortcutSettingsDialog extends ContentDialog {
                 shortcut.putExtra("midiSoundFont", midiSoundFont);
                 shortcut.putExtra("lc_all", lc_all);
 
-                shortcut.putExtra("fullscreenStretched", cbFullscreenStretched.isChecked() ? "1" : null);
+                int fullscreenMode = sFullscreenMode.getSelectedItemPosition();
+                int screenAlignment = sScreenAlignment.getSelectedItemPosition();
+                boolean ownMode = fullscreenMode != containerFullscreenMode;
+                shortcut.putExtra("fullscreenStretched", ownMode ? (fullscreenMode == 1 ? "1" : "0") : null);
+                shortcut.putExtra("fullscreenMode", ownMode ? String.valueOf(fullscreenMode) : null);
+                shortcut.putExtra("screenAlignment", screenAlignment != containerScreenAlignment ? String.valueOf(screenAlignment) : null);
 
                 String wincomponents = containerDetailFragment.getWinComponents(getContentView());
                 shortcut.putExtra("wincomponents", wincomponents);
@@ -634,8 +647,10 @@ public class ShortcutSettingsDialog extends ContentDialog {
         }
 
         fragment.loadShortcutsList();
+        android.graphics.Bitmap launcherIcon = shortcut.getLauncherIcon();
         fragment.updateShortcutOnScreen(newName, newName, shortcut.container.id, newDesktopFile.getAbsolutePath(),
-                Icon.createWithBitmap(shortcut.icon), shortcut.getExtra("uuid"));
+                launcherIcon != null ? Icon.createWithBitmap(launcherIcon) : Icon.createWithResource(getContext(), R.drawable.icon_shortcut),
+                shortcut.getExtra("uuid"));
     }
 
     // Method to ensure no old file remains

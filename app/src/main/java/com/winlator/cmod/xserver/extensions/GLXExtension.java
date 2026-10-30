@@ -298,7 +298,10 @@ public class GLXExtension implements Extension {
             else if (name == GLXEnums.GLX_CONTEXT_MINOR_VERSION_ARB) glMinorVersion = value;
         }
 
-        boolean success = glMajorVersion >= 1;
+        // Gladio implements up to OpenGL 3.3 (as in brunodev85's original): refusing a newer version makes the game fall
+        // back to one it can run, instead of getting a "4.x" context that is really 3.3. (The original compared the minor
+        // number alone and also refused 1.4 / 1.5.)
+        boolean success = glMajorVersion >= 1 && (glMajorVersion < 3 || (glMajorVersion == 3 && glMinorVersion <= 3));
         Log.i("GLXExtension", "createContextAttribsARB: requested GL " + glMajorVersion + "." + glMinorVersion + ", contextId=" + contextId + ", fbConfigId=" + fbConfigId + ", success=" + success);
         if (success) createGLXContextForClient(client, contextId, shareContext);
         else Log.w("GLXExtension", "createContextAttribsARB: rejected GL version " + glMajorVersion + "." + glMinorVersion);

@@ -107,10 +107,20 @@ public class TouchpadView extends View {
         resolutionScale = 1000.0f / Math.min(xServer.screenInfo.width, xServer.screenInfo.height);
     }
 
+    private int scaleMode = ViewTransformation.MODE_FIT;
+    private int screenAlignment = ViewTransformation.ALIGN_CENTER;
+
+    /** Same scaling and placement as the renderer, so touches land where the screen is drawn. */
+    public void setScaleMode(int mode, int alignment) {
+        scaleMode = mode;
+        screenAlignment = alignment;
+        updateXform(getWidth(), getHeight(), xServer.screenInfo.width, xServer.screenInfo.height);
+    }
+
     private void updateXform(int outerWidth, int outerHeight, int innerWidth, int innerHeight) {
         if (outerWidth <= 0 || outerHeight <= 0 || innerWidth <= 0 || innerHeight <= 0) return;
         ViewTransformation viewTransformation = new ViewTransformation();
-        viewTransformation.update(outerWidth, outerHeight, innerWidth, innerHeight);
+        viewTransformation.update(outerWidth, outerHeight, innerWidth, innerHeight, scaleMode, screenAlignment);
 
         float invAspect = 1.0f / (viewTransformation.aspect != 0 ? viewTransformation.aspect : 1.0f);
         boolean isFullscreen = xServer != null && xServer.getRenderer() != null && xServer.getRenderer().isFullscreen();
@@ -461,6 +471,10 @@ public class TouchpadView extends View {
 
 
 
+    private boolean moveCursorToTouchpoint() {
+        return preferences != null && preferences.getBoolean("move_cursor_to_touchpoint", false);
+    }
+
     private void handleFingerUp(Finger finger1) {
         switch (numFingers) {
             case 1:
@@ -471,7 +485,11 @@ public class TouchpadView extends View {
                     };
                     postDelayed(clickDelay, CLICK_DELAYED_TIME);
                 }
-                else if (finger1.isTap()) pressPointerButtonLeft(finger1);
+                else if (finger1.isTap()) {
+                    // brunodev85's "Move Cursor to Touchpoint": the tap clicks where the finger is, not at the cursor.
+                    if (moveCursorToTouchpoint()) xServer.injectPointerMove(finger1.x, finger1.y);
+                    pressPointerButtonLeft(finger1);
+                }
                 break;
             case 2:
                 Finger finger2 = findSecondFinger(finger1);
@@ -528,6 +546,9 @@ public class TouchpadView extends View {
             if (simTouchScreen) {
                 if (System.currentTimeMillis() - finger1.touchTime > CLICK_DELAYED_TIME)
                     xServer.injectPointerMove(finger1.x, finger1.y);
+            }
+            else if (moveCursorToTouchpoint() && numFingers == 1 && !xServer.isRelativeMouseMovement()) {
+                xServer.injectPointerMove(finger1.x, finger1.y);
             }
             else if (xServer.isRelativeMouseMovement()) {
                 WinHandler winHandler = xServer.getWinHandler();

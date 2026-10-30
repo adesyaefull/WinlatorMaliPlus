@@ -36,11 +36,11 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
     private final Object lock = new Object();
 
     public final ViewTransformation viewTransformation = new ViewTransformation();
-    // Fullscreen aspect-ratio mode (#71). STRETCH fills the surface (distorts); OFF/FIT letterbox.
-    private int fullscreenMode = Container.FULLSCREEN_OFF;
+    // Fullscreen mode values match the shared fullscreen picker and ViewTransformation.
+    private int fullscreenMode = ViewTransformation.MODE_FIT;
     // Screen alignment (#413). Only moves the letterbox bar vertically; CENTER == historical output.
     private int screenAlignment = Container.ALIGN_CENTER;
-    private boolean isStretch() { return fullscreenMode == Container.FULLSCREEN_STRETCH; }
+    private boolean isStretch() { return fullscreenMode == ViewTransformation.MODE_STRETCH; }
     private float magnifierZoom = 1.0f;
     private boolean screenOffsetYRelativeToCursor = false;
     public int surfaceWidth;
@@ -252,7 +252,8 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
 
     public void onSurfaceChanged(int width, int height) {
         surfaceWidth = width; surfaceHeight = height;
-        viewTransformation.update(width, height, xServer.screenInfo.width, xServer.screenInfo.height, fullscreenMode, screenAlignment);
+        viewTransformation.update(width, height, xServer.screenInfo.width, xServer.screenInfo.height,
+                fullscreenMode, screenAlignment);
         synchronized (lock) {
             if (nativeHandle != 0) { nativeResize(nativeHandle, width, height); updateTransform(); }
         }
@@ -1143,10 +1144,11 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
         if (fr instanceof FrameRating) classicHudRef = (FrameRating) fr;
     }
 
-    public boolean isFullscreen() { return fullscreenMode != Container.FULLSCREEN_OFF; }
+    public boolean isFullscreen() { return isStretch(); }
     public int getFullscreenMode() { return fullscreenMode; }
     public void setFullscreenMode(int mode) {
-        fullscreenMode = mode;
+        fullscreenMode = Math.max(ViewTransformation.MODE_FIT,
+                Math.min(ViewTransformation.MODE_INTEGER, mode));
         synchronized (lock) { updateTransform(); }
         xServerView.queueEvent(this::updateScene);
     }
@@ -1156,7 +1158,9 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
         synchronized (lock) { updateTransform(); }
         xServerView.queueEvent(this::updateScene);
     }
-    public void toggleFullscreen() { setFullscreenMode(Container.nextFullscreenMode(fullscreenMode)); }
+    public void toggleFullscreen() {
+        setFullscreenMode((fullscreenMode + 1) % (ViewTransformation.MODE_INTEGER + 1));
+    }
     public void setScreenOffsetYRelativeToCursor(boolean b) { screenOffsetYRelativeToCursor = b; synchronized (lock) { updateTransform(); } }
     public boolean isScreenOffsetYRelativeToCursor() { return screenOffsetYRelativeToCursor; }
     public void setMagnifierZoom(float zoom) {

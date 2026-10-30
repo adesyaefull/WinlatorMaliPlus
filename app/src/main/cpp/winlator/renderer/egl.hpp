@@ -172,6 +172,9 @@ class EGLRenderer {
         void requestRenderer();
         void requestCursorRender();
         void markContentUpdate(int windowId, bool direct);
+        int scaleMode = ViewTransformation::MODE_FIT;
+        int screenAlignment = ViewTransformation::ALIGN_CENTER;
+        void setScaleMode(int mode, int alignment);
 
         // Frame generation for the HUD: the multiplier in use, the game's frame rate, the frames shown (real and
         // generated, counted by the HUD reader) and the time to generate one.

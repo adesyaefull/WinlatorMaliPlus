@@ -365,6 +365,10 @@ public class ContainerDetailFragment extends Fragment {
 
         final CheckBox cbFullscreenStretched = view.findViewById(R.id.CBFullscreenStretched);
         cbFullscreenStretched.setChecked(isEditMode() && container.isFullscreenStretched());
+        final Spinner sFullscreenMode = view.findViewById(R.id.SFullscreenMode);
+        final Spinner sScreenAlignment = view.findViewById(R.id.SScreenAlignment);
+        sFullscreenMode.setSelection(isEditMode() ? parseIndex(container.getExtra("fullscreenMode"), container.isFullscreenStretched() ? 1 : 0, 3) : 0);
+        sScreenAlignment.setSelection(isEditMode() ? parseIndex(container.getExtra("screenAlignment"), 0, 2) : 0);
 
         final TextView tvHostRenderer = view.findViewById(R.id.TVHostRenderer);
         final Spinner sHostRenderer = view.findViewById(R.id.SHostRenderer);
@@ -617,7 +621,9 @@ public class ContainerDetailFragment extends Fragment {
                 String wincomponents = getWinComponents(view);
                 String drives = getDrives(view);
                 boolean showFPS = cbShowFPS.isChecked();
-                boolean fullscreenStretched = cbFullscreenStretched.isChecked();
+                int fullscreenMode = sFullscreenMode.getSelectedItemPosition();
+                int screenAlignment = sScreenAlignment.getSelectedItemPosition();
+                boolean fullscreenStretched = fullscreenMode == 1;
                 String hostRenderer = sHostRenderer.getSelectedItemPosition() == 1
                         ? Container.RENDERER_VULKAN : Container.RENDERER_OPENGL;
                 String rendererColorOrderToSave = sRendererColorOrder.getSelectedItemPosition() == 1
@@ -687,6 +693,9 @@ public class ContainerDetailFragment extends Fragment {
                     container.setDesktopTheme(desktopTheme);
                     container.setMidiSoundFont(midiSoundFont);
                     container.setLC_ALL(lc_all);
+                    container.setFullscreenStretched(fullscreenStretched);
+                    container.putExtra("fullscreenMode", String.valueOf(fullscreenMode));
+                    container.putExtra("screenAlignment", String.valueOf(screenAlignment));
                     container.saveData();
                     saveWineRegistryKeys(view);
                     getActivity().onBackPressed();
@@ -753,6 +762,9 @@ public class ContainerDetailFragment extends Fragment {
                     manager.createContainerAsync(data, contentsManager, (container) -> {
                         if (container != null) {
                             this.container = container;
+                            container.putExtra("fullscreenMode", String.valueOf(fullscreenMode));
+                            container.putExtra("screenAlignment", String.valueOf(screenAlignment));
+                            container.saveData();
                             saveWineRegistryKeys(view);
                         }
                         preloaderDialog.close();
@@ -1159,6 +1171,7 @@ public class ContainerDetailFragment extends Fragment {
                     sEmulator64.setSelection(1);
                 }
                 loadBox64VersionSpinner(context, container, contentsManager, sBox64Version, wineInfo.isArm64EC());
+                applyBox64Labels(view, wineInfo.isArm64EC());
                 setupDXWrapperSpinner(sDXWrapper, vDXWrapperConfig, wineInfo.isArm64EC());
             }
             @Override
@@ -1264,6 +1277,22 @@ public class ContainerDetailFragment extends Fragment {
         public String toString() {
             return label;
         }
+    }
+
+    // x86_64 Wine runs entirely under Box64. arm64ec Wine runs x86 code with FEXCore; WOWBox64 is only an
+    // optional alternative to FEXCore for 32-bit programs, so the section must not say Box64 there.
+    public static int parseIndex(String value, int fallback, int max) {
+        try { return Math.max(0, Math.min(max, Integer.parseInt(value))); }
+        catch (NumberFormatException e) { return fallback; }
+    }
+
+    public static void applyBox64Labels(View root, boolean isArm64EC) {
+        TextView header = root.findViewById(R.id.TVBox64);
+        TextView version = root.findViewById(R.id.TVBox64VersionLabel);
+        TextView preset = root.findViewById(R.id.TVBox64PresetLabel);
+        if (header != null) header.setText(isArm64EC ? "WOWBox64 (32-bit programs, optional; FEXCore can do this too)" : "Box64");
+        if (version != null) version.setText(isArm64EC ? "WOWBox64 Version" : "Box64 Version");
+        if (preset != null) preset.setText(isArm64EC ? "WOWBox64 Preset" : "Box64 Preset");
     }
 
     public static void loadBox64VersionSpinner(Context context, Container container, ContentsManager manager, Spinner spinner, boolean isArm64EC) {

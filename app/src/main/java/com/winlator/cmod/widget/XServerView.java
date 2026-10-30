@@ -413,6 +413,18 @@ public class XServerView extends SurfaceView implements SurfaceHolder.Callback, 
     /** Frame generation: {multiplier (0 = off), game fps, shown fps, ms per generated frame}. */
     public static native float[] nativeGetFrameGenStats();
 
+    /** Fit / Fill / Integer scaling and Center / Top / Bottom placement, see {@link com.winlator.cmod.renderer.ViewTransformation}. */
+    public void setScaleMode(int mode, int alignment) {
+        if (vulkanRenderer != null) {
+            vulkanRenderer.setFullscreenMode(mode);
+            vulkanRenderer.setScreenAlignment(alignment);
+        } else {
+            nativeSetScaleMode(mode, alignment);
+        }
+    }
+
+    private native void nativeSetScaleMode(int mode, int alignment);
+
     private native boolean nativeGetFitMapping(float[] out);
     @FastNative
     private native void nativeUpdateWindowContent(int id);

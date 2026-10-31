@@ -16,11 +16,13 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
 public final class PanvkReleaseManager {
     private static final long MAX_DOWNLOAD_SIZE = 100L * 1024 * 1024;
+    private static final int RELEASES_PER_PAGE = 100;
     private static final Repository[] REPOSITORIES = {
             new Repository("zenithblue-oss", "panvk-kbase-android",
                     "Poco X6 Pro (Mali-G615); Lenovo Tab TB336FU (G57); Pixel 7/7a (G710); "
@@ -31,7 +33,10 @@ public final class PanvkReleaseManager {
                     "-adrenotools.zip"),
             new Repository("FristOneRR", "FristOneRR-Panvk-Driver",
                     "Poco M6 Pro 4G, Galaxy A15/A17, Realme 10 4G, Infinix Note 50 Pro — Mali-G57 MC2",
-                    "panvk-mali-g57-")
+                    "panvk-"),
+            new Repository("Noysz", "panvk-g99-jm",
+                    "Mali-G57 MC2 / Helio G99 (MT6789); experimental FourFectVK test builds",
+                    "fourfectvk-g57-")
     };
 
     public interface ProgressListener {
@@ -45,6 +50,7 @@ public final class PanvkReleaseManager {
         public final String tag;
         public final String publishedAt;
         public final String deviceSupport;
+        public final String description;
         public final String fileName;
         public final String downloadUrl;
         public final String sha256;
@@ -52,7 +58,7 @@ public final class PanvkReleaseManager {
         public final boolean prerelease;
 
         private ReleaseAsset(String owner, String repository, String releaseName, String tag,
-                             String publishedAt, String deviceSupport, String fileName,
+                             String publishedAt, String deviceSupport, String description, String fileName,
                              String downloadUrl, String sha256, long size, boolean prerelease) {
             this.owner = owner;
             this.repository = repository;
@@ -60,6 +66,7 @@ public final class PanvkReleaseManager {
             this.tag = tag;
             this.publishedAt = publishedAt;
             this.deviceSupport = deviceSupport;
+            this.description = description;
             this.fileName = fileName;
             this.downloadUrl = downloadUrl;
             this.sha256 = sha256;
@@ -84,8 +91,7 @@ public final class PanvkReleaseManager {
         boolean accepts(String fileName) {
             String lowerName = fileName.toLowerCase(Locale.ROOT);
             if (!lowerName.endsWith(".zip")) return false;
-            if (zipFilter.startsWith("panvk-")) return lowerName.startsWith(zipFilter);
-            return lowerName.endsWith(zipFilter);
+            return lowerName.startsWith(zipFilter) || lowerName.endsWith(zipFilter);
         }
     }
 
@@ -94,41 +100,67 @@ public final class PanvkReleaseManager {
     public static List<ReleaseAsset> fetchReleases() throws IOException {
         ArrayList<ReleaseAsset> releases = new ArrayList<>();
         for (Repository repository : REPOSITORIES) {
-            String endpoint = "https://api.github.com/repos/" + repository.owner + "/"
-                    + repository.name + "/releases?per_page=100";
-            JSONArray releaseArray;
-            try {
-                releaseArray = new JSONArray(readUrl(endpoint));
-            } catch (JSONException e) {
-                throw new IOException("Invalid GitHub releases response for " + repository.owner
-                        + "/" + repository.name, e);
-            }
-            for (int i = 0; i < releaseArray.length(); i++) {
-                JSONObject release = releaseArray.optJSONObject(i);
-                if (release == null || release.optBoolean("draft", false)) continue;
-                JSONArray assets = release.optJSONArray("assets");
-                if (assets == null) continue;
-                for (int assetIndex = 0; assetIndex < assets.length(); assetIndex++) {
-                    JSONObject asset = assets.optJSONObject(assetIndex);
-                    if (asset == null) continue;
-                    String fileName = asset.optString("name", "").trim();
-                    long size = asset.optLong("size", 0L);
-                    String downloadUrl = asset.optString("browser_download_url", "").trim();
-                    if (!repository.accepts(fileName) || size <= 0 || size > MAX_DOWNLOAD_SIZE
-                            || !isAllowedAssetUrl(repository, downloadUrl)) continue;
-                    String digest = asset.optString("digest", "");
-                    String sha256 = digest.startsWith("sha256:")
-                            ? digest.substring("sha256:".length()).toLowerCase(Locale.ROOT) : "";
-                    releases.add(new ReleaseAsset(repository.owner, repository.name,
-                            release.optString("name", release.optString("tag_name", "")),
-                            release.optString("tag_name", ""),
-                            release.optString("published_at", ""),
-                            repository.deviceSupport, fileName, downloadUrl, sha256, size,
-                            release.optBoolean("prerelease", false)));
+            for (int page = 1; ; page++) {
+                String endpoint = "https://api.github.com/repos/" + repository.owner + "/"
+                        + repository.name + "/releases?per_page=" + RELEASES_PER_PAGE
+                        + "&page=" + page;
+                JSONArray releaseArray;
+                try {
+                    releaseArray = new JSONArray(readUrl(endpoint));
+                } catch (JSONException e) {
+                    throw new IOException("Invalid GitHub releases response for " + repository.owner
+                            + "/" + repository.name, e);
                 }
+                for (int i = 0; i < releaseArray.length(); i++) {
+                    JSONObject release = releaseArray.optJSONObject(i);
+                    if (release == null || release.optBoolean("draft", false)) continue;
+                    JSONArray assets = release.optJSONArray("assets");
+                    if (assets == null) continue;
+                    for (int assetIndex = 0; assetIndex < assets.length(); assetIndex++) {
+                        JSONObject asset = assets.optJSONObject(assetIndex);
+                        if (asset == null) continue;
+                        String fileName = asset.optString("name", "").trim();
+                        long size = asset.optLong("size", 0L);
+                        String downloadUrl = asset.optString("browser_download_url", "").trim();
+                        if (!repository.accepts(fileName) || size <= 0 || size > MAX_DOWNLOAD_SIZE
+                                || !isAllowedAssetUrl(repository, downloadUrl)) continue;
+                        String digest = asset.optString("digest", "");
+                        String sha256 = digest.startsWith("sha256:")
+                                ? digest.substring("sha256:".length()).toLowerCase(Locale.ROOT) : "";
+                        releases.add(new ReleaseAsset(repository.owner, repository.name,
+                                release.optString("name", release.optString("tag_name", "")),
+                                release.optString("tag_name", ""),
+                                release.optString("published_at", ""),
+                                repository.deviceSupport, summarizeDescription(release.optString("body", "")),
+                                fileName, downloadUrl, sha256, size,
+                                release.optBoolean("prerelease", false)));
+                    }
+                }
+                if (releaseArray.length() < RELEASES_PER_PAGE) break;
             }
         }
+        Collections.sort(releases, (left, right) -> {
+            int ownerOrder = left.owner.compareToIgnoreCase(right.owner);
+            return ownerOrder != 0 ? ownerOrder : right.publishedAt.compareTo(left.publishedAt);
+        });
         return releases;
+    }
+
+    private static String summarizeDescription(String body) {
+        if (body == null || body.trim().isEmpty()) return "No release description provided.";
+        for (String line : body.split("\\r?\\n")) {
+            String summary = line.trim();
+            if (summary.isEmpty() || summary.startsWith("#") || summary.startsWith("[")) continue;
+            summary = summary.replaceAll("\\[([^\\]]+)\\]\\([^)]+\\)", "$1")
+                    .replaceAll("[*_`>#]", "")
+                    .replaceAll("\\s+", " ")
+                    .trim();
+            if (!summary.isEmpty()) {
+                if (summary.length() > 220) summary = summary.substring(0, 217).trim() + "...";
+                return summary;
+            }
+        }
+        return "No release description provided.";
     }
 
     public static File download(Context context, ReleaseAsset asset, ProgressListener listener)

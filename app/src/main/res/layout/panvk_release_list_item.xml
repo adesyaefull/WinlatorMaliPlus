@@ -9,6 +9,14 @@
     android:paddingBottom="12dp">
 
     <TextView
+        android:id="@+id/TVReleaseAuthor"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="?attr/colorAccent"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+
+    <TextView
         android:id="@+id/TVReleaseName"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -20,7 +28,7 @@
         android:id="@+id/TVReleaseDetails"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="5dp"
         android:textColor="?android:attr/textColorSecondary"
         android:textSize="12sp" />
 </LinearLayout>

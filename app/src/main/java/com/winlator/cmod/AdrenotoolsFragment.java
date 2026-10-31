@@ -142,17 +142,19 @@ public class AdrenotoolsFragment extends Fragment {
                 View row = super.getView(position, convertView, parent);
                 ReleaseAsset release = getItem(position);
                 if (release != null) {
+                    TextView author = row.findViewById(R.id.TVReleaseAuthor);
                     TextView title = row.findViewById(R.id.TVReleaseName);
                     TextView details = row.findViewById(R.id.TVReleaseDetails);
-                    String name = release.releaseName.isEmpty() ? release.tag : release.releaseName;
-                    title.setText(name);
+                    author.setText(release.owner.toUpperCase(Locale.ROOT));
+                    title.setText(release.fileName);
                     String published = release.publishedAt.length() >= 10
                             ? release.publishedAt.substring(0, 10) : release.publishedAt;
                     String releaseType = release.prerelease ? "Pre-release" : "Release";
                     details.setText(String.format(Locale.ROOT,
-                            "@%1$s/%2$s · %3$s · %4$s · %5$s\nZIP: %6$s · Tested: %7$s",
-                            release.owner, release.repository, release.tag, releaseType, published,
-                            Downloader.formatFileSize(release.size), release.deviceSupport));
+                            "• %1$s\n%2$s · %3$s · %4$s · %5$s · %6$s · Tested: %7$s",
+                            release.description, release.tag, releaseType, published,
+                            Downloader.formatFileSize(release.size), release.repository,
+                            release.deviceSupport));
                 }
                 return row;
             }

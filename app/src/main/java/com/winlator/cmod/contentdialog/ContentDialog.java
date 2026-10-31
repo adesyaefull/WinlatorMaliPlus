@@ -44,6 +44,7 @@ public class ContentDialog extends Dialog {
     @Override
     protected void onStart() {
         super.onStart();
+        com.winlator.cmod.widget.GlassWindowEffects.applyDialogBlur(getWindow(), getContext());
         if (controllerNavigation && !controllerHighlightAttached) {
             controllerHighlightAttached = true;
             com.winlator.cmod.core.ControllerNavigation.attach(getWindow());
@@ -84,7 +85,7 @@ public class ContentDialog extends Dialog {
         }
 
         com.winlator.cmod.ThemeManager.applyThemeToView(contentView, context);
-        contentView.setBackgroundResource(R.drawable.liquid_glass_surface);
+        contentView.setBackgroundResource(R.drawable.liquid_glass_dialog);
 
         View confirmButton = contentView.findViewById(R.id.BTConfirm);
         confirmButton.setOnClickListener((v) -> {
@@ -110,6 +111,11 @@ public class ContentDialog extends Dialog {
 
     public View getContentView() {
         return contentView;
+    }
+
+    public void applyThemeToContentView(Context context) {
+        com.winlator.cmod.ThemeManager.applyThemeToView(contentView, context);
+        contentView.setBackgroundResource(R.drawable.liquid_glass_dialog);
     }
 
     public void setOnConfirmCallback(Runnable onConfirmCallback) {

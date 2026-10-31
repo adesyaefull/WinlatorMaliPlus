@@ -47,6 +47,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.cardview.widget.CardView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.signature.ObjectKey;
 import com.winlator.cmod.container.Container;
 import com.winlator.cmod.container.ContainerManager;
 import com.winlator.cmod.container.Shortcut;
@@ -63,6 +64,7 @@ import com.winlator.cmod.core.CommunityConfigManager;
 import com.winlator.cmod.core.CommunityConfigUtils;
 import com.winlator.cmod.core.CoverArtManager;
 import com.winlator.cmod.core.FileUtils;
+import com.winlator.cmod.core.ImageUtils;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -87,6 +89,7 @@ public class ShortcutsFragment extends Fragment {
     private TextView fexDetails;
     private TextView box64Details;
     private Shortcut currentShortcut;
+    private long currentCoverArtSelectionVersion = -1;
     private Shortcut selectedShortcut;
     private ShortcutsAdapter adapter;
     private final Set<String> coverArtRequests = new HashSet<>();
@@ -117,6 +120,12 @@ public class ShortcutsFragment extends Fragment {
             manager = ((MainActivity) getActivity()).getContainerManager();
         } else {
             manager = new ContainerManager(getContext());
+        }
+    }
+
+    private void refreshShortcutCoverArtCards() {
+        if (adapter != null && adapter.data != null) {
+            adapter.notifyItemRangeChanged(0, adapter.getItemCount());
         }
     }
 
@@ -324,6 +333,7 @@ public class ShortcutsFragment extends Fragment {
     public void onResume() {
         super.onResume();
         isLaunchingShortcut = false;
+        if (manager != null) manager.loadContainers();
         if (adapter != null) {
             adapter.notifyDataSetChanged();
             loadShortcutsList();
@@ -622,7 +632,8 @@ public class ShortcutsFragment extends Fragment {
                         updateSelectedShortcutDetails();
                         adapter.updateEmptyState();
                         for (Shortcut shortcut : adapter.data) {
-                            if ("1".equals(shortcut.getExtra("coverArtSelectionPending"))
+                            String coverArtPending = shortcut.getExtra("coverArtSelectionPending");
+                            if (("1".equals(coverArtPending) || "local-selection".equals(coverArtPending))
                                     && coverArtPromptsShown.add(shortcut.file.getAbsolutePath())) {
                                 shortcut.putExtra("coverArtSelectionPending", "prompted");
                                 shortcut.saveData();
@@ -645,6 +656,7 @@ public class ShortcutsFragment extends Fragment {
                 Shortcut current = adapter.data.get(i);
                 if (current != null && current.file != null
                         && path.equals(current.file.getAbsolutePath())) {
+                    current.copyCoverArtFrom(shortcut);
                     adapter.notifyItemChanged(i);
                     return;
                 }
@@ -672,15 +684,45 @@ public class ShortcutsFragment extends Fragment {
     @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_CODE_CUSTOM_COVER_ART && resultCode == Activity.RESULT_OK && data != null && currentShortcut != null) {
-            Uri selectedImage = data.getData();
+        if (requestCode == REQUEST_CODE_CUSTOM_COVER_ART && currentShortcut != null) {
+            Shortcut shortcut = currentShortcut;
+            long selectionVersion = currentCoverArtSelectionVersion;
             try {
-                android.graphics.Bitmap bitmap = android.provider.MediaStore.Images.Media.getBitmap(requireContext().getContentResolver(), selectedImage);
-                currentShortcut.saveCustomCoverArt(bitmap);
-                loadShortcutsList();
-                Toast.makeText(getContext(), "Cover art updated.", Toast.LENGTH_SHORT).show();
+                if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
+                    if (shortcut.cancelCoverArtSelection(selectionVersion)) {
+                        requestCloudCoverArt(shortcut);
+                    }
+                    return;
+                }
+                Uri selectedImage = data.getData();
+                Bitmap bitmap = ImageUtils.getBitmapFromUri(requireContext(), selectedImage, 1600);
+                if (bitmap == null || !shortcut.saveCustomCoverArt(bitmap, selectionVersion)) {
+                    boolean selectionStillCurrent =
+                            shortcut.getCoverArtVersion() == selectionVersion;
+                    boolean cleared = shortcut.cancelCoverArtSelection(selectionVersion);
+                    if (!selectionStillCurrent) return;
+                    android.util.Log.e("ShortcutsFragment",
+                            "Unable to save selected cover art for " + shortcut.name);
+                    if (cleared) requestCloudCoverArt(shortcut);
+                    Toast.makeText(getContext(), "Failed to update cover art.", Toast.LENGTH_SHORT).show();
+                } else {
+                    notifyShortcutImageUpdated(shortcut);
+                    refreshShortcutCoverArtCards();
+                    if (selectedShortcut != null && selectedShortcut.file.equals(shortcut.file)) {
+                        updateSelectedShortcutDetails();
+                    }
+                    Toast.makeText(getContext(), "Cover art updated.", Toast.LENGTH_SHORT).show();
+                }
             } catch (Exception e) {
-                Toast.makeText(getContext(), "Failed to update cover art.", Toast.LENGTH_SHORT).show();
+                android.util.Log.e("ShortcutsFragment", "Failed to load selected cover art.", e);
+                boolean cleared = shortcut.cancelCoverArtSelection(selectionVersion);
+                if (cleared) {
+                    requestCloudCoverArt(shortcut);
+                    Toast.makeText(getContext(), "Failed to update cover art.", Toast.LENGTH_SHORT).show();
+                }
+            } finally {
+                currentShortcut = null;
+                currentCoverArtSelectionVersion = -1;
             }
         } else if (requestCode == REQUEST_CODE_CUSTOM_HERO_ART && resultCode == Activity.RESULT_OK && data != null && currentShortcut != null) {
             Uri selectedImage = data.getData();
@@ -1318,8 +1360,16 @@ public class ShortcutsFragment extends Fragment {
                 holder.version.setVisibility(View.GONE);
             }
 
-            Glide.with(holder.coverArt)
-                    .load(item.getCoverArt())
+            File coverArtFile = item.getCoverArtFile();
+            com.bumptech.glide.RequestBuilder<android.graphics.drawable.Drawable> coverRequest =
+                    Glide.with(holder.coverArt).load(
+                            coverArtFile != null ? coverArtFile : item.getCoverArt());
+            if (coverArtFile != null) {
+                coverRequest.signature(new ObjectKey(coverArtFile.getAbsolutePath()
+                        + ":" + coverArtFile.lastModified() + ":" + coverArtFile.length()
+                        + ":" + item.getCoverArtVersion()));
+            }
+            coverRequest
                     .placeholder(R.drawable.cover_art_placeholder)
                     .error(R.drawable.cover_art_placeholder)
                     .fallback(R.drawable.cover_art_placeholder)
@@ -1502,8 +1552,21 @@ public class ShortcutsFragment extends Fragment {
                         }
                         else if (index == 1) {
                             currentShortcut = shortcut;
+                            currentCoverArtSelectionVersion = shortcut.beginCoverArtSelection();
                             Intent intent = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-                            startActivityForResult(intent, REQUEST_CODE_CUSTOM_COVER_ART);
+                            try {
+                                startActivityForResult(intent, REQUEST_CODE_CUSTOM_COVER_ART);
+                            } catch (Exception e) {
+                                long selectionVersion = currentCoverArtSelectionVersion;
+                                boolean cleared = shortcut.cancelCoverArtSelection(selectionVersion);
+                                currentShortcut = null;
+                                currentCoverArtSelectionVersion = -1;
+                                android.util.Log.e("ShortcutsFragment", "Unable to open image picker.", e);
+                                if (cleared) {
+                                    requestCloudCoverArt(shortcut);
+                                    Toast.makeText(context, "Unable to open image picker.", Toast.LENGTH_SHORT).show();
+                                }
+                            }
                         }
                         else if (index == 2) {
                             shortcut.removeCustomCoverArt();
@@ -2376,24 +2439,37 @@ public class ShortcutsFragment extends Fragment {
                     holder.itemView.setOnClickListener(v -> {
                         dialog.dismiss();
                         Toast.makeText(context, forHero ? "Applying loading screen art..." : "Applying cover art...", Toast.LENGTH_SHORT).show();
+                        long coverArtVersion = forHero ? -1 : shortcut.beginCoverArtSelection();
                         com.winlator.cmod.core.CoverArtManager.DownloadCallback cb = new com.winlator.cmod.core.CoverArtManager.DownloadCallback() {
                             @Override
                             public void onCompleted(android.graphics.Bitmap bitmap) {
                                 Activity a = getActivity();
                                 if (a != null && !a.isFinishing() && isAdded()) a.runOnUiThread(() -> {
-                                    loadShortcutsList();
+                                    if (forHero) loadShortcutsList();
+                                    else {
+                                        notifyShortcutImageUpdated(shortcut);
+                                        refreshShortcutCoverArtCards();
+                                    }
                                     Toast.makeText(context, forHero ? "Loading screen art updated." : "Cover art updated.", Toast.LENGTH_SHORT).show();
                                 });
                             }
 
                             @Override
                             public void onFailed(com.winlator.cmod.core.CoverArtManager.ErrorReason reason) {
+                                if (!forHero) {
+                                    if (shortcut.getCoverArtVersion() != coverArtVersion
+                                            || !shortcut.cancelCoverArtSelection(coverArtVersion)) return;
+                                }
                                 Activity a = getActivity();
-                                if (a != null && !a.isFinishing() && isAdded()) a.runOnUiThread(() -> Toast.makeText(context, forHero ? "Failed to download loading screen art." : "Failed to download cover art.", Toast.LENGTH_SHORT).show());
+                                if (a != null && !a.isFinishing() && isAdded()) a.runOnUiThread(() -> {
+                                    if (!forHero) requestCloudCoverArt(shortcut);
+                                    Toast.makeText(context, forHero ? "Failed to download loading screen art." : "Failed to download cover art.", Toast.LENGTH_SHORT).show();
+                                });
                             }
                         };
                         if (forHero) com.winlator.cmod.core.CoverArtManager.downloadSelectedHeroArt(data.url(), shortcut, cb);
-                        else com.winlator.cmod.core.CoverArtManager.downloadSelectedCoverArt(data.url(), shortcut, cb);
+                        else com.winlator.cmod.core.CoverArtManager.downloadSelectedCoverArt(
+                                data.url(), shortcut, coverArtVersion, cb);
                     });
                 }
 

@@ -91,7 +91,7 @@ public class ShortcutSettingsDialog extends ContentDialog {
         LinearLayout llContent = findViewById(R.id.LLContent);
         llContent.getLayoutParams().width = AppUtils.getPreferredDialogWidth(context, 0.85f, 0.7f);
 
-        com.winlator.cmod.ThemeManager.applyThemeToView(getContentView(), context);
+        applyThemeToContentView(context);
 
         // Initialize the turnip version TextView
         tvGraphicsDriverVersion = findViewById(R.id.TVGraphicsDriverVersion);
@@ -457,7 +457,7 @@ public class ShortcutSettingsDialog extends ContentDialog {
         final CPUListView cpuListView = findViewById(R.id.CPUListView);
         cpuListView.setCheckedCPUList(shortcut.getExtra("cpuList", shortcut.container.getCPUList(true)));
 
-        com.winlator.cmod.ThemeManager.applyThemeToView(getContentView(), context);
+        applyThemeToContentView(context);
 
         setOnConfirmCallback(() -> {
             String name = etName.getText().toString().trim();
@@ -588,7 +588,7 @@ public class ShortcutSettingsDialog extends ContentDialog {
     }
 
     public void onWinComponentsViewsAdded(boolean isDarkMode) {
-        com.winlator.cmod.ThemeManager.applyThemeToView(getContentView(), fragment.getContext());
+        applyThemeToContentView(fragment.getContext());
     }
 
     public static void loadScreenSizeSpinner(View view, String selectedValue, boolean isDarkMode) {

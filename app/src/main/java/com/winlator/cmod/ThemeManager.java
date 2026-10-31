@@ -4,6 +4,10 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
+import android.app.Activity;
+import android.graphics.RenderEffect;
+import android.graphics.Shader;
+import android.os.Build;
 import android.graphics.Typeface;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,6 +22,8 @@ import android.widget.TextView;
 import androidx.annotation.StyleRes;
 import androidx.preference.PreferenceManager;
 import com.google.android.material.tabs.TabLayout;
+import com.winlator.cmod.widget.LiquidGlassSurfaceDrawable;
+import com.winlator.cmod.widget.GlassSpinnerPopup;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,6 +34,7 @@ public final class ThemeManager {
     public static final String PREF_DARK_THEME_INDEX = "dark_theme_preset_index";
     public static final String PREF_CUSTOM_ACCENT = "custom_accent_color";
     public static final String PREF_CUSTOM_BG = "custom_background_color";
+    public static final String PREF_FULL_LIQUID_GLASS = "full_liquid_glass";
 
     // =========================================================================
     // CURATED THEME PRESETS (Midnight Ocean is default at index 0)
@@ -61,6 +68,45 @@ public final class ThemeManager {
 
     public static boolean isDarkMode(Context context) {
         return true;
+    }
+
+    public static boolean isFullLiquidGlassEnabled(Context context) {
+        return PreferenceManager.getDefaultSharedPreferences(context)
+                .getBoolean(PREF_FULL_LIQUID_GLASS, true);
+    }
+
+    public static void applyGlassBackdropEffect(Activity activity) {
+        applyGlassBackdropEffect(activity, false);
+    }
+
+    public static void applyContainerEditorBackdropEffect(Activity activity) {
+        applyGlassBackdropEffect(activity, true);
+    }
+
+    private static void applyGlassBackdropEffect(Activity activity, boolean forceBlur) {
+        if (activity == null) return;
+        View backdrop = activity.findViewById(R.id.GlassBackdrop);
+        if (backdrop == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
+        if (backdrop.getWidth() == 0 || backdrop.getHeight() == 0) {
+            backdrop.post(() -> {
+                if (backdrop.getWidth() > 0 && backdrop.getHeight() > 0) {
+                    applyGlassBackdropEffect(activity);
+                }
+            });
+            return;
+        }
+
+        if (forceBlur || isFullLiquidGlassEnabled(activity)) {
+            float radius = 12f * activity.getResources().getDisplayMetrics().density;
+            backdrop.setRenderEffect(RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP));
+        } else {
+            backdrop.setRenderEffect(null);
+        }
+    }
+
+    public static android.graphics.drawable.Drawable createGlassSurfaceDrawable(
+            Context context, int fallbackResource, float cornerRadiusDp) {
+        return new LiquidGlassSurfaceDrawable(context, fallbackResource, cornerRadiusDp);
     }
 
     public static List<ThemePreset> getPresets(Context context) {
@@ -137,6 +183,8 @@ public final class ThemeManager {
         int index = getSelectedPresetIndex(context);
         theme.applyStyle(DARK_STYLES[index], true);
         theme.applyStyle(R.style.LiquidGlassTheme, true);
+        theme.applyStyle(isFullLiquidGlassEnabled(context)
+                ? R.style.FullLiquidGlassTheme : R.style.SimpleLiquidGlassTheme, true);
     }
 
     public static int getAccentColor(Context context) {
@@ -196,8 +244,9 @@ public final class ThemeManager {
             cb.setButtonTintList(ColorStateList.valueOf(accent));
         } else if (view instanceof Spinner) {
             Spinner spinner = (Spinner) view;
-            spinner.setPopupBackgroundResource(isDarkMode ? R.drawable.content_dialog_background_dark : R.drawable.content_dialog_background);
+            spinner.setPopupBackgroundResource(R.drawable.liquid_glass_popup);
             spinner.setBackgroundResource(isDarkMode ? R.drawable.combo_box_dark : R.drawable.combo_box);
+            GlassSpinnerPopup.attach(spinner);
             int padStart = (int) (12 * spinner.getResources().getDisplayMetrics().density);
             int padEnd = (int) (42 * spinner.getResources().getDisplayMetrics().density);
             spinner.setPaddingRelative(padStart, 0, padEnd, 0);

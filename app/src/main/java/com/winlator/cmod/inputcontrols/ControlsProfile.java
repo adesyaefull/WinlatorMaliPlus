@@ -102,6 +102,14 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
     }
 
     public boolean isVirtualGamepad() {
+        if (elementsLoaded) {
+            for (ControlElement element : elements) {
+                for (int i = 0; i < element.getBindingCount(); i++) {
+                    if (element.getBindingAt(i).isGamepad()) return true;
+                }
+            }
+            return false;
+        }
         return virtualGamepad;
     }
 
@@ -386,13 +394,13 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
                 if (elementJSONObject.has("range")) element.setRange(ControlElement.Range.parse(elementJSONObject.optString("range", "FROM_A_TO_Z")));
                 if (elementJSONObject.has("orientation")) element.setOrientation((byte)elementJSONObject.optInt("orientation", 0));
 
-                boolean hasGamepadBinding = true;
+                boolean hasGamepadBinding = false;
                 JSONArray bindingsJSONArray = elementJSONObject.optJSONArray("bindings");
                 if (bindingsJSONArray != null) {
                     for (int j = 0; j < bindingsJSONArray.length(); j++) {
                         Binding binding = Binding.fromString(bindingsJSONArray.getString(j));
                         element.setBindingAt(j, binding);
-                        if (!binding.isGamepad()) hasGamepadBinding = false;
+                        if (binding.isGamepad()) hasGamepadBinding = true;
                     }
                 }
 

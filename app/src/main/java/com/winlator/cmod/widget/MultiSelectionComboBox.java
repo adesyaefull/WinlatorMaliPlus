@@ -1,6 +1,8 @@
 package com.winlator.cmod.widget;
 
 import android.content.Context;
+import android.graphics.Color;
+import android.content.res.ColorStateList;
 import android.util.ArraySet;
 import android.util.AttributeSet;
 import android.view.View;
@@ -14,6 +16,8 @@ import androidx.appcompat.widget.AppCompatTextView;
 import androidx.appcompat.widget.ListPopupWindow;
 
 import com.winlator.cmod.core.UnitUtils;
+import com.winlator.cmod.R;
+import com.winlator.cmod.ThemeManager;
 
 import java.util.Collections;
 
@@ -99,6 +103,14 @@ public class MultiSelectionComboBox extends AppCompatTextView {
             public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
                 CheckedTextView checkedTextView = (CheckedTextView)super.getView(position, convertView, parent);
                 checkedTextView.setChecked(selectedItemSet.contains(items[position]));
+                checkedTextView.setTextColor(ThemeManager.getOnSurfaceTextColor(getContext()));
+                checkedTextView.setCheckMarkTintList(
+                        ColorStateList.valueOf(ThemeManager.getAccentColor(getContext())));
+                int horizontalPadding = Math.round(16
+                        * getResources().getDisplayMetrics().density);
+                checkedTextView.setPadding(horizontalPadding, 0, horizontalPadding, 0);
+                checkedTextView.setMinHeight(Math.round(48
+                        * getResources().getDisplayMetrics().density));
                 if (!text.isEmpty())
                     setText(selectedItemSet.size() + " " + text);
                 else
@@ -111,6 +123,7 @@ public class MultiSelectionComboBox extends AppCompatTextView {
         popupWindow.setAdapter(adapter);
         popupWindow.setAnchorView(this);
         popupWindow.setWidth((int)UnitUtils.dpToPx(260));
+        popupWindow.setBackgroundDrawable(getContext().getDrawable(R.drawable.liquid_glass_popup));
 
         popupWindow.setOnItemClickListener((parent, view, position, id) -> {
             String item = items[position];
@@ -123,6 +136,10 @@ public class MultiSelectionComboBox extends AppCompatTextView {
         });
 
         popupWindow.show();
+        if (popupWindow.getListView() != null) {
+            popupWindow.getListView().setBackgroundColor(Color.TRANSPARENT);
+            popupWindow.getListView().setCacheColorHint(Color.TRANSPARENT);
+        }
         return true;
     }
 }

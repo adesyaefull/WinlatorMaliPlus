@@ -281,6 +281,24 @@ public class ContainerDetailFragment extends Fragment {
         return container != null;
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        ThemeManager.applyContainerEditorBackdropEffect(getActivity());
+    }
+
+    @Override
+    public void onPause() {
+        ThemeManager.applyGlassBackdropEffect(getActivity());
+        super.onPause();
+    }
+
+    @Override
+    public void onDestroyView() {
+        ThemeManager.applyGlassBackdropEffect(getActivity());
+        super.onDestroyView();
+    }
+
     @SuppressLint("SetTextI18n")
     @Nullable
     @Override
@@ -294,6 +312,7 @@ public class ContainerDetailFragment extends Fragment {
 
         // Apply dynamic styles
         applyDynamicStyles(view, isDarkMode);
+        view.setBackgroundResource(R.drawable.liquid_glass_editor_background);
 
         // Apply dynamic styles recursively
 //        applyDynamicStylesRecursively(view, isDarkMode);
@@ -768,6 +787,9 @@ public class ContainerDetailFragment extends Fragment {
                             saveWineRegistryKeys(view);
                         }
                         preloaderDialog.close();
+                        if (container != null && getActivity() instanceof MainActivity) {
+                            ((MainActivity) getActivity()).getContainerManager().loadContainers();
+                        }
                         getActivity().onBackPressed();
                     });
                 }

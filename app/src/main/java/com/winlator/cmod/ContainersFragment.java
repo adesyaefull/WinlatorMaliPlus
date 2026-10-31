@@ -75,13 +75,21 @@ public class ContainersFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         ThemeManager.applyThemeToView(view, getContext());
         manager = new ContainerManager(getContext());
-        loadContainersList();
         androidx.appcompat.app.ActionBar actionBar = ((AppCompatActivity) getActivity()).getSupportActionBar();
         if (actionBar != null) {
             actionBar.setTitle(R.string.containers);
         }
 
         checkFirstLaunchWineSetup();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (manager != null && recyclerView != null) {
+            manager.loadContainers();
+            loadContainersList();
+        }
     }
 
     private void checkFirstLaunchWineSetup() {
@@ -226,8 +234,10 @@ public class ContainersFragment extends Fragment {
                 int accent = ThemeManager.getAccentColor(context);
                 int onSurface = ThemeManager.getOnSurfaceTextColor(context);
                 float density = context.getResources().getDisplayMetrics().density;
-                if (holder.itemView instanceof androidx.cardview.widget.CardView)
-                    ((androidx.cardview.widget.CardView) holder.itemView).setCardBackgroundColor(ThemeManager.getSurfaceColor(context));
+                if (holder.itemView instanceof androidx.cardview.widget.CardView) {
+                    ((androidx.cardview.widget.CardView) holder.itemView).setCardBackgroundColor(android.graphics.Color.TRANSPARENT);
+                    holder.itemView.setBackgroundResource(R.drawable.liquid_glass_card);
+                }
                 holder.title.setTextColor(onSurface);
                 holder.imageView.setImageTintList(android.content.res.ColorStateList.valueOf(accent));
                 holder.menuButton.setImageTintList(android.content.res.ColorStateList.valueOf((onSurface & 0x00FFFFFF) | 0xB3000000));

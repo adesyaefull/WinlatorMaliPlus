@@ -73,7 +73,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         super.onCreate(savedInstanceState);
 
         // Get shared preferences
-        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        if (!sharedPreferences.contains(ThemeManager.PREF_FULL_LIQUID_GLASS)) {
+            sharedPreferences.edit()
+                    .putBoolean(ThemeManager.PREF_FULL_LIQUID_GLASS, true)
+                    .apply();
+        }
 
         isDarkMode = true;
         setTheme(R.style.AppTheme_Dark);
@@ -81,6 +86,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         applyOrientationSystemUi();
         setContentView(R.layout.main_activity);
+        ThemeManager.applyGlassBackdropEffect(this);
         applyOrientationSystemUi();
         androidx.appcompat.widget.Toolbar toolbar = findViewById(R.id.Toolbar);
         if (toolbar != null) toolbar.setBackgroundResource(R.drawable.shortcut_toolbar_glass);
@@ -96,6 +102,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                                       @NonNull View view, @Nullable Bundle savedInstanceState) {
                         ThemeManager.applyThemeToView(view, MainActivity.this);
                     }
+
                 }, true);
         NavigationView navigationView = findViewById(R.id.NavigationView);
         navigationView.setNavigationItemSelectedListener(this);
@@ -232,6 +239,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     protected void onResume() {
         super.onResume();
+        ThemeManager.applyGlassBackdropEffect(this);
         NavigationView navigationView = findViewById(R.id.NavigationView);
         if (navigationView != null) {
             MenuItem item = navigationView.getMenu().findItem(R.id.main_menu_adrenotools_gpu_drivers);

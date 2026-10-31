@@ -416,12 +416,7 @@ public final class InGameControlsEditor implements View.OnClickListener {
         popupWindow.setContentView(view);
         popupWindow.setFocusable(true);
         popupWindow.setOutsideTouchable(true);
-
-        android.graphics.drawable.GradientDrawable bgDrawable = new android.graphics.drawable.GradientDrawable();
-        bgDrawable.setColor(isDarkMode ? 0xFF181C24 : 0xFFFFFFFF);
-        bgDrawable.setCornerRadius(UnitUtils.dpToPx(12));
-        bgDrawable.setStroke((int) UnitUtils.dpToPx(1.5f), isDarkMode ? 0xFF333D4D : 0xFFCFD8DC);
-        popupWindow.setBackgroundDrawable(bgDrawable);
+        popupWindow.setBackgroundDrawable(activity.getDrawable(R.drawable.liquid_glass_dialog));
 
         int initialX = (element.getX() > screenWidth / 2) ? (int) UnitUtils.dpToPx(24) : (screenWidth - dialogWidth - (int) UnitUtils.dpToPx(24));
         int initialY = (int) UnitUtils.dpToPx(36);
@@ -429,11 +424,7 @@ public final class InGameControlsEditor implements View.OnClickListener {
 
         View dragHeader = view.findViewById(R.id.LLDragHeader);
         if (dragHeader != null) {
-            android.graphics.drawable.GradientDrawable headerDrawable = new android.graphics.drawable.GradientDrawable();
-            headerDrawable.setColor(isDarkMode ? 0xFF242C38 : 0xFFECEFF1);
-            float r = UnitUtils.dpToPx(12);
-            headerDrawable.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
-            dragHeader.setBackground(headerDrawable);
+            dragHeader.setBackgroundResource(R.drawable.liquid_glass_dialog);
 
             TextView tvDragTitle = dragHeader.findViewById(R.id.TVDragTitle);
             if (tvDragTitle != null) tvDragTitle.setTextColor(accentColor);

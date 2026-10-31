@@ -12,6 +12,7 @@
         android:layout_height="match_parent">
 
         <com.winlator.cmod.widget.PlayStationWaveBackgroundView
+            android:id="@+id/GlassBackdrop"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 

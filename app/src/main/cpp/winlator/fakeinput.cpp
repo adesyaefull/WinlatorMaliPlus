@@ -10,6 +10,7 @@
 
 #include <fcntl.h>
 #include <dirent.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -42,6 +43,9 @@ static int (*my_open)(const char *, int, ...) = nullptr;
 static int (*my_openat)(int, const char *, int, ...) = nullptr;
 static int (*my_stat)(const char *, struct stat *) = nullptr;
 static int (*my_fstat)(int fd, struct stat *buf) = nullptr;
+static int (*my_access)(const char *, int) = nullptr;
+static int (*my_faccessat)(int, const char *, int, int) = nullptr;
+static DIR *(*my_opendir)(const char *) = nullptr;
 static int (*my_scandir)(const char *, struct dirent***, int(*)(const struct dirent *), int(*)(const struct dirent**, const struct dirent**));
 static int (*my_inotify_add_watch)(int, const char *, uint32_t);
 static int (*my_close)(int);
@@ -123,6 +127,29 @@ char *from_real_to_fake_path(const char *pathname) {
 	char *fake_path;
 	asprintf(&fake_path, "%s/%s", hook_dir, event);
 	return fake_path;
+}
+
+__attribute__((visibility("hidden")))
+const char *redirect_input_path(const char *pathname, char **allocated_path) {
+    *allocated_path = nullptr;
+    if (pathname && strstr(pathname, "/dev/input/event")) {
+        *allocated_path = from_real_to_fake_path(pathname);
+        return *allocated_path;
+    }
+    if (pathname && !strcmp(pathname, "/dev/input")) {
+        return hook_dir;
+    }
+    return pathname;
+}
+
+__attribute__((visibility("hidden")))
+void copy_ioctl_data(void *argp, size_t requested_size, const void *data, size_t data_size) {
+    if (!argp || requested_size == 0) return;
+    size_t copy_size = std::min(requested_size, data_size);
+    memcpy(argp, data, copy_size);
+    if (requested_size > copy_size) {
+        memset(static_cast<char *>(argp) + copy_size, 0, requested_size - copy_size);
+    }
 }
 
 __attribute__((visibility("hidden")))
@@ -229,25 +256,18 @@ EXPORT int stat(const char *pathname, struct stat *statbuf) {
 	if (!my_stat)
 		*(void **)&my_stat = dlsym(RTLD_NEXT, "stat");
 
-     const char *event = nullptr;
-     int event_number = -1;
-
-	if (pathname) {
-		if (strstr(pathname, "/dev/input/event")) {
-		    pathname = from_real_to_fake_path(pathname);
-		    event = get_event(pathname);
-		    event_number = get_event_number(event);
-		}
-		else if (!strcmp(pathname, "/dev/input")) {                                    
-		    pathname = hook_dir;             
-		}
-	}
-
-	int ret = my_stat(pathname, statbuf);
-    
-    if (event && event_number >= 0) {
-		statbuf->st_rdev = makedev(1, event_number);
-	}
+    char *allocated_path = nullptr;
+    pathname = redirect_input_path(pathname, &allocated_path);
+    int ret = my_stat(pathname, statbuf);
+    if (allocated_path && ret == 0) {
+        const char *event = get_event(allocated_path);
+        int event_number = get_event_number(event);
+        if (event_number >= 0) {
+            statbuf->st_mode = (statbuf->st_mode & ~S_IFMT) | S_IFCHR;
+            statbuf->st_rdev = makedev(1, event_number);
+        }
+    }
+    free(allocated_path);
 
 	return ret;
 }
@@ -259,12 +279,46 @@ EXPORT int fstat(int fd, struct stat *buf) {
     int ret = my_fstat(fd, buf);
 
     auto controller = controller_map.find(fd);
-    if (controller != controller_map.end()) {
+    if (ret == 0 && controller != controller_map.end()) {
+        buf->st_mode = (buf->st_mode & ~S_IFMT) | S_IFCHR;
     	buf->st_rdev = makedev(1, get_event_number(controller->second));
     }
 
     return ret;
   }
+
+EXPORT int access(const char *pathname, int mode) {
+    if (!my_access)
+        *(void **)&my_access = dlsym(RTLD_NEXT, "access");
+
+    char *allocated_path = nullptr;
+    pathname = redirect_input_path(pathname, &allocated_path);
+    int ret = my_access(pathname, mode);
+    free(allocated_path);
+    return ret;
+}
+
+EXPORT int faccessat(int dirfd, const char *pathname, int mode, int flags) {
+    if (!my_faccessat)
+        *(void **)&my_faccessat = dlsym(RTLD_NEXT, "faccessat");
+
+    char *allocated_path = nullptr;
+    pathname = redirect_input_path(pathname, &allocated_path);
+    int ret = my_faccessat(dirfd, pathname, mode, flags);
+    free(allocated_path);
+    return ret;
+}
+
+EXPORT DIR *opendir(const char *name) {
+    if (!my_opendir)
+        *(void **)&my_opendir = dlsym(RTLD_NEXT, "opendir");
+
+    char *allocated_path = nullptr;
+    name = redirect_input_path(name, &allocated_path);
+    DIR *dir = my_opendir(name);
+    free(allocated_path);
+    return dir;
+}
 
 EXPORT int scandir(const char *dirp, struct dirent ***namelist, int(*filter)(const struct dirent *), int(*compar)(const struct dirent **, const struct dirent **)) {
 	if (!my_scandir)
@@ -331,35 +385,39 @@ EXPORT int ioctl(int fd, int op, ...) {
         return 0;
     }
     else if (type == 0x45 && number == 0x6) {
-    	Logger::log("Hooking ioctl EVIOCGNAME for event %s\n", event);
-    	snprintf((char *)argp, 256, "Generic HID Gamepad %d", event_number);
-    	return 0;
+        Logger::log("Hooking ioctl EVIOCGNAME for event %s\n", event);
+        char name[64];
+        snprintf(name, sizeof(name), "Generic HID Gamepad %d", event_number);
+        copy_ioctl_data(argp, _IOC_SIZE(op), name, strlen(name) + 1);
+        return 0;
     }
     else if (type == 0x45 && number == 0x9) {
         Logger::log("Hooking ioctl EVIOCGPROP for event %s\n", event);
+        char bitmask[(INPUT_PROP_MAX / 8) + 1] = {0};
+        copy_ioctl_data(argp, _IOC_SIZE(op), bitmask, sizeof(bitmask));
         return 0;
     }
     else if (type == 0x45 && number == 0x18) {
-    	Logger::log("Hooking ioctl EVIOCGKEY(len) for event %s\n", event);
-    	char bitmask[KEY_MAX / 8] = {0};
-        memcpy(argp, (void *)&bitmask, sizeof(bitmask));
+        Logger::log("Hooking ioctl EVIOCGKEY(len) for event %s\n", event);
+        char bitmask[(KEY_MAX / 8) + 1] = {0};
+        copy_ioctl_data(argp, _IOC_SIZE(op), bitmask, sizeof(bitmask));
         return 0;
     }
     else if (type == 0x45 && number == 0x20) {
-    	Logger::log("Hooking ioctl EVIOCGBIT(0, len) for event %s\n", event);
-        char bitmask[EV_MAX / 8] = {0};
+        Logger::log("Hooking ioctl EVIOCGBIT(0, len) for event %s\n", event);
+        char bitmask[(EV_MAX / 8) + 1] = {0};
         bitmask[EV_SYN / 8] |= (1 << (EV_SYN % 8));
         bitmask[EV_KEY / 8] |= (1 << (EV_KEY % 8));
         bitmask[EV_ABS / 8] |= (1 << (EV_ABS % 8));
         if (vibration_enabled) {
             bitmask[EV_FF / 8] |= (1 << (EV_FF % 8));
         }
-    	memcpy(argp, (void *)&bitmask, sizeof(bitmask));
-    	return 0;	
+        copy_ioctl_data(argp, _IOC_SIZE(op), bitmask, sizeof(bitmask));
+        return 0;
     }
     else if (type == 0x45 && number == 0x21) {
         Logger::log("Hooking ioctl EVIOCGBIT(EV_KEY, len) for event %s\n", event);
-        char bitmask[KEY_MAX / 8] = {0};
+        char bitmask[(KEY_MAX / 8) + 1] = {0};
         for (int i = 0x130; i <= 0x13e; i++) {
             if (i == 0x130)
                 bitmask[BTN_A / 8] |= (1 << (BTN_A % 8));
@@ -376,35 +434,35 @@ EXPORT int ioctl(int fd, int op, ...) {
             else
                 bitmask[i / 8] |= (1 << (i % 8));
         }
-        memcpy(argp, (void *)&bitmask, sizeof(bitmask));
+        copy_ioctl_data(argp, _IOC_SIZE(op), bitmask, sizeof(bitmask));
         return 0;
     }
     else if (type == 0x45 && number == 0x22) {
-    	Logger::log("Hooking ioctl EVIOCGBIT(EV_REL, len) for event %s\n", event);
-    	char bitmask[REL_MAX / 8] = {0};
-    	memcpy(argp, (void *)&bitmask, sizeof(bitmask));
-    	return 0;
+        Logger::log("Hooking ioctl EVIOCGBIT(EV_REL, len) for event %s\n", event);
+        char bitmask[(REL_MAX / 8) + 1] = {0};
+        copy_ioctl_data(argp, _IOC_SIZE(op), bitmask, sizeof(bitmask));
+        return 0;
     }
     else if (type == 0x45 && number == 0x23) {
-    	Logger::log("Hooking ioctl EVIOCGBIT(EV_ABS, len) for event %s\n", event);
-    	char bitmask[ABS_MAX / 8] = {0};
-    	bitmask[ABS_X / 8] |= (1 << (ABS_X % 8));
-    	bitmask[ABS_Y / 8] |= (1 << (ABS_Y % 8));
-    	bitmask[ABS_RX / 8] |= (1 << (ABS_RX % 8));
-    	bitmask[ABS_RY / 8] |= (1 << (ABS_RY % 8));
-    	bitmask[ABS_GAS / 8] |= (1 << (ABS_GAS % 8));
-    	bitmask[ABS_BRAKE / 8] |= (1 << (ABS_BRAKE % 8));
-    	bitmask[ABS_HAT0X / 8] |= (1 << (ABS_HAT0X % 8));
-    	bitmask[ABS_HAT0Y / 8] |= (1 << (ABS_HAT0Y % 8));
-    	memcpy(argp, (void *)&bitmask, sizeof(bitmask));
-    	return 0;
+        Logger::log("Hooking ioctl EVIOCGBIT(EV_ABS, len) for event %s\n", event);
+        char bitmask[(ABS_MAX / 8) + 1] = {0};
+        bitmask[ABS_X / 8] |= (1 << (ABS_X % 8));
+        bitmask[ABS_Y / 8] |= (1 << (ABS_Y % 8));
+        bitmask[ABS_RX / 8] |= (1 << (ABS_RX % 8));
+        bitmask[ABS_RY / 8] |= (1 << (ABS_RY % 8));
+        bitmask[ABS_GAS / 8] |= (1 << (ABS_GAS % 8));
+        bitmask[ABS_BRAKE / 8] |= (1 << (ABS_BRAKE % 8));
+        bitmask[ABS_HAT0X / 8] |= (1 << (ABS_HAT0X % 8));
+        bitmask[ABS_HAT0Y / 8] |= (1 << (ABS_HAT0Y % 8));
+        copy_ioctl_data(argp, _IOC_SIZE(op), bitmask, sizeof(bitmask));
+        return 0;
     }
     else if (type == 0x45 && number == 0x35) {
         Logger::log("Hooking ioctl EVIOCGBIT(EV_FF, len) for event %s\n", event);
-        char bitmask[FF_MAX / 8] = {0};
+        char bitmask[(FF_MAX / 8) + 1] = {0};
         bitmask[FF_RUMBLE / 8] |= (1 << (FF_RUMBLE % 8));
         bitmask[FF_PERIODIC / 8] |= (1 << (FF_PERIODIC % 8));
-        memcpy(argp, (void *)&bitmask, sizeof(bitmask));
+        copy_ioctl_data(argp, _IOC_SIZE(op), bitmask, sizeof(bitmask));
         return 0;
     }
     else if (type == 0x45 && number == 0x80) {
@@ -461,7 +519,9 @@ EXPORT int ioctl(int fd, int op, ...) {
     }
     else if (type == 0x6A && number == 0x13) {
     	Logger::log("Hooking ioctl JSIOCGNAME(len) for event %s\n", event);
-        snprintf((char *)argp, 256, "Generic HID Gamepad %d", event_number);
+        char name[64];
+        snprintf(name, sizeof(name), "Generic HID Gamepad %d", event_number);
+        copy_ioctl_data(argp, _IOC_SIZE(op), name, strlen(name) + 1);
     	return 0;
     }
     else {

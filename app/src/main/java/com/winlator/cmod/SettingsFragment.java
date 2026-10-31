@@ -166,6 +166,17 @@ public class SettingsFragment extends Fragment {
             });
         }
 
+        CheckBox fullLiquidGlass = view.findViewById(R.id.CBFullLiquidGlass);
+        if (fullLiquidGlass != null) {
+            fullLiquidGlass.setChecked(ThemeManager.isFullLiquidGlassEnabled(context));
+            fullLiquidGlass.setOnCheckedChangeListener((button, enabled) -> {
+                preferences.edit().putBoolean(ThemeManager.PREF_FULL_LIQUID_GLASS, enabled).apply();
+                ThemeManager.applyTheme(requireActivity());
+                ThemeManager.applyGlassBackdropEffect(requireActivity());
+                requireActivity().recreate();
+            });
+        }
+
         final Spinner sThemePreset = view.findViewById(R.id.SThemePreset);
         if (sThemePreset != null) {
             String[] presetNames = ThemeManager.getPresetNames(context);

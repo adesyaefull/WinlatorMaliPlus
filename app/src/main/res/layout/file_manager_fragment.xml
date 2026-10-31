@@ -11,7 +11,7 @@
         <LinearLayout
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:background="?android:windowBackground"
+            android:background="@drawable/shortcut_toolbar_glass"
             android:paddingHorizontal="4.0dip"
             android:layout_width="fill_parent"
             android:layout_height="56.0dip">

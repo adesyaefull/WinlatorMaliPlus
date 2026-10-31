@@ -27,13 +27,18 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -48,7 +53,9 @@ public class Shortcut {
     private final JSONObject extraData = new JSONObject();
     private volatile Bitmap coverArt;
     private volatile Bitmap fallbackCoverArt;
-    private String customCoverArtPath;
+    private volatile String customCoverArtPath;
+    private static final ConcurrentMap<String, CoverArtState> coverArtStates = new ConcurrentHashMap<>();
+    private volatile long coverArtVersion = -1;
     // The wide (16:9-ish) hero art the fullscreen loading screen uses behind its UI -- a separate image from the
     // portrait coverArt above (that one's for the shortcut grid/list, too narrow to look right stretched fullscreen).
     private volatile Bitmap heroArt;
@@ -61,6 +68,16 @@ public class Shortcut {
     private static final String FALLBACK_HERO_ART_DIR = "app_data/fallback_hero_arts/";
 
     private static final ExecutorService backgroundExecutor = Executors.newFixedThreadPool(4);
+
+    private static final class CoverArtState {
+        final Object lock = new Object();
+        long version;
+    }
+
+    private CoverArtState coverArtState() {
+        File artFile = new File(container.getRootDir(), COVER_ART_DIR + name + ".png");
+        return coverArtStates.computeIfAbsent(artFile.getAbsolutePath(), key -> new CoverArtState());
+    }
 
     public interface OnShortcutLoadedListener {
         void onShortcutLoaded(Shortcut shortcut);
@@ -368,6 +385,11 @@ public class Shortcut {
     }
 
     private void runBackgroundInitialization() {
+        final long initializationCoverGeneration;
+        CoverArtState coverArtState = coverArtState();
+        synchronized (coverArtState.lock) {
+            initializationCoverGeneration = coverArtState.version;
+        }
         backgroundExecutor.submit(() -> {
             boolean changed = false;
 
@@ -411,41 +433,45 @@ public class Shortcut {
                 if (file.isFile()) path = file.getPath();
             }
 
+            Bitmap loadedCoverArt = null;
             if (path != null) {
                 BitmapFactory.Options options = new BitmapFactory.Options();
                 options.inPreferredConfig = Bitmap.Config.ARGB_8888;
                 options.inJustDecodeBounds = true;
                 BitmapFactory.decodeFile(path, options);
-                options.inSampleSize = ImageUtils.calculateInSampleSize(options, 800, 800);
-                options.inJustDecodeBounds = false;
-                this.coverArt = BitmapFactory.decodeFile(path, options);
-                if (this.coverArt == null) {
-                    Log.w("Shortcut", "Removing unreadable cover art: " + path);
-                    new File(path).delete();
+                if (options.outWidth > 0 && options.outHeight > 0) {
+                    options.inSampleSize = ImageUtils.calculateInSampleSize(options, 800, 800);
+                    options.inJustDecodeBounds = false;
+                    loadedCoverArt = BitmapFactory.decodeFile(path, options);
+                }
+                if (loadedCoverArt == null) {
+                    Log.w("Shortcut", "Unable to decode cover art; preserving the source for retry: " + path);
                     path = null;
-                } else {
-                    changed = true;
                 }
             }
 
+            Bitmap loadedFallbackCoverArt = null;
             if (path == null) {
                 File fallbackFile = new File(new File(container.getRootDir(), FALLBACK_COVER_ART_DIR), this.name + ".png");
-                if (!fallbackFile.exists() || this.fallbackCoverArt == null) {
-                    Bitmap fallback = null;
-                    if (fallbackFile.isFile()) {
-                        fallback = BitmapFactory.decodeFile(fallbackFile.getPath());
-                    }
-                    if (fallback == null) {
-                        fallback = generateFallbackCoverArt(600, 900);
-                        saveFallbackCoverArt(fallback);
-                    }
-                    this.fallbackCoverArt = fallback;
-                    changed = true;
+                if (fallbackFile.isFile()) {
+                    loadedFallbackCoverArt = BitmapFactory.decodeFile(fallbackFile.getPath());
                 }
-                if (this.fallbackCoverArt == null) {
-                    this.fallbackCoverArt = generateFallbackCoverArt(600, 900);
-                    saveFallbackCoverArt(this.fallbackCoverArt);
-                    changed = true;
+                if (loadedFallbackCoverArt == null) {
+                    loadedFallbackCoverArt = generateFallbackCoverArt(600, 900);
+                    saveFallbackCoverArt(loadedFallbackCoverArt);
+                }
+            }
+
+            synchronized (coverArtState.lock) {
+                if (coverArtState.version == initializationCoverGeneration) {
+                    if (loadedCoverArt != null) {
+                        this.coverArt = loadedCoverArt;
+                        changed = true;
+                    } else if (this.fallbackCoverArt == null && loadedFallbackCoverArt != null) {
+                        this.fallbackCoverArt = loadedFallbackCoverArt;
+                        changed = true;
+                    }
+                    coverArtVersion = coverArtState.version;
                 }
             }
 
@@ -556,12 +582,38 @@ public class Shortcut {
     }
 
     public void setCoverArt(Bitmap coverArt) {
-        this.coverArt = coverArt;
+        CoverArtState state = coverArtState();
+        synchronized (state.lock) {
+            this.coverArt = coverArt;
+            coverArtVersion = state.version;
+        }
+    }
+
+    public boolean copyCoverArtFrom(Shortcut source) {
+        if (source == null) return false;
+        CoverArtState state = coverArtState();
+        if (source.coverArtState() != state) return false;
+        synchronized (state.lock) {
+            if (source.coverArtVersion != state.version) return false;
+            coverArt = source.coverArt;
+            fallbackCoverArt = source.fallbackCoverArt;
+            coverArtVersion = state.version;
+            return true;
+        }
     }
 
     public String getCustomCoverArtPath() {
         if (customCoverArtPath == null || customCoverArtPath.isEmpty()) return "";
         return new File(customCoverArtPath).isFile() ? customCoverArtPath : "";
+    }
+
+    public File getCoverArtFile() {
+        String customPath = getCustomCoverArtPath();
+        if (!customPath.isEmpty()) return new File(customPath);
+        File primaryFile = new File(container.getRootDir(), COVER_ART_DIR + name + ".png");
+        if (primaryFile.isFile()) return primaryFile;
+        File fallbackFile = new File(container.getRootDir(), FALLBACK_COVER_ART_DIR + name + ".png");
+        return fallbackFile.isFile() ? fallbackFile : null;
     }
 
     public boolean hasPrimaryCoverArt() {
@@ -571,9 +623,14 @@ public class Shortcut {
     }
 
     public void setCustomCoverArtPath(String path) {
-        this.customCoverArtPath = path;
-        putExtra("customCoverArtPath", path);
-        saveData();
+        CoverArtState state = coverArtState();
+        synchronized (state.lock) {
+            this.customCoverArtPath = path;
+            putExtra("customCoverArtPath", path);
+            state.version++;
+            coverArtVersion = state.version;
+            saveData();
+        }
         Log.d("Shortcut", "Set and saved custom cover art path: " + path);
     }
 
@@ -679,51 +736,162 @@ public class Shortcut {
     }
 
     public boolean saveCustomCoverArt(Bitmap coverArt) {
-        if (coverArt == null) return false;
-        try {
-            File dir = new File(container.getRootDir(), COVER_ART_DIR);
-            if (!dir.exists() && !dir.mkdirs()) {
-                Log.e("Shortcut", "Failed to create cover art directory: " + dir.getAbsolutePath());
-                return false;
-            }
+        return saveCustomCoverArt(coverArt, getCoverArtVersion());
+    }
 
-            File file = new File(dir, this.name + ".png");
-            if (FileUtils.saveBitmapToFile(coverArt, file)) {
+    public boolean saveCustomCoverArt(Bitmap coverArt, long expectedVersion) {
+        if (coverArt == null) return false;
+        CoverArtState state = coverArtState();
+        synchronized (state.lock) {
+            if (state.version != expectedVersion) return false;
+            try {
+                File dir = new File(container.getRootDir(), COVER_ART_DIR);
+                if (!dir.exists() && !dir.mkdirs()) {
+                    Log.e("Shortcut", "Failed to create cover art directory: " + dir.getAbsolutePath());
+                    return false;
+                }
+
+                File file = new File(dir, this.name + ".png");
+                saveBitmapAtomically(coverArt, file);
                 this.coverArt = coverArt;
-                setCustomCoverArtPath(file.getPath());
+                this.customCoverArtPath = file.getPath();
+                putExtra("customCoverArtPath", file.getPath());
                 putExtra("coverArtSelectionPending", null);
+                state.version++;
+                coverArtVersion = state.version;
                 saveData();
                 Log.d("Shortcut", "Custom cover art saved at: " + file.getPath());
                 return true;
-            } else {
-                Log.e("Shortcut", "Failed to save custom cover art.");
+            } catch (Exception e) {
+                Log.e("Shortcut", "Failed to save custom cover art.", e);
                 return false;
             }
-        } catch (Exception e) {
-            Log.e("Shortcut", "Failed to save custom cover art.", e);
-            return false;
+        }
+    }
+
+    public boolean saveDefaultCoverArtIfNone(Bitmap coverArt) {
+        return saveDefaultCoverArtIfNone(coverArt, getCoverArtVersion());
+    }
+
+    public boolean saveDefaultCoverArtIfNone(Bitmap coverArt, long expectedVersion) {
+        if (coverArt == null) return false;
+        CoverArtState state = coverArtState();
+        synchronized (state.lock) {
+            if (state.version != expectedVersion) return false;
+            if (!getCustomCoverArtPath().isEmpty()
+                    || hasCoverArtSelectionPendingOnDisk()
+                    || hasPrimaryCoverArt()) return false;
+            return saveCustomCoverArt(coverArt, expectedVersion);
+        }
+    }
+
+    public long beginCoverArtSelection() {
+        CoverArtState state = coverArtState();
+        synchronized (state.lock) {
+            state.version++;
+            coverArtVersion = state.version;
+            putExtra("coverArtSelectionPending", "local-selection");
+            saveData();
+            return state.version;
+        }
+    }
+
+    public boolean cancelCoverArtSelection(long expectedVersion) {
+        CoverArtState state = coverArtState();
+        synchronized (state.lock) {
+            if (state.version != expectedVersion) return false;
+            putExtra("coverArtSelectionPending", null);
+            saveData();
+            return true;
+        }
+    }
+
+    public long getCoverArtVersion() {
+        CoverArtState state = coverArtState();
+        synchronized (state.lock) {
+            return state.version;
+        }
+    }
+
+    public void setCoverArtSelectionPending(boolean pending) {
+        CoverArtState state = coverArtState();
+        synchronized (state.lock) {
+            if (pending) putExtra("coverArtSelectionPending", "local-selection");
+            else putExtra("coverArtSelectionPending", null);
+            state.version++;
+            coverArtVersion = state.version;
+            saveData();
+        }
+    }
+
+    private boolean hasCoverArtSelectionPendingOnDisk() {
+        boolean inExtraData = false;
+        for (String line : FileUtils.readLines(file)) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                inExtraData = trimmed.equalsIgnoreCase("[Extra Data]");
+            } else if (inExtraData && trimmed.startsWith("coverArtSelectionPending=")) {
+                return !trimmed.substring("coverArtSelectionPending=".length()).isEmpty();
+            }
+        }
+        return false;
+    }
+
+    private void saveBitmapAtomically(Bitmap bitmap, File destination) throws IOException {
+        File parent = destination.getParentFile();
+        File temporaryFile = File.createTempFile(destination.getName() + ".", ".tmp", parent);
+        try {
+            try (FileOutputStream output = new FileOutputStream(temporaryFile)) {
+                if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                    throw new IOException("Bitmap compression failed.");
+                }
+                output.flush();
+                output.getFD().sync();
+            }
+            try {
+                Files.move(temporaryFile.toPath(), destination.toPath(),
+                        StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temporaryFile.toPath(), destination.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            if (temporaryFile.exists() && !temporaryFile.delete()) {
+                Log.w("Shortcut", "Unable to remove temporary cover art: " + temporaryFile.getPath());
+            }
         }
     }
 
     public void removeCustomCoverArt() {
-        if (customCoverArtPath != null && !customCoverArtPath.isEmpty()) {
-            File file = new File(customCoverArtPath);
-            if (file.exists()) file.delete();
+        CoverArtState state = coverArtState();
+        synchronized (state.lock) {
+            if (customCoverArtPath != null && !customCoverArtPath.isEmpty()) {
+                File file = new File(customCoverArtPath);
+                if (file.exists() && !file.delete()) {
+                    Log.w("Shortcut", "Unable to remove custom cover art: " + file.getPath());
+                }
+            }
+
+            File coverArtFile = new File(new File(container.getRootDir(), COVER_ART_DIR), this.name + ".png");
+            if (coverArtFile.exists() && !coverArtFile.delete()) {
+                Log.w("Shortcut", "Unable to remove cover art: " + coverArtFile.getPath());
+            }
+
+            File fallbackFile = new File(new File(container.getRootDir(), FALLBACK_COVER_ART_DIR), this.name + ".png");
+            if (fallbackFile.exists() && !fallbackFile.delete()) {
+                Log.w("Shortcut", "Unable to remove fallback cover art: " + fallbackFile.getPath());
+            }
+
+            this.customCoverArtPath = null;
+            this.coverArt = null;
+            this.fallbackCoverArt = null;
+            state.version++;
+            coverArtVersion = state.version;
+            putExtra("customCoverArtPath", null);
+            putExtra("steam_id", null);
+            putExtra("community_image", null);
+            saveData();
         }
-
-        File coverArtFile = new File(new File(container.getRootDir(), COVER_ART_DIR), this.name + ".png");
-        if (coverArtFile.exists()) coverArtFile.delete();
-
-        File fallbackFile = new File(new File(container.getRootDir(), FALLBACK_COVER_ART_DIR), this.name + ".png");
-        if (fallbackFile.exists()) fallbackFile.delete();
-
-        this.customCoverArtPath = null;
-        this.coverArt = null;
-        this.fallbackCoverArt = null;
-        putExtra("customCoverArtPath", null);
-        putExtra("steam_id", null);
-        putExtra("community_image", null);
-        saveData();
 
         runBackgroundInitialization();
     }

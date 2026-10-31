@@ -169,6 +169,7 @@ public abstract class AppUtils {
     public static PopupWindow showPopupWindow(View anchor, View contentView, int width, int height) {
         Context context = anchor.getContext();
         PopupWindow popupWindow = new PopupWindow(context);
+        popupWindow.setBackgroundDrawable(context.getDrawable(R.drawable.liquid_glass_popup));
         popupWindow.setElevation(5.0f);
 
         if (width == 0 && height == 0) {

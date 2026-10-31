@@ -56,7 +56,7 @@ public class RadialWheelsDialog {
         dialog.setTitle(profile != null ? "Radial Wheels (" + profile.getName() + ")" : "Radial Wheels (Controller)");
         dialog.setIcon(R.drawable.icon_radial_wheel);
 
-        ThemeManager.applyThemeToView(dialog.getContentView(), context);
+        dialog.applyThemeToContentView(context);
 
         Spinner spWheelSelect = dialog.findViewById(R.id.SPWheelSelect);
         View btAddWheel = dialog.findViewById(R.id.BTAddWheel);

@@ -10,6 +10,7 @@ import android.widget.TextView;
 import com.google.android.material.progressindicator.CircularProgressIndicator;
 import com.winlator.cmod.R;
 import com.winlator.cmod.math.Mathf;
+import com.winlator.cmod.widget.GlassWindowEffects;
 
 public class DownloadProgressDialog {
     private final Activity activity;
@@ -28,15 +29,9 @@ public class DownloadProgressDialog {
         dialog.setContentView(R.layout.download_progress_dialog);
 
         android.view.View bgView = dialog.findViewById(R.id.LLPreloaderBackground);
-        int surfaceColor = com.winlator.cmod.ThemeManager.getSurfaceColor(activity);
         int accentColor = com.winlator.cmod.ThemeManager.getAccentColor(activity);
         int onSurfaceColor = com.winlator.cmod.ThemeManager.getOnSurfaceTextColor(activity);
-
-        android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
-        gd.setColor(surfaceColor);
-        gd.setCornerRadius(UnitUtils.dpToPx(14));
-        gd.setStroke((int)UnitUtils.dpToPx(1), 0x33FFFFFF);
-        bgView.setBackground(gd);
+        bgView.setBackgroundResource(R.drawable.liquid_glass_dialog);
 
         TextView tv = dialog.findViewById(R.id.TextView);
         if (tv != null) tv.setTextColor(onSurfaceColor);
@@ -51,6 +46,7 @@ public class DownloadProgressDialog {
         if (window != null) {
             window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
             window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+            GlassWindowEffects.applyDialogBlur(window, activity);
         }
     }
 

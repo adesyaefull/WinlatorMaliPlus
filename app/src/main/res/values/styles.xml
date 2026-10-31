@@ -7,14 +7,16 @@
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="android:windowBackground">@color/window_background_color</item>
         <item name="android:colorBackground">@color/window_background_color</item>
+        <item name="alertDialogTheme">@style/SimpleGlassAlertDialog</item>
+        <item name="android:alertDialogTheme">@style/SimpleGlassAlertDialog</item>
         <item name="android:textViewStyle">@style/TextView</item>
         <item name="android:checkboxStyle">@style/CheckBox</item>
         <item name="android:listPopupWindowStyle">@style/ListPopupWindow</item>
-        <item name="listPopupWindowStyle">@style/ListPopupWindow</item>
+        <item name="listPopupWindowStyle">@style/AppCompatListPopupWindow</item>
         <item name="android:popupWindowStyle">@style/PopupWindow</item>
         <item name="popupWindowStyle">@style/PopupWindow</item>
         <item name="android:popupMenuStyle">@style/PopupMenu</item>
-        <item name="popupMenuStyle">@style/PopupMenu</item>
+        <item name="popupMenuStyle">@style/AppCompatPopupMenu</item>
 
         <item name="gamingSurfaceColor">#66383D43</item>
         <item name="gamingCardSubtitleColor">#b3000000</item>
@@ -38,14 +40,16 @@
         <item name="colorPrimaryDark">@color/colorPrimaryDarkModeDark</item>
         <item name="android:windowBackground">@color/window_background_color_dark</item>
         <item name="android:colorBackground">@color/window_background_color_dark</item>
+        <item name="alertDialogTheme">@style/SimpleGlassAlertDialog</item>
+        <item name="android:alertDialogTheme">@style/SimpleGlassAlertDialog</item>
         <item name="android:textViewStyle">@style/TextView.Dark</item>
         <item name="android:checkboxStyle">@style/CheckBox.Dark</item>
         <item name="android:listPopupWindowStyle">@style/ListPopupWindow.Dark</item>
-        <item name="listPopupWindowStyle">@style/ListPopupWindow.Dark</item>
+        <item name="listPopupWindowStyle">@style/AppCompatListPopupWindow.Dark</item>
         <item name="android:popupWindowStyle">@style/PopupWindow.Dark</item>
         <item name="popupWindowStyle">@style/PopupWindow.Dark</item>
         <item name="android:popupMenuStyle">@style/PopupMenu.Dark</item>
-        <item name="popupMenuStyle">@style/PopupMenu.Dark</item>
+        <item name="popupMenuStyle">@style/AppCompatPopupMenu.Dark</item>
 
         <item name="gamingSurfaceColor">#66383D43</item>
         <item name="gamingCardSubtitleColor">#b3ffffff</item>
@@ -70,6 +74,37 @@
         <item name="semanticSurfaceVariant">#AA5C4770</item>
         <item name="semanticSurfaceContainer">#B84F3D64</item>
         <item name="semanticDivider">#8CF7EEFF</item>
+    </style>
+
+    <style name="FullLiquidGlassTheme">
+        <item name="alertDialogTheme">@style/FullGlassAlertDialog</item>
+        <item name="android:alertDialogTheme">@style/FullGlassAlertDialog</item>
+    </style>
+
+    <style name="SimpleLiquidGlassTheme">
+        <item name="alertDialogTheme">@style/SimpleGlassAlertDialog</item>
+        <item name="android:alertDialogTheme">@style/SimpleGlassAlertDialog</item>
+    </style>
+
+    <style name="FullGlassAlertDialog" parent="@style/ThemeOverlay.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/liquid_glass_dialog</item>
+        <item name="android:windowBlurBehindEnabled">true</item>
+        <item name="android:windowBlurBehindRadius">28dp</item>
+        <item name="android:backgroundDimAmount">0.16</item>
+    </style>
+
+    <style name="SimpleGlassAlertDialog" parent="@style/ThemeOverlay.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/liquid_glass_dialog</item>
+        <item name="android:windowBlurBehindEnabled">false</item>
+        <item name="android:windowBlurBehindRadius">0dp</item>
+    </style>
+
+    <style name="GlassSpinnerDialog" parent="@style/Theme.AppCompat.Dialog.Alert">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowMinWidthMajor">0%</item>
+        <item name="android:windowMinWidthMinor">0%</item>
     </style>
 
     <!-- Light Theme Fullscreen -->
@@ -107,14 +142,14 @@
         <item name="android:ellipsize">end</item>
         <item name="android:spinnerMode">dropdown</item>
         <item name="android:background">@drawable/combo_box</item>
-        <item name="android:popupBackground">@drawable/content_dialog_background</item>
+        <item name="android:popupBackground">@drawable/liquid_glass_popup</item>
     </style>
 
     <!-- Dark ComboBox Styles -->
     <style name="ComboBox.Dark" parent="ComboBox">
         <item name="android:textColor">#ffffff</item>
         <item name="android:background">@drawable/combo_box_dark</item>
-        <item name="android:popupBackground">@drawable/content_dialog_background_dark</item>
+        <item name="android:popupBackground">@drawable/liquid_glass_popup</item>
     </style>
 
     <style name="MultiSelectionComboBox" parent="ComboBox"/>
@@ -122,30 +157,46 @@
 
     <!-- Popup Styles -->
     <style name="ListPopupWindow" parent="@android:style/Widget.ListPopupWindow">
-        <item name="android:popupBackground">@drawable/content_dialog_background</item>
+        <item name="android:popupBackground">@drawable/liquid_glass_popup</item>
         <item name="android:dropDownHorizontalOffset">-4dp</item>
     </style>
 
 
     <style name="ListPopupWindow.Dark" parent="ListPopupWindow">
-        <item name="android:popupBackground">@drawable/content_dialog_background_dark</item>
+        <item name="android:popupBackground">@drawable/liquid_glass_popup</item>
+    </style>
+
+    <style name="AppCompatListPopupWindow" parent="@style/Widget.AppCompat.ListPopupWindow">
+        <item name="android:popupBackground">@drawable/liquid_glass_popup</item>
+    </style>
+
+    <style name="AppCompatListPopupWindow.Dark" parent="AppCompatListPopupWindow">
+        <item name="android:popupBackground">@drawable/liquid_glass_popup</item>
     </style>
 
     <style name="PopupWindow" parent="@android:style/Widget.PopupWindow">
-        <item name="android:popupBackground">@drawable/content_dialog_background</item>
+        <item name="android:popupBackground">@drawable/liquid_glass_popup</item>
         <item name="android:dropDownHorizontalOffset">-4dp</item>
     </style>
 
     <style name="PopupWindow.Dark" parent="PopupWindow">
-        <item name="android:popupBackground">@drawable/content_dialog_background_dark</item>
+        <item name="android:popupBackground">@drawable/liquid_glass_popup</item>
     </style>
 
     <style name="PopupMenu" parent="@android:style/Widget.PopupMenu">
-        <item name="android:popupBackground">@drawable/content_dialog_background</item>
+        <item name="android:popupBackground">@drawable/liquid_glass_menu</item>
     </style>
 
     <style name="PopupMenu.Dark" parent="PopupMenu">
-        <item name="android:popupBackground">@drawable/content_dialog_background_dark</item>
+        <item name="android:popupBackground">@drawable/liquid_glass_menu</item>
+    </style>
+
+    <style name="AppCompatPopupMenu" parent="@style/Widget.AppCompat.PopupMenu">
+        <item name="android:popupBackground">@drawable/liquid_glass_menu</item>
+    </style>
+
+    <style name="AppCompatPopupMenu.Dark" parent="AppCompatPopupMenu">
+        <item name="android:popupBackground">@drawable/liquid_glass_menu</item>
     </style>
 
     <style name="ContentDialog" parent="@style/Theme.AppCompat.Light.Dialog">
@@ -785,11 +836,11 @@
             <item name="android:textViewStyle">@style/TextView</item>
             <item name="android:checkboxStyle">@style/CheckBox</item>
             <item name="android:listPopupWindowStyle">@style/ListPopupWindow</item>
-            <item name="listPopupWindowStyle">@style/ListPopupWindow</item>
+            <item name="listPopupWindowStyle">@style/AppCompatListPopupWindow</item>
             <item name="android:popupWindowStyle">@style/PopupWindow</item>
             <item name="popupWindowStyle">@style/PopupWindow</item>
             <item name="android:popupMenuStyle">@style/PopupMenu</item>
-            <item name="popupMenuStyle">@style/PopupMenu</item>
+            <item name="popupMenuStyle">@style/AppCompatPopupMenu</item>
         </style>
         <style name="AppThemeFullscreen" parent="@style/AppTheme">
             <item name="android:windowFullscreen">true</item>
@@ -815,7 +866,7 @@
             <item name="android:ellipsize">end</item>
             <item name="android:spinnerMode">dropdown</item>
             <item name="android:background">@drawable/combo_box</item>
-            <item name="android:popupBackground">@drawable/content_dialog_background</item>
+            <item name="android:popupBackground">@drawable/liquid_glass_popup</item>
         </style>
         <style name="MultiSelectionComboBox">
             <item name="android:layout_width">192dp</item>
@@ -836,15 +887,15 @@
             <item name="android:background">@drawable/combo_box</item>
         </style>
         <style name="ListPopupWindow" parent="@android:style/Widget.ListPopupWindow">
-            <item name="android:popupBackground">@drawable/content_dialog_background</item>
+            <item name="android:popupBackground">@drawable/liquid_glass_popup</item>
             <item name="android:dropDownHorizontalOffset">-4dp</item>
         </style>
         <style name="PopupWindow" parent="@android:style/Widget.PopupWindow">
-            <item name="android:popupBackground">@drawable/content_dialog_background</item>
+            <item name="android:popupBackground">@drawable/liquid_glass_popup</item>
             <item name="android:dropDownHorizontalOffset">-4dp</item>
         </style>
         <style name="PopupMenu" parent="@android:style/Widget.PopupMenu">
-            <item name="android:popupBackground">@drawable/content_dialog_background</item>
+            <item name="android:popupBackground">@drawable/liquid_glass_popup</item>
         </style>
         <style name="ContentDialog" parent="@android:style/Theme.Dialog">
             <item name="android:windowNoTitle">true</item>

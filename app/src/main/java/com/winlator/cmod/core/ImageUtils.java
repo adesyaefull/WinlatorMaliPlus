@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.util.Log;
 
 import androidx.annotation.IntRange;
 
@@ -18,13 +19,10 @@ public abstract class ImageUtils {
         final int width = options.outWidth;
         int inSampleSize = 1;
 
-        if (height > reqHeight || width > reqWidth) {
-            final int halfHeight = height / 2;
-            final int halfWidth = width / 2;
-
-            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
-                inSampleSize *= 2;
-            }
+        if (height <= 0 || width <= 0 || reqHeight <= 0 || reqWidth <= 0) return inSampleSize;
+        while (height / inSampleSize > reqHeight || width / inSampleSize > reqWidth) {
+            if (inSampleSize > Integer.MAX_VALUE / 2) break;
+            inSampleSize *= 2;
         }
         return inSampleSize;
     }
@@ -34,39 +32,28 @@ public abstract class ImageUtils {
         final int width = options.outWidth;
         int inSampleSize = 1;
 
-        int reqWidth = width >= height ? maxSize : 0;
-        int reqHeight = height >= width ? maxSize : 0;
-
-        if (height > reqHeight || width > reqWidth) {
-            int halfHeight = height / 2;
-            int halfWidth = width / 2;
-            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
-                inSampleSize *= 2;
-            }
+        if (height <= 0 || width <= 0 || maxSize <= 0) return inSampleSize;
+        while (Math.max(width / inSampleSize, height / inSampleSize) > maxSize) {
+            if (inSampleSize > Integer.MAX_VALUE / 2) break;
+            inSampleSize *= 2;
         }
         return inSampleSize;
     }
 
     public static Bitmap getBitmapFromUri(Context context, Uri uri, BitmapFactory.Options options) {
-        InputStream is = null;
-        Bitmap bitmap = null;
-        try {
-            is = context.getContentResolver().openInputStream(uri);
-            if (options != null) {
-                bitmap = BitmapFactory.decodeStream(is, null, options);
+        if (uri == null) return null;
+        try (InputStream input = context.getContentResolver().openInputStream(uri)) {
+            if (input == null) {
+                Log.e("ImageUtils", "Unable to open image URI: " + uri);
+                return null;
             }
-            else bitmap = BitmapFactory.decodeStream(is);
+            return options != null
+                    ? BitmapFactory.decodeStream(input, null, options)
+                    : BitmapFactory.decodeStream(input);
+        } catch (IOException e) {
+            Log.e("ImageUtils", "Unable to decode image URI: " + uri, e);
+            return null;
         }
-        catch (IOException e) {
-            e.printStackTrace();
-        }
-        finally {
-            try {
-                if (is != null) is.close();
-            }
-            catch (IOException e) {}
-        }
-        return bitmap;
     }
 
     public static Bitmap getBitmapFromUri(Context context, Uri uri) {
@@ -74,27 +61,26 @@ public abstract class ImageUtils {
     }
 
     public static Bitmap getBitmapFromUri(Context context, Uri uri, int maxSize) {
-        InputStream is = null;
+        if (uri == null) return null;
         BitmapFactory.Options options = new BitmapFactory.Options();
-
-        try {
-            is = context.getContentResolver().openInputStream(uri);
-            options.inJustDecodeBounds = true;
-            BitmapFactory.decodeStream(is, null, options);
-            int inSampleSize = calculateInSampleSize(options, maxSize);
-            options.inJustDecodeBounds = false;
-            options.inSampleSize = inSampleSize;
-        }
-        catch (IOException e) {
-            e.printStackTrace();
-        }
-        finally {
-            try {
-                if (is != null) is.close();
+        try (InputStream input = context.getContentResolver().openInputStream(uri)) {
+            if (input == null) {
+                Log.e("ImageUtils", "Unable to open image URI: " + uri);
+                return null;
             }
-            catch (IOException e) {}
+            options.inJustDecodeBounds = true;
+            BitmapFactory.decodeStream(input, null, options);
+        } catch (IOException e) {
+            Log.e("ImageUtils", "Unable to read image bounds: " + uri, e);
+            return null;
         }
 
+        if (options.outWidth <= 0 || options.outHeight <= 0) {
+            Log.e("ImageUtils", "Image has invalid dimensions: " + uri);
+            return null;
+        }
+        options.inSampleSize = calculateInSampleSize(options, maxSize);
+        options.inJustDecodeBounds = false;
         return getBitmapFromUri(context, uri, options);
     }
 

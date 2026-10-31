@@ -51,11 +51,11 @@ public class ContainerManager {
         return isInitialized;
     }
 
-    public ArrayList<Container> getContainers() {
-        return containers;
+    public synchronized ArrayList<Container> getContainers() {
+        return new ArrayList<>(containers);
     }
 
-    public void loadContainers() {
+    public synchronized void loadContainers() {
         containers.clear();
 
         File[] files = homeDir.listFiles();
@@ -212,7 +212,7 @@ public class ContainerManager {
 
     public ArrayList<Shortcut> loadShortcuts() {
         ArrayList<Shortcut> shortcuts = new ArrayList<>();
-        for (Container container : containers) {
+        for (Container container : getContainers()) {
             File desktopDir = container.getDesktopDir();
             ArrayList<File> files = new ArrayList<>();
             if (desktopDir.exists())
@@ -243,7 +243,7 @@ public class ContainerManager {
         while (true) {
             String name = baseName + number;
             boolean exists = false;
-            for (Container c : containers) {
+            for (Container c : getContainers()) {
                 if (c.getName().equalsIgnoreCase(name)) {
                     exists = true;
                     break;
@@ -277,7 +277,7 @@ public class ContainerManager {
     }
 
     public Container getContainerById(int id) {
-        for (Container container : containers) if (container.id == id) return container;
+        for (Container container : getContainers()) if (container.id == id) return container;
         return null;
     }
 
@@ -451,7 +451,7 @@ public class ContainerManager {
 
     public Container getContainerForShortcut(Shortcut shortcut) {
         // Search for the container by its ID
-        for (Container container : containers) {
+        for (Container container : getContainers()) {
             if (container.id == shortcut.getContainerId()) {
                 return container;
             }

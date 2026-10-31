@@ -140,6 +140,22 @@
                                 android:src="@drawable/icon_popup_menu_settings"
                                 android:contentDescription="Customize Colors" />
                         </LinearLayout>
+
+                        <CheckBox
+                            android:id="@+id/CBFullLiquidGlass"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="Enhanced Liquid Glass"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="32dp"
+                            android:text="Adds animated-backdrop blur and shader highlights. Popup blur stays enabled when this is off."
+                            android:textColor="?attr/semanticOnSurfaceVariant"
+                            android:textSize="12sp" />
                     </LinearLayout>
                 </LinearLayout>
 

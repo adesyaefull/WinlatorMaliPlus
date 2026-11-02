@@ -77,7 +77,7 @@ public class GraphicsEnhancementsDialog extends ContentDialog {
         setTitle(R.string.graphics_enhancements);
 
         preferences = PreferenceManager.getDefaultSharedPreferences(activity);
-        isDarkMode = preferences.getBoolean("dark_mode", true);
+        isDarkMode = com.winlator.cmod.ThemeManager.isDarkMode(activity);
 
         XServerView xServerView = activity.getXServerView();
         XServer xServer = activity.getXServer();

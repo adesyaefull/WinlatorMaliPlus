@@ -24,7 +24,9 @@ Highlights in the local integration:
 * An online Bannerlator wrapper catalog with installed-wrapper selection and validation.
 * A live PanVK release browser in Adrenotools GPU Drivers. It refreshes GitHub Releases from three upstream projects, offers only recognized Adrenotools ZIP packages, verifies downloads, and imports them into the existing driver manager.
 * Shortcut library improvements: full-cover portrait/landscape cards, per-game cover-art handling and selection, container-aware `.exe` shortcut creation, and selected-game graphics details.
-* Animated PlayStation-inspired backgrounds and a shared liquid-glass treatment across app and in-game surfaces.
+* A Steam screen with a native Store (live releases, a swipeable three-slide promotion banner, free games, and search), filtered Library, Friends, Profile, Achievements/Badges, and Downloads in a bottom navigation bar; free-game claiming is integrated with Steam and friend chat is opt-in. Steam reconnect replaces failed client connections and checks for recovered Internet access without requiring mobile-data toggles.
+* Steam Library installs use the JavaSteam depot downloader. Shortcuts created from downloaded games launch the selected Windows executable directly with Wine in the chosen container; the official Steam desktop client is not required for this flow. Steam account ownership and each game's DRM requirements still apply.
+* The Steam screen reuses the purple animated PlayStation wave background from the main Winlator screen. Enhanced Liquid Glass blurs only this background; Steam panels and text remain sharp.
 
 **PanVK is experimental.** It may be less smooth or stable than the built-in System driver, and compatibility depends on the device, Mali GPU, and kernel. Review the device notes shown with each release and switch back to System if issues occur. A successful build or ZIP import does not guarantee runtime compatibility.
 

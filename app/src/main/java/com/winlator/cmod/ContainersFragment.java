@@ -116,7 +116,8 @@ public class ContainersFragment extends Fragment {
         if (containers.isEmpty()) {
             emptyTextView.setText("No containers yet\n\nTap + above to create one");
             emptyTextView.setTextSize(16);
-            if (getContext() != null) emptyTextView.setTextColor((ThemeManager.getOnSurfaceTextColor(getContext()) & 0x00FFFFFF) | 0xB3000000);
+            if (getContext() != null) emptyTextView.setTextColor(
+                    ThemeManager.getOnSurfaceTextColor(getContext()));
             emptyTextView.setVisibility(View.VISIBLE);
         }
         else emptyTextView.setVisibility(View.GONE);
@@ -236,11 +237,11 @@ public class ContainersFragment extends Fragment {
                 float density = context.getResources().getDisplayMetrics().density;
                 if (holder.itemView instanceof androidx.cardview.widget.CardView) {
                     ((androidx.cardview.widget.CardView) holder.itemView).setCardBackgroundColor(android.graphics.Color.TRANSPARENT);
-                    holder.itemView.setBackgroundResource(R.drawable.liquid_glass_card);
+                    holder.itemView.setBackground(ThemeManager.createThemedSurfaceDrawable(context, 16));
                 }
                 holder.title.setTextColor(onSurface);
                 holder.imageView.setImageTintList(android.content.res.ColorStateList.valueOf(accent));
-                holder.menuButton.setImageTintList(android.content.res.ColorStateList.valueOf((onSurface & 0x00FFFFFF) | 0xB3000000));
+                holder.menuButton.setImageTintList(android.content.res.ColorStateList.valueOf(onSurface));
 
                 // Run: a round filled accent button, its icon dark or light by the accent's brightness.
                 android.graphics.drawable.GradientDrawable runBg = new android.graphics.drawable.GradientDrawable();
@@ -267,7 +268,7 @@ public class ContainersFragment extends Fragment {
                 String screen = item.getScreenSize();
                 if (screen != null && !screen.isEmpty()) sub += (sub.isEmpty() ? "" : " · ") + screen;
                 holder.subtitle.setText(sub);
-                holder.subtitle.setTextColor((onSurface & 0x00FFFFFF) | 0xA6000000);
+                holder.subtitle.setTextColor(ThemeManager.getSelectedPreset(context).onSurfaceVariant);
             }
 
             holder.runButton.setOnClickListener(view -> runContainer(item)); // Correct item reference

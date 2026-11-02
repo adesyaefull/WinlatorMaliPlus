@@ -55,9 +55,10 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
     @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
-        ThemeManager.applyTheme(this);
+        ThemeManager.applyActivityTheme(this, true);
         AppUtils.hideSystemUI(this);
         setContentView(R.layout.controls_editor_activity);
+        ThemeManager.applyThemeToView(findViewById(android.R.id.content), this);
 
         iconPickerLauncher = registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.GetContent(), uri -> {
             if (uri != null) {
@@ -175,7 +176,7 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
         tvValue.setText("Opacity: " + currentPct + "%");
         tvValue.setTextSize(14);
         tvValue.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        tvValue.setTextColor(getResources().getColor(R.color.colorAccent));
+        tvValue.setTextColor(ThemeManager.getAccentColor(this));
         layout.addView(tvValue);
 
         SeekBar seekBar = new SeekBar(this);
@@ -391,8 +392,8 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
         int dialogHeight = Math.min((int)UnitUtils.dpToPx(480), screenHeight - (int)UnitUtils.dpToPx(32));
 
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-        boolean isDarkMode = preferences.getBoolean("dark_mode", true);
-        int accentColor = getResources().getColor(isDarkMode ? R.color.colorAccentDark : R.color.colorAccent);
+        boolean isDarkMode = ThemeManager.isDarkMode(this);
+        int accentColor = ThemeManager.getAccentColor(this);
 
         InGameControlsEditor.applyThemeToViewHierarchy(view, isDarkMode);
 
@@ -403,7 +404,7 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
         popupWindow.setContentView(view);
         popupWindow.setFocusable(true);
         popupWindow.setOutsideTouchable(true);
-        popupWindow.setBackgroundDrawable(getDrawable(R.drawable.liquid_glass_dialog));
+        popupWindow.setBackgroundDrawable(ThemeManager.createThemedSurfaceDrawable(this, 20));
 
         // Calculate initial spawn position: place on opposite side of screen from the selected element so it NEVER covers the button
         int initialX = (element.getX() > screenWidth / 2) ? (int)UnitUtils.dpToPx(24) : (screenWidth - dialogWidth - (int)UnitUtils.dpToPx(24));
@@ -412,7 +413,7 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
 
         View dragHeader = view.findViewById(R.id.LLDragHeader);
         if (dragHeader != null) {
-            dragHeader.setBackgroundResource(R.drawable.liquid_glass_dialog);
+            dragHeader.setBackground(ThemeManager.createThemedSurfaceDrawable(this, 18));
 
             TextView tvDragTitle = dragHeader.findViewById(R.id.TVDragTitle);
             if (tvDragTitle != null) tvDragTitle.setTextColor(accentColor);
@@ -604,7 +605,7 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
         });
 
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-        boolean isDarkMode = preferences.getBoolean("dark_mode", true);
+        boolean isDarkMode = ThemeManager.isDarkMode(this);
         InGameControlsEditor.applyThemeToViewHierarchy(view, isDarkMode);
 
         container.addView(view);
@@ -650,7 +651,7 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
         clearImageView.setPadding(padding, padding, padding, padding);
         clearImageView.setBackgroundResource(R.drawable.icon_background);
         clearImageView.setImageResource(android.R.drawable.ic_menu_close_clear_cancel);
-        clearImageView.setColorFilter(getResources().getColor(R.color.colorAccent));
+        clearImageView.setColorFilter(ThemeManager.getAccentColor(this));
         clearImageView.setSelected(selectedId == 0);
         clearImageView.setOnClickListener((v) -> {
             for (int i = 0; i < parent.getChildCount(); i++) parent.getChildAt(i).setSelected(false);
@@ -669,7 +670,7 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
         addImageView.setPadding(padding, padding, padding, padding);
         addImageView.setBackgroundResource(R.drawable.icon_background);
         addImageView.setImageResource(R.drawable.icon_add);
-        addImageView.setColorFilter(getResources().getColor(R.color.colorAccent));
+        addImageView.setColorFilter(ThemeManager.getAccentColor(this));
         addImageView.setOnClickListener((v) -> {
             if (iconPickerLauncher != null) {
                 iconPickerLauncher.launch("image/*");
@@ -685,7 +686,7 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
             imageView.setTag(Integer.valueOf(id));
             imageView.setSelected(id == selectedId);
             if (id <= com.winlator.cmod.inputcontrols.CustomIconManager.BUILTIN_ICON_MAX) {
-                imageView.setColorFilter(getResources().getColor(R.color.colorAccent));
+                imageView.setColorFilter(ThemeManager.getAccentColor(this));
             } else {
                 imageView.setColorFilter(null);
             }

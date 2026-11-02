@@ -150,6 +150,7 @@ public class WinlatorHUD extends View {
     private Bitmap glassPanel;
     private int glassPanelW, glassPanelH;
     private boolean glassPanelVertical;
+    private int glassPanelTheme = -1;
 
     private int showMask = SHOW_DEFAULT;
     private float hudAlpha = 1f;
@@ -452,20 +453,33 @@ public class WinlatorHUD extends View {
                     Context ctx = getContext();
                     int surfaceCol = ThemeManager.getSurfaceColor(ctx);
                     int accentCol = ThemeManager.getAccentColor(ctx);
+                    boolean liquidGlass = ThemeManager.isFullLiquidGlassEnabled(ctx);
 
-                    pBg.setColor(Color.argb(220, Color.red(surfaceCol), Color.green(surfaceCol), Color.blue(surfaceCol)));
-                    pBg.setShadowLayer(2f * density, 0, 0.5f * density, Color.argb(140, 0, 0, 0));
+                    pBg.setColor(liquidGlass
+                            ? Color.argb(220, Color.red(surfaceCol), Color.green(surfaceCol), Color.blue(surfaceCol))
+                            : surfaceCol);
+                    if (liquidGlass) {
+                        pBg.setShadowLayer(2f * density, 0, 0.5f * density, Color.argb(80, 0, 0, 0));
+                    }
                     c.drawRoundRect(bgRect, corner, corner, pBg);
                     pBg.clearShadowLayer();
 
                     if ((showMask & SHOW_BORDER) != 0) {
-                        pBorder.setColor(Color.argb(140, Color.red(accentCol), Color.green(accentCol), Color.blue(accentCol)));
+                        pBorder.setColor(liquidGlass
+                                ? Color.argb(170, Color.red(accentCol), Color.green(accentCol), Color.blue(accentCol))
+                                : accentCol);
                         pBorder.setStrokeWidth(1.5f * density);
                         c.drawRoundRect(bgRect, corner, corner, pBorder);
                     }
                 } else {
-                    pBg.setColor(Color.argb(180, 0, 0, 0));
-                    pBg.setShadowLayer(4f, 0, 0, Color.BLACK);
+                    Context ctx = getContext();
+                    int surface = ThemeManager.getSurfaceColor(ctx);
+                    if (ThemeManager.isFullLiquidGlassEnabled(ctx)) {
+                        pBg.setColor(Color.argb(220, Color.red(surface), Color.green(surface), Color.blue(surface)));
+                        pBg.setShadowLayer(2f * density, 0, 0.5f * density, Color.argb(80, 0, 0, 0));
+                    } else {
+                        pBg.setColor(surface);
+                    }
                     c.drawRoundRect(bgRect, corner, corner, pBg);
                     pBg.clearShadowLayer();
 
@@ -483,16 +497,34 @@ public class WinlatorHUD extends View {
     // Inset so its shadow stays inside the view instead of being clipped at the edge.
     private Bitmap getGlassPanel() {
         int w = Math.max(1, getWidth()), h = Math.max(1, getHeight());
-        if (glassPanel == null || glassPanelW != w || glassPanelH != h || glassPanelVertical != vertical) {
+        int themeIndex = ThemeManager.getSelectedPresetIndex(getContext());
+        if (glassPanel == null || glassPanelW != w || glassPanelH != h
+                || glassPanelVertical != vertical || glassPanelTheme != themeIndex) {
             if (glassPanel != null) glassPanel.recycle();
             glassPanel = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
             float inset = 2.5f * density;
             RectF rect = new RectF(inset, inset, w - inset, h - inset);
             float radius = vertical ? 12f * density : rect.height() / 2f;
-            GlassPainter.paint(new Canvas(glassPanel), rect, radius, 0, 255, false, false);
+            Canvas panelCanvas = new Canvas(glassPanel);
+            if (ThemeManager.isFullLiquidGlassEnabled(getContext())) {
+                GlassPainter.paint(panelCanvas, rect, radius, 0, 255, false, false, true,
+                        ThemeManager.getSurfaceColor(getContext()), ThemeManager.getAccentColor(getContext()));
+            } else {
+                Paint surfacePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                surfacePaint.setColor(ThemeManager.getSurfaceColor(getContext()));
+                panelCanvas.drawRoundRect(rect, radius, radius, surfacePaint);
+                if ((showMask & SHOW_BORDER) != 0) {
+                    Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    borderPaint.setColor(ThemeManager.getAccentColor(getContext()));
+                    borderPaint.setStyle(Paint.Style.STROKE);
+                    borderPaint.setStrokeWidth(1.5f * density);
+                    panelCanvas.drawRoundRect(rect, radius, radius, borderPaint);
+                }
+            }
             glassPanelW = w;
             glassPanelH = h;
             glassPanelVertical = vertical;
+            glassPanelTheme = themeIndex;
         }
         return glassPanel;
     }
@@ -524,33 +556,47 @@ public class WinlatorHUD extends View {
     }
 
     private void updatePaintColors(boolean mono) {
+        Context context = getContext();
+        int accent = ThemeManager.getAccentColor(context);
+        int surface = ThemeManager.getSurfaceColor(context);
+        int onSurface = ThemeManager.getOnSurfaceTextColor(context);
+        int onSurfaceVariant = ThemePreset.lerp(onSurface, accent, 0.30f);
+        int divider = ThemeManager.getDividerColor(context);
+        boolean liquidGlass = ThemeManager.isFullLiquidGlassEnabled(context);
+        pTileBg.setColor(liquidGlass
+                ? Color.argb(180, Color.red(surface), Color.green(surface), Color.blue(surface))
+                : surface);
+        pTileBorder.setColor(liquidGlass ? 0x66FFFFFF : divider);
+        pGraphBg.setColor(liquidGlass
+                ? Color.argb(45, Color.red(surface), Color.green(surface), Color.blue(surface))
+                : ThemePreset.lerp(surface, onSurface, 0.12f));
+
         if (currentStyle == STYLE_GLASS) {
-            // Madeira's look: soft white labels, bright white values, colour only where it means something.
             float fps = snapFps;
-            int label = Color.argb(165, 255, 255, 255);
-            int fpsColor = fps >= 55 ? 0xFF7EE787 : (fps >= 25 ? 0xFFFFFFFF : 0xFFFF7B72);
+            int label = ThemePreset.lerp(onSurface, ThemeManager.getSurfaceColor(context), 0.18f);
+            int fpsColor = fps >= 55 ? 0xFF36B66A : (fps >= 25 ? accent : 0xFFD84343);
             pFps.setColor(fpsColor);
-            pGraph.setColor(Color.argb(230, Color.red(fpsColor), Color.green(fpsColor), Color.blue(fpsColor)));
-            pGraphBg.setColor(Color.argb(28, 255, 255, 255));
+            pGraph.setColor(liquidGlass
+                    ? Color.argb(230, Color.red(fpsColor), Color.green(fpsColor), Color.blue(fpsColor))
+                    : fpsColor);
             for (Paint p : new Paint[]{pGpu, pCpu, pBat, pTmp, pRend, pRam}) p.setColor(label);
-            pVal.setColor(0xFFFFFFFF);
-            pSep.setColor(Color.argb(60, 255, 255, 255));
-            pChg.setColor(0xFF7EE787);
+            pVal.setColor(onSurface);
+            pSep.setColor(ThemeManager.getDividerColor(context));
+            pChg.setColor(accent);
             return;
         }
         if (currentStyle == STYLE_ADAPTIVE) {
-            Context ctx = getContext();
-            int accent = ThemeManager.getAccentColor(ctx);
-            int surface = ThemeManager.getSurfaceColor(ctx);
-            int onSurface = ThemeManager.getOnSurfaceTextColor(ctx);
-
             float fps = snapFps;
             int fpsColor = fps >= 55 ? 0xFF00E676 : (fps >= 25 ? accent : 0xFFFF5252);
             pFps.setColor(fpsColor);
             pGraph.setColor(accent);
-            pGraphBg.setColor(Color.argb(70, Color.red(surface), Color.green(surface), Color.blue(surface)));
+            pGraphBg.setColor(liquidGlass
+                    ? Color.argb(70, Color.red(surface), Color.green(surface), Color.blue(surface))
+                    : ThemePreset.lerp(surface, onSurface, 0.12f));
 
-            pBorder.setColor(Color.argb(140, Color.red(accent), Color.green(accent), Color.blue(accent)));
+            pBorder.setColor(liquidGlass
+                    ? Color.argb(170, Color.red(accent), Color.green(accent), Color.blue(accent))
+                    : accent);
             pBorder.setStrokeWidth(1.5f * density);
 
             pRend.setColor(accent);
@@ -559,27 +605,29 @@ public class WinlatorHUD extends View {
             pRam.setColor(ThemePreset.lerp(accent, 0xFF69F0AE, 0.35f));
             pBat.setColor(ThemePreset.lerp(accent, 0xFFFFAB40, 0.40f));
             pTmp.setColor(ThemePreset.lerp(accent, 0xFFFF5252, 0.45f));
-            pSep.setColor(Color.argb(130, Color.red(accent), Color.green(accent), Color.blue(accent)));
-            pChg.setColor(0xFF00E676);
+            pSep.setColor(liquidGlass
+                    ? Color.argb(180, Color.red(accent), Color.green(accent), Color.blue(accent))
+                    : divider);
+            pChg.setColor(accent);
             pVal.setColor(onSurface);
             return;
         }
 
         float fps = snapFps;
-        int fpsColor = mono ? C_WHITE : (fps >= 55 ? C_FPS : (fps >= 25 ? C_REND : C_TEMP));
+        int fpsColor = mono ? onSurface : (fps >= 55 ? C_FPS : (fps >= 25 ? C_REND : C_TEMP));
         pFps.setColor(fpsColor);
         pGraph.setColor(fpsColor);
-        pGpu.setColor(mono ? C_WHITE : C_GPU);
-        pCpu.setColor(mono ? C_WHITE : C_CPU);
-        pBat.setColor(mono ? C_WHITE : C_BATT);
-        pTmp.setColor(mono ? C_WHITE : C_TEMP);
-        pRend.setColor(mono ? C_WHITE : C_REND);
-        pRam.setColor(mono ? C_WHITE : C_RAM);
-        pVal.setColor(C_WHITE);
-        pSep.setColor(C_SEP);
-        pChg.setColor(C_CHG);
-        pBorder.setColor(C_BORDER);
-        pBorder.setStrokeWidth(1.5f);
+        pGpu.setColor(mono ? onSurface : accent);
+        pCpu.setColor(mono ? onSurface : onSurfaceVariant);
+        pBat.setColor(mono ? onSurface : onSurfaceVariant);
+        pTmp.setColor(mono ? onSurface : onSurfaceVariant);
+        pRend.setColor(mono ? onSurface : accent);
+        pRam.setColor(mono ? onSurface : onSurfaceVariant);
+        pVal.setColor(onSurface);
+        pSep.setColor(divider);
+        pChg.setColor(accent);
+        pBorder.setColor(divider);
+        pBorder.setStrokeWidth(1.5f * density);
     }
 
     private void drawClassicHorizontal(Canvas c) {

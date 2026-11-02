@@ -39,23 +39,33 @@
                 android:textColor="?android:attr/textColorPrimary" />
         </LinearLayout>
 
-        <TextView
+        <Button
+            android:id="@+id/BTImportWrapper"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:tag="section_header"
-            android:text="@string/wrapper_catalog_title"
-            android:textStyle="bold"
-            android:textSize="14sp"
-            android:textColor="?attr/colorAccent"
-            android:layout_marginBottom="4dp" />
+            android:text="@string/import_wrapper"
+            android:textAllCaps="false"
+            android:layout_marginBottom="12dp" />
 
         <TextView
+            android:id="@+id/TVWrapperCatalogInstructions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/wrapper_catalog_instructions"
             android:textSize="12sp"
             android:textColor="?android:attr/textColorSecondary"
             android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/BTWrapperCatalogToggle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/wrapper_catalog_title"
+            android:textAllCaps="false"
+            android:layout_marginBottom="4dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground" />
 
         <TextView
             android:id="@+id/TVWrapperCatalogStatus"
@@ -83,15 +93,13 @@
             android:textColor="?attr/colorAccent"
             android:layout_marginBottom="8dp" />
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/RecyclerView"
+        <LinearLayout
+            android:id="@+id/DriverList"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:nestedScrollingEnabled="false"
-            android:scrollbars="vertical"
-            android:clipToPadding="false"
+            android:orientation="vertical"
             android:paddingBottom="16dp"
-            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+            android:descendantFocusability="afterDescendants" />
 
     </LinearLayout>
 </ScrollView>

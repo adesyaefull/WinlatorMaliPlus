@@ -489,7 +489,7 @@ public class LogManagerFragment extends Fragment {
         LinearLayout card = new LinearLayout(requireContext());
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(14), dp(10), dp(14), dp(10));
-        card.setBackgroundResource(R.drawable.liquid_glass_card);
+        card.setBackground(ThemeManager.createThemedSurfaceDrawable(requireContext(), 18));
         card.setElevation(dp(3));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.bottomMargin = dp(6);

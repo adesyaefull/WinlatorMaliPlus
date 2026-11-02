@@ -54,6 +54,12 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name="com.winlator.cmod.store.SteamStoreActivity"
+            android:theme="@style/AppTheme.Dark"
+            android:screenOrientation="user"
+            android:exported="false" />
+
         <!-- Invisible, own task, never in recents: being the USB_DEVICE_ATTACHED target for a
              whitelisted gamepad lets Android auto-grant (and remember) USB permission, with nothing
              shown on screen and no interruption to whatever app is in front. -->
@@ -144,6 +150,11 @@
 
         <service
             android:name=".contents.ContentDownloadService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
+        <service
+            android:name=".store.SteamConnectionService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
     </application>

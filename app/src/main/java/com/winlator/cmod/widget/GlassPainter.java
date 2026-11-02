@@ -38,17 +38,37 @@ public final class GlassPainter {
 
     /** Paints the glass shape into rect. alpha is 0..255; tint 0 means the neutral dark glass. */
     public static void paint(Canvas c, RectF rect, float radius, int tint, float alpha, boolean pressed, boolean selected) {
+        paint(c, rect, radius, tint, alpha, pressed, selected, true, 0, 0);
+    }
+
+    public static void paint(Canvas c, RectF rect, float radius, int tint, float alpha,
+                             boolean pressed, boolean selected, boolean liquidGlass,
+                             int surfaceColor, int accentColor) {
         float w = rect.width(), h = rect.height();
         float cx = rect.centerX(), cy = rect.centerY();
         float min = Math.min(w, h);
         float rim = Math.max(1.5f, min * 0.022f);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         float a = alpha / 255f;
+        if (!liquidGlass) {
+            p.setColor(Color.argb((int) (255 * a * 0.24f), 0, 0, 0));
+            p.setMaskFilter(new BlurMaskFilter(Math.max(1f, min * 0.07f), BlurMaskFilter.Blur.NORMAL));
+            c.drawRoundRect(rect, radius, radius, p);
+            p.setMaskFilter(null);
+            p.setColor(ColorUtils.setAlphaComponent(surfaceColor, (int) (255 * a)));
+            c.drawRoundRect(rect, radius, radius, p);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(selected ? rim * 1.8f : rim);
+            p.setColor(ColorUtils.setAlphaComponent(accentColor,
+                    (int) (255 * a * (pressed ? 0.95f : 0.72f))));
+            c.drawRoundRect(rect, radius, radius, p);
+            return;
+        }
         Path shapePath = new Path();
         shapePath.addRoundRect(rect, radius, radius, Path.Direction.CW);
 
         // Soft shadow under the glass.
-        p.setColor(Color.argb((int) (255 * a * 0.28f), 0, 0, 0));
+        p.setColor(Color.argb((int) (255 * a * 0.12f), 0, 0, 0));
         p.setMaskFilter(new BlurMaskFilter(Math.max(1f, min * 0.07f), BlurMaskFilter.Blur.NORMAL));
         c.save();
         c.translate(0, min * 0.035f);
@@ -61,10 +81,10 @@ public final class GlassPainter {
         c.clipPath(shapePath);
         // A dark base keeps the glass readable over bright scenes, the lens light over dark ones.
         if (tint != 0) {
-            p.setColor(ColorUtils.setAlphaComponent(tint, (int) (255 * a * (pressed ? 0.75f : 0.60f))));
+            p.setColor(ColorUtils.setAlphaComponent(tint, (int) (255 * a * (pressed ? 0.46f : 0.28f))));
             c.drawRect(rect, p);
         } else {
-            p.setColor(Color.argb((int) (255 * a * 0.36f), 20, 22, 28));
+            p.setColor(ColorUtils.setAlphaComponent(surfaceColor, (int) (255 * a * 0.42f)));
             c.drawRect(rect, p);
         }
         float lens = pressed ? 1.45f : 1.0f;

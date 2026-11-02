@@ -55,7 +55,7 @@ public class IconPickerDialog {
         toolbar.setPadding(0, 0, 0, 12);
 
         android.content.SharedPreferences preferences = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context);
-        boolean isDarkMode = preferences.getBoolean("dark_mode", true);
+        boolean isDarkMode = com.winlator.cmod.ThemeManager.isDarkMode(context);
 
         Button btNoIcon = new Button(context);
         btNoIcon.setText("None (Text Only)");

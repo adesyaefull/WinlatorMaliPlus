@@ -28,6 +28,10 @@
                     android:icon="@drawable/ic_package_install"
                     android:title="@string/contents" />
                 <item
+                    android:id="@+id/main_menu_steam"
+                    android:icon="@drawable/ic_steam_custom"
+                    android:title="Steam" />
+                <item
                     android:id="@+id/main_menu_community_configs"
                     android:icon="@drawable/ic_community_configs"
                     android:title="Community Configs" />

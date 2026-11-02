@@ -72,6 +72,8 @@
         android:theme="@style/ThemeOverlay.Winlator.Drawer"
         app:headerLayout="@layout/main_menu_header"
         app:itemBackground="@drawable/navigation_item_background"
+        app:itemIconTint="@color/navigation_item_icon_tint"
+        app:itemTextColor="@color/navigation_item_text_tint"
         app:itemShapeInsetStart="12dp"
         app:itemShapeInsetEnd="12dp"
         app:itemShapeInsetTop="2dp"

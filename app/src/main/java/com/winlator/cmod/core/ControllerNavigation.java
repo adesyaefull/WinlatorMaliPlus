@@ -14,6 +14,7 @@ import android.widget.ScrollView;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.winlator.cmod.ExternalControllerBindingsActivity;
+import com.winlator.cmod.ThemePreset;
 import com.winlator.cmod.ThemeManager;
 import com.winlator.cmod.XServerDisplayActivity;
 
@@ -93,16 +94,19 @@ public final class ControllerNavigation {
     public static void buildHints(android.widget.LinearLayout bar, String[][] hints) {
         Context context = bar.getContext();
         bar.removeAllViews();
+        int accent = ThemeManager.getAccentColor(context);
+        int glyphText = ThemePreset.onAccentFor(accent);
+        int labelText = ThemeManager.getOnSurfaceTextColor(context);
         int size = (int) UnitUtils.dpToPx(22);
         for (String[] hint : hints) {
             android.widget.TextView glyph = new android.widget.TextView(context);
             glyph.setText(hint[0]);
-            glyph.setTextColor(0xFFFFFFFF);
+            glyph.setTextColor(glyphText);
             glyph.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, hint[0].length() > 1 ? 9 : 11);
             glyph.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             glyph.setGravity(android.view.Gravity.CENTER);
             GradientDrawable chip = new GradientDrawable();
-            chip.setColor(android.graphics.Color.parseColor(hint[2]));
+            chip.setColor(accent);
             chip.setCornerRadius(size / 2f);
             glyph.setBackground(chip);
             glyph.setMinWidth(size);
@@ -113,7 +117,7 @@ public final class ControllerNavigation {
 
             android.widget.TextView label = new android.widget.TextView(context);
             label.setText(hint[1]);
-            label.setTextColor(0xDDFFFFFF);
+            label.setTextColor(labelText);
             label.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
             android.widget.LinearLayout.LayoutParams labelParams = new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.WRAP_CONTENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
             labelParams.setMarginStart((int) UnitUtils.dpToPx(5));

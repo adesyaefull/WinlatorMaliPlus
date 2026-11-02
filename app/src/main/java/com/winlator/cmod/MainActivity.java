@@ -74,27 +74,32 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         // Get shared preferences
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-        if (!sharedPreferences.contains(ThemeManager.PREF_FULL_LIQUID_GLASS)) {
-            sharedPreferences.edit()
-                    .putBoolean(ThemeManager.PREF_FULL_LIQUID_GLASS, true)
-                    .apply();
-        }
-
-        isDarkMode = true;
-        setTheme(R.style.AppTheme_Dark);
-        ThemeManager.applyTheme(this);
+        isDarkMode = ThemeManager.isDarkMode(this);
+        ThemeManager.applyActivityTheme(this, false);
+        boolean requireInitialThemeSelection = ThemeManager.isInitialThemeSelectionRequired(this);
 
         applyOrientationSystemUi();
         setContentView(R.layout.main_activity);
         ThemeManager.applyGlassBackdropEffect(this);
         applyOrientationSystemUi();
         androidx.appcompat.widget.Toolbar toolbar = findViewById(R.id.Toolbar);
-        if (toolbar != null) toolbar.setBackgroundResource(R.drawable.shortcut_toolbar_glass);
+        if (toolbar != null) ThemeManager.applyToolbarBackground(toolbar, this);
         com.winlator.cmod.core.ControllerNavigation.attach(getWindow());
         com.winlator.cmod.logs.SessionLog.installCrashHandler(this);
         if (savedInstanceState == null) com.winlator.cmod.logs.SessionLog.autosaveExitReasons(this);
 
         drawerLayout = findViewById(R.id.DrawerLayout);
+        drawerLayout.addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
+            @Override
+            public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {
+                applyDrawerBackdropBlur(slideOffset);
+            }
+
+            @Override
+            public void onDrawerClosed(@NonNull View drawerView) {
+                applyDrawerBackdropBlur(0f);
+            }
+        });
         getSupportFragmentManager().registerFragmentLifecycleCallbacks(
                 new FragmentManager.FragmentLifecycleCallbacks() {
                     @Override
@@ -122,8 +127,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             // keyboard cluster, so a controller could never reach the hamburger or toolbar actions (e.g. +).
             toolbar.setTouchscreenBlocksFocus(false);
             toolbar.setKeyboardNavigationCluster(false);
-            toolbar.setBackgroundResource(R.drawable.shortcut_toolbar_glass);
-            toolbar.setTitleTextColor(isDarkMode ? Color.WHITE : Color.BLACK);
+            ThemeManager.applyToolbarBackground(toolbar, this);
+            toolbar.setTitleTextColor(ThemeManager.getOnSurfaceTextColor(this));
             if (toolbar.getOverflowIcon() != null) {
                 Drawable overflow = toolbar.getOverflowIcon().mutate();
                 overflow.setTint(accentColor);
@@ -132,6 +137,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
 
         applyDrawerStyling(navigationView);
+        MenuItem steamMenuItem = navigationView.getMenu().findItem(R.id.main_menu_steam);
+        if (steamMenuItem != null) {
+            Drawable steamIcon = androidx.appcompat.content.res.AppCompatResources
+                    .getDrawable(this, R.drawable.ic_steam_custom);
+            if (steamIcon != null) {
+                steamIcon = steamIcon.mutate();
+                steamIcon.setTint(accentColor);
+                steamMenuItem.setIcon(steamIcon);
+            }
+        }
 
         // Create Winlator folder if not present
         File winlatorDir = new File(SettingsFragment.DEFAULT_WINLATOR_PATH);
@@ -155,11 +170,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             onNavigationItemSelected(navigationView.getMenu().findItem(menuItemId));
             navigationView.setCheckedItem(menuItemId);
 
-            if (checkStoragePermissions()) {
+            if (!requireInitialThemeSelection && checkStoragePermissions()) {
                 if (!ImageFsInstaller.installIfNeeded(this)) {
                     com.winlator.cmod.contents.WineDownloader.checkFirstLaunchWineSetup(this);
                 }
-            } else {
+            } else if (!requireInitialThemeSelection) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     showAllFilesAccessDialog();
                 } else {
@@ -167,11 +182,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }
             }
 
-            if (Build.VERSION.SDK_INT >= 33) {
-                if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 0);
-                }
-            }
+        }
+
+        if (requireInitialThemeSelection) {
+            getWindow().getDecorView().post(() ->
+                    com.winlator.cmod.contentdialog.ThemeSelectionDialog.show(this, true, this::recreate));
         }
     }
 
@@ -229,6 +244,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                 | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+        if (!isDarkMode) {
+            flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        }
         getWindow().getDecorView().setSystemUiVisibility(flags);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             getWindow().setStatusBarContrastEnforced(false);
@@ -244,6 +263,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (navigationView != null) {
             MenuItem item = navigationView.getMenu().findItem(R.id.main_menu_adrenotools_gpu_drivers);
             if (item != null) item.setVisible(true);
+        }
+        if (ThemeManager.isInitialThemeSelectionRequired(this)) return;
+        if (Build.VERSION.SDK_INT >= 33
+                && ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+                && !sharedPreferences.getBoolean("notification_permission_prompted", false)) {
+            sharedPreferences.edit().putBoolean("notification_permission_prompted", true).apply();
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 0);
+            return;
         }
         if (checkStoragePermissions()) {
             if (!ImageFsInstaller.installIfNeeded(this)) {
@@ -348,9 +376,17 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void updateControllerHints() {
         View bar = findViewById(R.id.HSVControllerHints);
-        if (bar == null) return;
-        boolean connected = com.winlator.cmod.core.ControllerNavigation.isControllerConnected();        if (connected && ((android.view.ViewGroup) findViewById(R.id.LLControllerHints)).getChildCount() == 0) {
-            com.winlator.cmod.core.ControllerNavigation.buildHints(findViewById(R.id.LLControllerHints), new String[][]{
+        View hints = findViewById(R.id.LLControllerHints);
+        if (bar == null || !(hints instanceof android.widget.LinearLayout)) return;
+        boolean connected = com.winlator.cmod.core.ControllerNavigation.isControllerConnected();
+        if (ThemeManager.isFullLiquidGlassEnabled(this)) {
+            bar.setBackground(ThemeManager.createThemedSurfaceDrawable(this, 12));
+        } else {
+            bar.setBackgroundColor(ThemeManager.getSelectedPreset(this).surface);
+        }
+        android.widget.LinearLayout hintLayout = (android.widget.LinearLayout) hints;
+        if (connected) {
+            com.winlator.cmod.core.ControllerNavigation.buildHints(hintLayout, new String[][]{
                 {"A", "Select", "#3DA35D"},
                 {"B", "Back", "#D9453B"},
                 {"X", "Item menu", "#2F6FD6"},
@@ -520,6 +556,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             case R.id.main_menu_contents:
                 show(new ContentsFragment(), false);  // Forward animation
                 break;
+            case R.id.main_menu_steam:
+                com.winlator.cmod.store.SteamConnectionService.start(this);
+                startActivity(new Intent(this, com.winlator.cmod.store.SteamStoreActivity.class));
+                break;
             case R.id.main_menu_community_configs:
                 show(new CommunityConfigsFragment(), false);
                 break;
@@ -612,6 +652,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     "<b>Winlator Mali</b> by <a href=\"https://github.com/GunaCharanTeja\">GunaCharanTeja (Fcharan)</a>",
                     "<b>Winlator Mali+</b> customizations by <a href=\"https://github.com/adesyaefull/WinlatorMaliPlus\">Adesyaefull</a>",
                     "Vulkan renderer and frame-generation references/adaptations: Bannerlator by <a href=\"https://github.com/The412Banner/Bannerlator\">The412Banner</a>",
+                    "Steam integration uses <a href=\"https://github.com/Longi94/JavaSteam\">JavaSteam by Longi94</a>; Steam and its logo are trademarks of <a href=\"https://www.valvesoftware.com\">Valve</a>",
+                    "Bannerlator wrapper catalog metadata and downloads: <a href=\"https://github.com/The412Banner/winlator-contents\">The412Banner / winlator-contents</a>",
                     "<b>Winlator &amp; Gladio</b> by <a href=\"https://github.com/brunodev85\">Bruno (brunodev85)</a>",
                     "Fork of <b>Winlator Bionic</b> by <a href=\"https://github.com/Pipetto-crypto\">Pipetto Cripto</a>",
                     "<b>BCN Layer &amp; Transcode</b> by <a href=\"https://github.com/leegao\">leegao</a>",
@@ -637,6 +679,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     "<b>D8VK &amp; dxwrapper &amp; CNC DDraw:</b> zlib / GPL / MIT",
                     "<b>libadrenotools:</b> GPL v3 (<a href=\"https://github.com/bylaws/libadrenotools\">bylaws</a>)",
                     "<b>ZeroFG Frame Generation:</b> Apache 2.0 / BSD 3-Clause",
+                    "<b>JavaSteam:</b> MIT (<a href=\"https://github.com/Longi94/JavaSteam\">Longi94/JavaSteam</a>)",
+                    "<b>ZXing:</b> Apache 2.0 (<a href=\"https://github.com/zxing/zxing\">zxing</a>)",
                     "<b>Inter Font:</b> SIL Open Font License 1.1",
                     "<b>Android Open Source Project:</b> Apache 2.0"
             );
@@ -656,7 +700,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         int accentColor = ThemeManager.getAccentColor(this);
         int onSurfaceColor = ThemeManager.getOnSurfaceTextColor(this);
 
-        navigationView.setBackgroundResource(R.drawable.navigation_drawer_glass);
+        navigationView.setBackground(ThemeManager.createThemedSurfaceDrawable(this, 20));
+        if (ThemeManager.isFullLiquidGlassEnabled(this)) {
+            navigationView.setElevation(0f);
+            DrawerLayout drawer = findViewById(R.id.DrawerLayout);
+            if (drawer != null) drawer.setDrawerElevation(0f);
+        }
 
         int[][] states = new int[][]{
             new int[]{android.R.attr.state_checked},
@@ -666,11 +715,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // The selected item reads brighter than the rest: its text is the accent lifted towards the normal text color
         // (plain accent on an accent pill was darker than the unselected items), its icon the full accent.
         int checkedIcon = androidx.core.graphics.ColorUtils.blendARGB(accentColor, onSurfaceColor, 0.35f);
-        int normalText = (onSurfaceColor & 0x00FFFFFF) | (0xD9 << 24);
+        boolean liquidGlass = ThemeManager.isFullLiquidGlassEnabled(this);
+        int normalText = liquidGlass
+                ? (onSurfaceColor & 0x00FFFFFF) | (0xD9 << 24)
+                : onSurfaceColor;
         android.content.res.ColorStateList textStateList = new android.content.res.ColorStateList(states,
             new int[]{onSurfaceColor, onSurfaceColor, normalText});
         android.content.res.ColorStateList iconStateList = new android.content.res.ColorStateList(states,
-            new int[]{checkedIcon, checkedIcon, (onSurfaceColor & 0x00FFFFFF) | (0xA8 << 24)});
+            new int[]{checkedIcon, checkedIcon, liquidGlass
+                    ? (onSurfaceColor & 0x00FFFFFF) | (0xA8 << 24) : onSurfaceColor});
         navigationView.setItemTextColor(textStateList);
         navigationView.setItemIconTintList(iconStateList);
 
@@ -708,9 +761,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
 
         // Dynamic theme accent pill highlight
-        int pillAlpha = 0x55; // ~33% alpha
-        int pillColor = (accentColor & 0x00FFFFFF) | (pillAlpha << 24);
-        int rippleColor = (accentColor & 0x00FFFFFF) | (0x33 << 24);
+        int pillColor = liquidGlass
+                ? (accentColor & 0x00FFFFFF) | 0x55000000
+                : androidx.core.graphics.ColorUtils.blendARGB(
+                        ThemeManager.getSurfaceColor(this), accentColor, 0.22f);
+        int rippleColor = liquidGlass
+                ? (accentColor & 0x00FFFFFF) | 0x33000000
+                : androidx.core.graphics.ColorUtils.blendARGB(
+                        ThemeManager.getSurfaceColor(this), accentColor, 0.30f);
 
         android.graphics.drawable.GradientDrawable checkedDrawable = new android.graphics.drawable.GradientDrawable();
         checkedDrawable.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
@@ -724,17 +782,28 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         stateListDrawable.addState(new int[]{android.R.attr.state_checked}, checkedDrawable);
         stateListDrawable.addState(new int[]{}, transparentDrawable);
 
-        // The pill (and its ripple) floats inside the drawer: a custom item background ignores itemShapeInset*.
+        // Keep the drawer's rounded selection while avoiding the glass outlines used in the in-game menu.
         android.graphics.drawable.GradientDrawable rippleMask = new android.graphics.drawable.GradientDrawable();
         rippleMask.setCornerRadius(dpToPx(24));
         rippleMask.setColor(Color.WHITE);
         android.graphics.drawable.RippleDrawable rippleDrawable = new android.graphics.drawable.RippleDrawable(
-            android.content.res.ColorStateList.valueOf(rippleColor),
-            stateListDrawable,
-            rippleMask
-        );
+            android.content.res.ColorStateList.valueOf(rippleColor), stateListDrawable, rippleMask);
         int insetH = (int) dpToPx(12), insetV = (int) dpToPx(2);
         navigationView.setItemBackground(new android.graphics.drawable.InsetDrawable(rippleDrawable, insetH, insetV, insetH, insetV));
+    }
+
+    private void applyDrawerBackdropBlur(float slideOffset) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                || !ThemeManager.isFullLiquidGlassEnabled(this)
+                || drawerLayout == null || drawerLayout.getChildCount() == 0) return;
+        View content = drawerLayout.getChildAt(0);
+        if (slideOffset <= 0f) {
+            content.setRenderEffect(null);
+            return;
+        }
+        float radius = 16f * getResources().getDisplayMetrics().density * slideOffset;
+        content.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(
+                radius, radius, android.graphics.Shader.TileMode.CLAMP));
     }
 
     private float dpToPx(float dp) {

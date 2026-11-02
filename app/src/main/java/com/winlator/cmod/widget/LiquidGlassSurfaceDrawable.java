@@ -8,7 +8,6 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.graphics.RenderEffect;
 import android.graphics.RuntimeShader;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
@@ -29,26 +28,27 @@ public final class LiquidGlassSurfaceDrawable extends Drawable {
             + "uniform float4 accent;\n"
             + "half4 main(float2 p) {\n"
             + "  float2 uv = p / size;\n"
-            + "  float edge = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));\n"
             + "  float2 highlight = (uv - float2(0.24, 0.08)) / float2(0.92, 0.30);\n"
             + "  float broadReflection = exp(-dot(highlight, highlight) * 2.4);\n"
             + "  float lowerReflection = exp(-dot((uv - float2(0.78, 0.96)) * float2(1.5, 3.0),\n"
             + "                                     (uv - float2(0.78, 0.96)) * float2(1.5, 3.0)) * 2.0);\n"
-            + "  float edgeGlow = 1.0 - smoothstep(0.0, 0.075, edge);\n"
-            + "  float rimLine = exp(-abs(edge - 0.035) * 80.0);\n"
-            + "  float reflection = clamp(broadReflection * 0.17 + lowerReflection * 0.045\n"
-            + "                           + edgeGlow * 0.055 + rimLine * 0.12, 0.0, 0.32);\n"
-            + "  float colorShift = edgeGlow * 0.035;\n"
-            + "  half3 body = tint.rgb * 0.30 + half3(0.50) + accent.rgb * half(colorShift * 0.45);\n"
+            + "  float reflection = clamp(broadReflection * 0.17 + lowerReflection * 0.045,\n"
+            + "                           0.0, 0.24);\n"
+            + "  half3 body = tint.rgb * 0.35 + half3(0.25)\n"
+            + "               + accent.rgb * half(broadReflection * 0.015);\n"
             + "  half3 light = half3(reflection * 0.96, reflection, reflection * 1.04);\n"
-            + "  return half4(min(body + light, half3(1.0)), 0.48);\n"
+            + "  return half4(min(body + light, half3(1.0)), 0.10);\n"
             + "}";
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint outlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path clipPath = new Path();
     private final RectF rect = new RectF();
     private final Drawable fallback;
     private final float radiusPx;
+    private final float density;
+    private final int surfaceColor;
     private RuntimeShader shader;
     private int tint;
     private int accent;
@@ -56,15 +56,27 @@ public final class LiquidGlassSurfaceDrawable extends Drawable {
     private ColorFilter colorFilter;
 
     public LiquidGlassSurfaceDrawable(@NonNull Context context, int fallbackResource, float cornerRadiusDp) {
-        float density = context.getResources().getDisplayMetrics().density;
+        density = context.getResources().getDisplayMetrics().density;
         radiusPx = cornerRadiusDp * density;
         fallback = ContextCompat.getDrawable(context, fallbackResource);
         tint = ThemeManager.getBackgroundColor(context);
+        surfaceColor = shaderBaseColor(tint);
         accent = ThemeManager.getAccentColor(context);
+        glowPaint.setStyle(Paint.Style.STROKE);
+        glowPaint.setStrokeWidth(2f * density);
+        outlinePaint.setStyle(Paint.Style.STROKE);
+        outlinePaint.setStrokeWidth(0.6f * density);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && ThemeManager.isFullLiquidGlassEnabled(context)) {
             shader = createSurfaceShader();
         }
+    }
+
+    private static int shaderBaseColor(int color) {
+        return Color.rgb(
+                Math.round(Color.red(color) * 0.35f + 255f * 0.25f),
+                Math.round(Color.green(color) * 0.35f + 255f * 0.25f),
+                Math.round(Color.blue(color) * 0.35f + 255f * 0.25f));
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -81,7 +93,7 @@ public final class LiquidGlassSurfaceDrawable extends Drawable {
         if (shader != null) {
             shader.setFloatUniform("size", Math.max(1f, rect.width()), Math.max(1f, rect.height()));
             shader.setFloatUniform("tint", Color.red(tint) / 255f, Color.green(tint) / 255f,
-                    Color.blue(tint) / 255f, 0.48f);
+                    Color.blue(tint) / 255f, 0.76f);
             shader.setFloatUniform("accent", Color.red(accent) / 255f, Color.green(accent) / 255f,
                     Color.blue(accent) / 255f, 1f);
         }
@@ -100,12 +112,30 @@ public final class LiquidGlassSurfaceDrawable extends Drawable {
 
         paint.setAlpha(alpha);
         paint.setColorFilter(colorFilter);
+        paint.setShader(null);
+        paint.setColor(Color.argb(96, Color.red(surfaceColor),
+                Color.green(surfaceColor), Color.blue(surfaceColor)));
+        canvas.drawRoundRect(rect, radiusPx, radiusPx, paint);
+
         paint.setShader(shader);
         int save = canvas.save();
         canvas.clipPath(clipPath);
         canvas.drawRect(rect, paint);
         canvas.restoreToCount(save);
         paint.setShader(null);
+
+        glowPaint.setColor(Color.WHITE);
+        glowPaint.setAlpha(Math.round(14f * alpha / 255f));
+        glowPaint.setColorFilter(colorFilter);
+        outlinePaint.setColor(Color.WHITE);
+        outlinePaint.setAlpha(Math.round(64f * alpha / 255f));
+        outlinePaint.setColorFilter(colorFilter);
+        float inset = outlinePaint.getStrokeWidth() / 2f;
+        canvas.drawRoundRect(rect, radiusPx, radiusPx, glowPaint);
+        rect.inset(inset, inset);
+        canvas.drawRoundRect(rect, Math.max(0, radiusPx - inset), Math.max(0, radiusPx - inset),
+                outlinePaint);
+        rect.inset(-inset, -inset);
     }
 
     @Override

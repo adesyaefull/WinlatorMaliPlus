@@ -31,7 +31,7 @@ public class DownloadProgressDialog {
         android.view.View bgView = dialog.findViewById(R.id.LLPreloaderBackground);
         int accentColor = com.winlator.cmod.ThemeManager.getAccentColor(activity);
         int onSurfaceColor = com.winlator.cmod.ThemeManager.getOnSurfaceTextColor(activity);
-        bgView.setBackgroundResource(R.drawable.liquid_glass_dialog);
+        bgView.setBackground(com.winlator.cmod.ThemeManager.createThemedSurfaceDrawable(activity, 22));
 
         TextView tv = dialog.findViewById(R.id.TextView);
         if (tv != null) tv.setTextColor(onSurfaceColor);
@@ -46,7 +46,9 @@ public class DownloadProgressDialog {
         if (window != null) {
             window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
             window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
-            GlassWindowEffects.applyDialogBlur(window, activity);
+            if (com.winlator.cmod.ThemeManager.isFullLiquidGlassEnabled(activity)) {
+                GlassWindowEffects.applyDialogBlur(window, activity);
+            }
         }
     }
 

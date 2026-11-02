@@ -139,6 +139,7 @@ public class ShortcutsFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         ThemeManager.applyThemeToView(view, getContext());
+        applyShortcutDetailsTheme(view);
         androidx.appcompat.app.ActionBar actionBar = ((AppCompatActivity)getActivity()).getSupportActionBar();
         if (actionBar != null) {
             actionBar.setTitle(R.string.shortcut_library_title);
@@ -147,8 +148,8 @@ public class ShortcutsFragment extends Fragment {
         if (toolbar == null && getActivity() != null) toolbar = getActivity().findViewById(R.id.Toolbar);
         if (toolbar != null) {
             previousToolbarBackground = toolbar.getBackground();
-            toolbar.setBackgroundResource(R.drawable.shortcut_toolbar_glass);
-            toolbar.setTitleTextColor(Color.WHITE);
+            ThemeManager.applyToolbarBackground(toolbar, getContext());
+            toolbar.setTitleTextColor(ThemeManager.getOnSurfaceTextColor(requireContext()));
         }
 
         recyclerView = view.findViewById(R.id.RecyclerView);
@@ -290,9 +291,27 @@ public class ShortcutsFragment extends Fragment {
 
     private void refreshCarouselLayout() {
         if (recyclerView == null || carouselArea == null || carouselArea.getWidth() == 0) return;
+        resetCarouselItemEffects();
         updateGridLayout();
+        recyclerView.getRecycledViewPool().clear();
         if (adapter != null) adapter.notifyDataSetChanged();
         recyclerView.post(this::centerSelectedShortcut);
+    }
+
+    private void resetCarouselItemEffects() {
+        if (recyclerView == null) return;
+        for (int i = 0; i < recyclerView.getChildCount(); i++) {
+            View child = recyclerView.getChildAt(i);
+            child.setScaleX(1f);
+            child.setScaleY(1f);
+            child.setAlpha(1f);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                RecyclerView.ViewHolder holder = recyclerView.getChildViewHolder(child);
+                View effectTarget = holder instanceof ShortcutsAdapter.ViewHolder
+                        ? ((ShortcutsAdapter.ViewHolder) holder).innerArea : child;
+                effectTarget.setRenderEffect(null);
+            }
+        }
     }
 
     @Override
@@ -332,11 +351,20 @@ public class ShortcutsFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        if (getView() != null) applyShortcutDetailsTheme(getView());
         isLaunchingShortcut = false;
         if (manager != null) manager.loadContainers();
         if (adapter != null) {
             adapter.notifyDataSetChanged();
             loadShortcutsList();
+        }
+    }
+
+    private void applyShortcutDetailsTheme(View root) {
+        View detailsPanel = root.findViewById(R.id.LLShortcutDetails);
+        Context context = getContext();
+        if (detailsPanel != null && context != null) {
+            detailsPanel.setBackground(ThemeManager.createThemedSurfaceDrawable(context, 15));
         }
     }
 
@@ -366,15 +394,13 @@ public class ShortcutsFragment extends Fragment {
         float availableHeightDp = contentHeight > 0
                 ? contentHeight / density
                 : Math.max(160f, screenHeight / density - 112f);
-        float maxCardHeightDp = Math.max(100f, availableHeightDp - 96f);
-        float cardWidthDp = landscape ? maxCardDp : Math.min(maxCardDp, maxCardHeightDp);
+        float cardWidthDp = maxCardDp;
         int sideInsetPx = Math.round(16f * density);
         int cardWidth = Math.max(1, Math.min(Math.round(cardWidthDp * density), contentWidth - sideInsetPx * 2));
         shortcutCardWidthPx = cardWidth;
         float coverHeightDp = landscape
-                ? Math.min(cardWidthDp * 0.95f, Math.max(80f, availableHeightDp - 112f))
-                : Math.min(cardWidthDp, Math.max(120f, availableHeightDp - 170f));
-        coverHeightDp += landscape ? 60f : 83f;
+                ? Math.min(cardWidthDp * 0.95f, Math.max(80f, availableHeightDp - 28f))
+                : 263f;
         shortcutCoverHeightPx = Math.round(coverHeightDp * density);
         int cardSlotWidth = cardWidth + Math.round(16f * density);
         int recyclerWidth = landscape
@@ -386,8 +412,9 @@ public class ShortcutsFragment extends Fragment {
         recyclerView.setLayoutParams(params);
         recyclerView.setTranslationY(0f);
         int centerPadding = Math.max(0, (recyclerWidth - cardSlotWidth) / 2);
-        recyclerView.setPadding(centerPadding, Math.round(16f * density),
-                centerPadding, Math.round(16f * density));
+        int verticalPadding = Math.round((landscape ? 4f : 16f) * density);
+        recyclerView.setPadding(centerPadding, verticalPadding,
+                centerPadding, verticalPadding);
         recyclerView.setClipToPadding(false);
         RecyclerView.LayoutManager lm = recyclerView.getLayoutManager();
         if (lm instanceof LinearLayoutManager
@@ -1361,6 +1388,11 @@ public class ShortcutsFragment extends Fragment {
             }
 
             File coverArtFile = item.getCoverArtFile();
+            int coverWidth = Math.max(1, shortcutCardWidthPx
+                    - holder.cardRoot.getContentPaddingLeft()
+                    - holder.cardRoot.getContentPaddingRight());
+            int coverHeight = Math.max(1, shortcutCoverHeightPx);
+            holder.coverArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
             com.bumptech.glide.RequestBuilder<android.graphics.drawable.Drawable> coverRequest =
                     Glide.with(holder.coverArt).load(
                             coverArtFile != null ? coverArtFile : item.getCoverArt());
@@ -1370,6 +1402,7 @@ public class ShortcutsFragment extends Fragment {
                         + ":" + item.getCoverArtVersion()));
             }
             coverRequest
+                    .override(coverWidth, coverHeight)
                     .placeholder(R.drawable.cover_art_placeholder)
                     .error(R.drawable.cover_art_placeholder)
                     .fallback(R.drawable.cover_art_placeholder)
@@ -1388,7 +1421,9 @@ public class ShortcutsFragment extends Fragment {
                         : Color.argb(60, 255, 255, 255));
                 holder.cardRoot.setCardElevation((selected ? 11f : 7f) * density);
                 holder.cardRoot.setMaxCardElevation(14f * density);
-                holder.playButton.setImageTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
+                android.content.res.ColorStateList playTint = android.content.res.ColorStateList.valueOf(accent);
+                holder.playButton.setImageTintList(playTint);
+                holder.landscapePlayButton.setImageTintList(playTint);
             }
             holder.cardRoot.setAlpha(1f);
             holder.cardRoot.setEnabled(true);
@@ -1776,7 +1811,7 @@ public class ShortcutsFragment extends Fragment {
             editText.setVisibility(View.VISIBLE);
             
             // Apply independent styling to ensure visibility in both light and dark themes
-            boolean isDarkMode = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context).getBoolean("dark_mode", true);
+            boolean isDarkMode = ThemeManager.isDarkMode(context);
             if (isDarkMode) {
                 editText.setTextColor(android.graphics.Color.WHITE);
                 editText.setHintTextColor(android.graphics.Color.GRAY);
@@ -1903,7 +1938,7 @@ public class ShortcutsFragment extends Fragment {
             final android.widget.EditText etTitle = uploadDialog.findViewById(R.id.ETConfigTitle);
             final android.widget.EditText etNotes = uploadDialog.findViewById(R.id.ETConfigNotes);
             
-            boolean isDarkMode = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context).getBoolean("dark_mode", true);
+            boolean isDarkMode = ThemeManager.isDarkMode(context);
             int textColor = isDarkMode ? android.graphics.Color.WHITE : android.graphics.Color.BLACK;
             int hintColor = android.graphics.Color.GRAY;
             int bgRes = isDarkMode ? R.drawable.edit_text_dark : R.drawable.edit_text;

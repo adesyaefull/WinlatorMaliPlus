@@ -54,8 +54,9 @@ public class ExternalControllerBindingsActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        ThemeManager.applyTheme(this);
+        ThemeManager.applyActivityTheme(this, false);
         setContentView(R.layout.external_controller_bindings_activity);
+        ThemeManager.applyThemeToView(findViewById(android.R.id.content), this);
 
         Intent intent = getIntent();
         int profileId = intent.getIntExtra("profile_id", 0);

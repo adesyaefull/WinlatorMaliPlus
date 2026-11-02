@@ -80,7 +80,7 @@
                         android:id="@+id/TVTheme"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Theme &amp; Colors"
+                        android:text="Appearance"
                         android:textStyle="bold"
                         android:textSize="14sp"
                         android:textColor="?attr/colorAccent"
@@ -90,72 +90,33 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
                         android:padding="14dp"
                         android:orientation="vertical"
                         android:layout_marginBottom="16dp">
 
-                        <LinearLayout
-                            android:id="@+id/LLThemePreset"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="Active Color Palette"
-                                android:textStyle="bold"
-                                android:textSize="13sp"
-                                android:textColor="?android:attr/textColorSecondary"
-                                android:layout_marginBottom="6dp" />
-
-                            <Spinner
-                                android:id="@+id/SThemePreset"
-                                style="@style/ComboBox"
-                                android:layout_width="match_parent"
-                                android:layout_height="42dp"
-                                android:spinnerMode="dropdown" />
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:id="@+id/LLCustomTheme"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="Custom Palette Editor"
-                                android:textSize="14sp" />
-
-                            <ImageButton
-                                android:id="@+id/BTCustomizeTheme"
-                                style="@style/ToolButton"
-                                android:layout_width="40dp"
-                                android:layout_height="40dp"
-                                android:src="@drawable/icon_popup_menu_settings"
-                                android:contentDescription="Customize Colors" />
-                        </LinearLayout>
-
-                        <CheckBox
-                            android:id="@+id/CBFullLiquidGlass"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="10dp"
-                            android:text="Enhanced Liquid Glass"
-                            android:textSize="14sp" />
-
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="32dp"
-                            android:text="Adds animated-backdrop blur and shader highlights. Popup blur stays enabled when this is off."
+                            android:text="Choose the appearance used across the app, dialogs, and in-game HUD."
                             android:textColor="?attr/semanticOnSurfaceVariant"
-                            android:textSize="12sp" />
+                            android:textSize="13sp"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:id="@+id/BTSelectAppTheme"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/theme_option_background"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center_vertical"
+                            android:minHeight="58dp"
+                            android:paddingStart="16dp"
+                            android:paddingEnd="16dp"
+                            android:textColor="?attr/semanticOnSurface"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
                     </LinearLayout>
                 </LinearLayout>
 
@@ -184,6 +145,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
                         android:padding="14dp"
                         android:orientation="vertical"
                         android:layout_marginBottom="16dp">
@@ -264,6 +226,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
                         android:padding="14dp"
                         android:orientation="vertical"
                         android:layout_marginBottom="16dp">
@@ -354,6 +317,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
                         android:padding="14dp"
                         android:orientation="vertical"
                         android:layout_marginBottom="16dp">
@@ -452,6 +416,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
                         android:padding="14dp"
                         android:orientation="vertical"
                         android:layout_marginBottom="16dp">
@@ -539,6 +504,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
                         android:padding="14dp"
                         android:orientation="vertical"
                         android:layout_marginBottom="16dp">
@@ -588,6 +554,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
                         android:padding="14dp"
                         android:orientation="vertical"
                         android:layout_marginBottom="16dp">
@@ -682,6 +649,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
                         android:padding="14dp"
                         android:orientation="vertical"
                         android:layout_marginBottom="16dp">
@@ -827,6 +795,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
                         android:padding="14dp"
                         android:orientation="vertical"
                         android:layout_marginBottom="16dp">
@@ -877,6 +846,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
                         android:padding="14dp"
                         android:orientation="vertical"
                         android:layout_marginBottom="16dp">
@@ -936,6 +906,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
                         android:padding="14dp"
                         android:orientation="vertical"
                         android:layout_marginBottom="16dp">
@@ -998,6 +969,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
                         android:padding="14dp"
                         android:orientation="vertical"
                         android:layout_marginBottom="16dp"

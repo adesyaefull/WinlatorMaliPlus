@@ -22,6 +22,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.winlator.cmod.R;
+import com.winlator.cmod.ThemeManager;
 
 public final class GlassSpinnerPopup {
     private GlassSpinnerPopup() {}
@@ -54,7 +55,7 @@ public final class GlassSpinnerPopup {
         Context context = spinner.getContext();
         Dialog dialog = new Dialog(context, R.style.GlassSpinnerDialog);
         FrameLayout surface = new FrameLayout(context);
-        surface.setBackgroundResource(R.drawable.liquid_glass_popup);
+        surface.setBackground(ThemeManager.createThemedSurfaceDrawable(context, 22));
 
         ListView list = new ListView(context);
         list.setAdapter(new DropDownAdapter(source));
@@ -87,6 +88,9 @@ public final class GlassSpinnerPopup {
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            if (ThemeManager.isFullLiquidGlassEnabled(context)) {
+                window.setElevation(0f);
+            }
             WindowManager.LayoutParams attributes = window.getAttributes();
             attributes.gravity = Gravity.CENTER;
             attributes.width = width;
@@ -97,7 +101,10 @@ public final class GlassSpinnerPopup {
         dialog.show();
         if (window != null) {
             window.setLayout(width, height);
-            GlassWindowEffects.applyDialogBlur(window, context);
+            if (ThemeManager.isFullLiquidGlassEnabled(context)) {
+                window.setElevation(0f);
+                GlassWindowEffects.applyDialogBlur(window, context);
+            }
         }
     }
 

@@ -2,7 +2,6 @@ package com.winlator.cmod.contentdialog;
 
 import android.app.Dialog;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.text.Html;
 import android.util.SparseBooleanArray;
@@ -17,7 +16,6 @@ import android.widget.ListView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-import androidx.preference.PreferenceManager;
 
 import com.winlator.cmod.R;
 import com.winlator.cmod.core.AppUtils;
@@ -44,7 +42,9 @@ public class ContentDialog extends Dialog {
     @Override
     protected void onStart() {
         super.onStart();
-        com.winlator.cmod.widget.GlassWindowEffects.applyDialogBlur(getWindow(), getContext());
+        if (com.winlator.cmod.ThemeManager.isFullLiquidGlassEnabled(getContext())) {
+            com.winlator.cmod.widget.GlassWindowEffects.applyDialogBlur(getWindow(), getContext());
+        }
         if (controllerNavigation && !controllerHighlightAttached) {
             controllerHighlightAttached = true;
             com.winlator.cmod.core.ControllerNavigation.attach(getWindow());
@@ -85,7 +85,8 @@ public class ContentDialog extends Dialog {
         }
 
         com.winlator.cmod.ThemeManager.applyThemeToView(contentView, context);
-        contentView.setBackgroundResource(R.drawable.liquid_glass_dialog);
+        contentView.setBackground(com.winlator.cmod.ThemeManager
+                .createThemedSurfaceDrawable(context, 22));
 
         View confirmButton = contentView.findViewById(R.id.BTConfirm);
         confirmButton.setOnClickListener((v) -> {
@@ -102,6 +103,9 @@ public class ContentDialog extends Dialog {
         setContentView(contentView);
         if (getWindow() != null) {
             getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            if (com.winlator.cmod.ThemeManager.isFullLiquidGlassEnabled(context)) {
+                getWindow().setElevation(0f);
+            }
         }
     }
 
@@ -115,7 +119,8 @@ public class ContentDialog extends Dialog {
 
     public void applyThemeToContentView(Context context) {
         com.winlator.cmod.ThemeManager.applyThemeToView(contentView, context);
-        contentView.setBackgroundResource(R.drawable.liquid_glass_dialog);
+        contentView.setBackground(com.winlator.cmod.ThemeManager
+                .createThemedSurfaceDrawable(context, 22));
     }
 
     public void setOnConfirmCallback(Runnable onConfirmCallback) {
@@ -226,8 +231,7 @@ public class ContentDialog extends Dialog {
 
         final EditText editText = dialog.findViewById(R.id.EditText);
 
-        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
-        boolean isDarkMode = sharedPreferences.getBoolean("dark_mode", true);
+        boolean isDarkMode = com.winlator.cmod.ThemeManager.isDarkMode(context);
         applyThemeToEditText(editText, isDarkMode);
 
         editText.setHint(R.string.untitled);

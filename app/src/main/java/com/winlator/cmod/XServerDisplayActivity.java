@@ -8,11 +8,15 @@ import android.app.Activity;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.ServiceConnection;
 import android.content.ComponentName;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.content.pm.ActivityInfo;
@@ -26,6 +30,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.system.ErrnoException;
+import android.system.Os;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
@@ -42,6 +48,7 @@ import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.Locale;
 
@@ -71,6 +78,7 @@ import com.winlator.cmod.contentdialog.WineD3DConfigDialog;
 import com.winlator.cmod.contents.ContentProfile;
 import com.winlator.cmod.contents.ContentsManager;
 import com.winlator.cmod.contents.AdrenotoolsManager;
+import com.winlator.cmod.store.SteamConnectionService;
 import com.winlator.cmod.core.AppUtils;
 import com.winlator.cmod.core.DefaultVersion;
 import com.winlator.cmod.core.EnvVars;
@@ -143,6 +151,11 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -169,6 +182,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     private HudDataSource hudDataSource = null;
     private Runnable editInputControlsCallback;
     private Shortcut shortcut;
+    private String steamClientWindowsDir;
+    private String steamGameWindowsPath;
+    private String steamSpecWindowsPath;
     private String graphicsDriver = Container.DEFAULT_GRAPHICS_DRIVER;
     private HashMap<String, String> graphicsDriverConfig;
     private String audioDriver = Container.DEFAULT_AUDIO_DRIVER;
@@ -230,6 +246,10 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     private Handler  timeoutHandler = new Handler(Looper.getMainLooper());
     private Runnable hideControlsRunnable;
+    private final Handler steamMessageHandler = new Handler(Looper.getMainLooper());
+    private BroadcastReceiver steamMessageReceiver;
+    private TextView steamMessageOverlay;
+    private Runnable hideSteamMessageOverlay;
 
     private boolean isDarkMode;
 
@@ -325,11 +345,11 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        isDarkMode = true;
-        setTheme(R.style.AppThemeFullscreen_Dark);
-        ThemeManager.applyTheme(this);
+        isDarkMode = ThemeManager.isDarkMode(getApplicationContext());
+        setTheme(isDarkMode ? R.style.AppThemeFullscreen_Dark : R.style.AppThemeFullscreen);
 
         super.onCreate(savedInstanceState);
+        ThemeManager.applyTheme(this);
         com.winlator.cmod.logs.SessionLog.installCrashHandler(this);
         com.winlator.cmod.core.ProcessHelper.killAllWineProcesses();
         AppUtils.hideSystemUI(this);
@@ -353,13 +373,14 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
         
         setContentView(R.layout.xserver_display_activity);
+        registerSteamMessageReceiver();
 
         preloaderDialog = new PreloaderDialog(this);
 
         cursorLock = preferences.getBoolean("cursor_lock", true);
 
         // Check for Dark Mode
-        isDarkMode = preferences.getBoolean("dark_mode", true);
+        isDarkMode = ThemeManager.isDarkMode(this);
 
         boolean isOpenWithAndroidBrowser = preferences.getBoolean("open_with_android_browser", false);
         boolean isShareAndroidClipboard = preferences.getBoolean("share_android_clipboard", false);
@@ -429,8 +450,14 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         if (navigationView != null) {
             int accent = ThemeManager.getAccentColor(this);
             navigationView.setItemIconTintList(android.content.res.ColorStateList.valueOf(accent));
-            navigationView.setItemTextColor(ContextCompat.getColorStateList(this, R.color.white));
-            navigationView.setBackgroundResource(R.drawable.content_dialog_background_dark);
+            navigationView.setItemTextColor(android.content.res.ColorStateList.valueOf(
+                    ThemeManager.getOnSurfaceTextColor(this)));
+            navigationView.setBackground(ThemeManager.createThemedSurfaceDrawable(this, 22));
+            if (ThemeManager.isFullLiquidGlassEnabled(this)) {
+                navigationView.setElevation(0f);
+                drawerLayout.setDrawerElevation(0f);
+            }
+            navigationView.setItemBackground(ThemeManager.createThemedNavigationItemBackground(this));
         }
 
         boolean enableLogs = com.winlator.cmod.logs.LogFiles.isOn(this, "enable_wine_debug") || com.winlator.cmod.logs.LogFiles.isOn(this, "enable_box64_logs");
@@ -525,7 +552,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         if (shortcutPath != null && !shortcutPath.isEmpty()) {
             shortcut = new Shortcut(container, new File(shortcutPath));
         }
-
 
         taskAffinityMask = (short) ProcessHelper.getAffinityMask(container.getCPUList(true));
         taskAffinityMaskWoW64 = (short) ProcessHelper.getAffinityMask(container.getCPUListWoW64(true));
@@ -994,6 +1020,16 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     protected void onDestroy() {
+        steamMessageHandler.removeCallbacksAndMessages(null);
+        if (steamMessageReceiver != null) {
+            unregisterReceiver(steamMessageReceiver);
+            steamMessageReceiver = null;
+        }
+        if (steamMessageOverlay != null
+                && steamMessageOverlay.getParent() instanceof ViewGroup) {
+            ((ViewGroup) steamMessageOverlay.getParent()).removeView(steamMessageOverlay);
+            steamMessageOverlay = null;
+        }
         // Log Manager: close this session's log and dump the app's logcat next to it.
         com.winlator.cmod.logs.SessionLog.stop(this, true);
         if (usbRumbleClaimed) {
@@ -1015,6 +1051,68 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             stopService(new Intent(this, EmulationService.class));
         }
         super.onDestroy();
+    }
+
+    private void registerSteamMessageReceiver() {
+        steamMessageReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                showSteamMessageOverlay(
+                        intent.getStringExtra(SteamConnectionService.EXTRA_CHAT_SENDER_NAME),
+                        intent.getStringExtra(SteamConnectionService.EXTRA_CHAT_MESSAGE));
+            }
+        };
+        IntentFilter filter = new IntentFilter(
+                SteamConnectionService.ACTION_IN_GAME_FRIEND_MESSAGE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(steamMessageReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(steamMessageReceiver, filter);
+        }
+    }
+
+    private void showSteamMessageOverlay(String sender, String message) {
+        FrameLayout root = findViewById(R.id.FLXServerDisplay);
+        if (root == null || message == null || message.trim().isEmpty()) return;
+        if (steamMessageOverlay != null && steamMessageOverlay.getParent() instanceof ViewGroup) {
+            ((ViewGroup) steamMessageOverlay.getParent()).removeView(steamMessageOverlay);
+        }
+
+        TextView overlay = new TextView(this);
+        overlay.setText((sender == null || sender.trim().isEmpty() ? "Steam friend" : sender)
+                + "\n" + message.trim());
+        overlay.setTextColor(ThemeManager.getOnSurfaceTextColor(this));
+        overlay.setTextSize(15);
+        overlay.setMaxLines(4);
+        overlay.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        overlay.setPadding(dp(16), dp(12), dp(16), dp(12));
+        overlay.setBackground(ThemeManager.createThemedSurfaceDrawable(this, 18));
+        overlay.setElevation(dp(18));
+        overlay.setClickable(false);
+        overlay.setFocusable(false);
+
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.TOP | android.view.Gravity.CENTER_HORIZONTAL);
+        params.setMargins(dp(14), dp(24), dp(14), 0);
+        root.addView(overlay, params);
+        overlay.bringToFront();
+        steamMessageOverlay = overlay;
+        if (hideSteamMessageOverlay != null) {
+            steamMessageHandler.removeCallbacks(hideSteamMessageOverlay);
+        }
+        hideSteamMessageOverlay = () -> {
+            if (steamMessageOverlay == overlay && overlay.getParent() == root) {
+                root.removeView(overlay);
+                steamMessageOverlay = null;
+            }
+            hideSteamMessageOverlay = null;
+        };
+        steamMessageHandler.postDelayed(hideSteamMessageOverlay, 5_000L);
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     @Override
@@ -2932,6 +3030,95 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         return command;
     }
 
+    private void stageSteamSessionLauncher() throws IOException {
+        File steamExe = findOfficialSteamClient();
+        if (steamExe == null) throw new IOException("Official Steam client is not installed.");
+        if (steamClientWindowsDir == null) {
+            throw new IOException("Steam client directory could not be resolved.");
+        }
+        if (steamGameWindowsPath.indexOf('\n') >= 0 || steamGameWindowsPath.indexOf('\r') >= 0) {
+            throw new IOException("Steam game path contains an invalid line break.");
+        }
+        File steamDirectory = steamExe.getParentFile().getCanonicalFile();
+        File expectedDirectory = new File(container.getRootDir(),
+                ".wine/drive_c/Program Files (x86)/Steam").getCanonicalFile();
+        if (!steamDirectory.equals(expectedDirectory)) {
+            throw new IOException("The session bridge currently requires Steam in "
+                    + "C:\\Program Files (x86)\\Steam.");
+        }
+        if (!"C:\\Program Files (x86)\\Steam".equalsIgnoreCase(steamClientWindowsDir)) {
+            throw new IOException("Steam client directory could not be resolved.");
+        }
+        File steamClientDll = new File(steamDirectory, "steamclient64.dll");
+        if (!steamClientDll.isFile()) {
+            throw new IOException("Steam client files are incomplete. Open Steam once, "
+                    + "let it update, and retry.");
+        }
+
+        int appId = getSteamShortcutAppId();
+        String specName = "winlator-game-" + appId + ".spec";
+        File spec = new File(steamDirectory, specName);
+        File temporarySpec = new File(steamDirectory, specName + ".tmp");
+        try {
+            try (FileOutputStream output = new FileOutputStream(temporarySpec);
+                 OutputStreamWriter writer = new OutputStreamWriter(
+                         output, StandardCharsets.UTF_8)) {
+                writer.write(steamGameWindowsPath);
+                writer.write('\n');
+                writer.write(Integer.toString(appId));
+                writer.write('\n');
+                writer.flush();
+                output.getFD().sync();
+            }
+            Files.move(temporarySpec.toPath(), spec.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            if (temporarySpec.exists() && !temporarySpec.delete()) {
+                Log.w("XServerDisplayActivity", "Could not remove Steam game spec staging file.");
+            }
+        }
+        steamSpecWindowsPath = steamClientWindowsDir + "\\" + specName;
+    }
+
+    private int getSteamShortcutAppId() {
+        if (shortcut == null) return 0;
+        String appIdValue = shortcut.getExtra("steamAppId", shortcut.getSteamId());
+        try {
+            int appId = Integer.parseInt(appIdValue);
+            return appId > 0 ? appId : 0;
+        } catch (NumberFormatException e) {
+            Log.w("XServerDisplayActivity", "Steam shortcut has an invalid app ID", e);
+            return 0;
+        }
+    }
+
+    private boolean hasOfficialSteamClient() throws IOException {
+        File steamExe = findOfficialSteamClient();
+        if (steamExe == null) return false;
+        File driveC = new File(container.getRootDir(), ".wine/drive_c").getCanonicalFile();
+        String driveCPath = driveC.getPath() + File.separator;
+        String steamDirectoryPath = steamExe.getParentFile().getCanonicalPath();
+        if (!steamDirectoryPath.startsWith(driveCPath)) return false;
+        steamClientWindowsDir = "C:\\" + steamDirectoryPath.substring(driveCPath.length())
+                .replace(File.separatorChar, '\\');
+        return true;
+    }
+
+    private File findOfficialSteamClient() throws IOException {
+        File driveC = new File(container.getRootDir(), ".wine/drive_c").getCanonicalFile();
+        String driveCPath = driveC.getPath() + File.separator;
+        File[] candidates = {
+                new File(driveC, "Program Files (x86)/Steam/steam.exe"),
+                new File(driveC, "Program Files/Steam/steam.exe")
+        };
+        for (File candidate : candidates) {
+            File canonicalCandidate = candidate.getCanonicalFile();
+            if (canonicalCandidate.getPath().startsWith(driveCPath)
+                    && canonicalCandidate.isFile()) return canonicalCandidate;
+        }
+        return null;
+    }
+
     private String getExecutable() {
         String filename = "";
         if (shortcut != null) {
@@ -3309,7 +3496,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 
     private static ArrayAdapter<String> createThemedSpinnerAdapter(android.content.Context context, java.util.List<String> items, boolean isDarkMode) {
-        int itemTextColor = isDarkMode ? android.graphics.Color.WHITE : android.graphics.Color.BLACK;
+        int itemTextColor = ThemeManager.getOnSurfaceTextColor(context);
         return new ArrayAdapter<String>(context, android.R.layout.simple_spinner_dropdown_item, items) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {

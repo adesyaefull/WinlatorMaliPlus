@@ -404,7 +404,7 @@ public final class InGameControlsEditor implements View.OnClickListener {
         int dialogHeight = Math.min((int) UnitUtils.dpToPx(480), screenHeight - (int) UnitUtils.dpToPx(32));
 
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
-        boolean isDarkMode = preferences.getBoolean("dark_mode", true);
+        boolean isDarkMode = ThemeManager.isDarkMode(activity);
         int accentColor = activity.getResources().getColor(isDarkMode ? R.color.colorAccentDark : R.color.colorAccent);
 
         applyThemeToViewHierarchy(view, isDarkMode);
@@ -416,7 +416,7 @@ public final class InGameControlsEditor implements View.OnClickListener {
         popupWindow.setContentView(view);
         popupWindow.setFocusable(true);
         popupWindow.setOutsideTouchable(true);
-        popupWindow.setBackgroundDrawable(activity.getDrawable(R.drawable.liquid_glass_dialog));
+        popupWindow.setBackgroundDrawable(ThemeManager.createThemedSurfaceDrawable(activity, 20));
 
         int initialX = (element.getX() > screenWidth / 2) ? (int) UnitUtils.dpToPx(24) : (screenWidth - dialogWidth - (int) UnitUtils.dpToPx(24));
         int initialY = (int) UnitUtils.dpToPx(36);
@@ -424,7 +424,7 @@ public final class InGameControlsEditor implements View.OnClickListener {
 
         View dragHeader = view.findViewById(R.id.LLDragHeader);
         if (dragHeader != null) {
-            dragHeader.setBackgroundResource(R.drawable.liquid_glass_dialog);
+            dragHeader.setBackground(ThemeManager.createThemedSurfaceDrawable(activity, 18));
 
             TextView tvDragTitle = dragHeader.findViewById(R.id.TVDragTitle);
             if (tvDragTitle != null) tvDragTitle.setTextColor(accentColor);
@@ -750,7 +750,7 @@ public final class InGameControlsEditor implements View.OnClickListener {
         });
 
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
-        boolean isDarkMode = preferences.getBoolean("dark_mode", true);
+        boolean isDarkMode = ThemeManager.isDarkMode(activity);
         applyThemeToViewHierarchy(view, isDarkMode);
 
         container.addView(view);
@@ -758,9 +758,9 @@ public final class InGameControlsEditor implements View.OnClickListener {
 
     public static void applyThemeToViewHierarchy(View view, boolean isDarkMode) {
         if (view == null) return;
-        int textColor = isDarkMode ? 0xFFECEFF1 : 0xFF212121;
-        int hintColor = isDarkMode ? 0xFF78909C : 0xFF9E9E9E;
-        int accentColor = isDarkMode ? 0xFF00E5FF : 0xFF0284C7;
+        int textColor = ThemeManager.getOnSurfaceTextColor(view.getContext());
+        int hintColor = ThemeManager.getSelectedPreset(view.getContext()).onSurfaceVariant;
+        int accentColor = ThemeManager.getAccentColor(view.getContext());
 
         if (view instanceof TextView && !(view instanceof Button) && !(view instanceof CheckBox) && !(view instanceof RadioButton) && !(view instanceof EditText)) {
             TextView tv = (TextView) view;

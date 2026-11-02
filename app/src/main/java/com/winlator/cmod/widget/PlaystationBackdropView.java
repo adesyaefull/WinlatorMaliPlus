@@ -20,11 +20,12 @@ public class PlaystationBackdropView extends View {
     private final float density;
     private long startTime;
     private boolean attached;
+    private boolean animationEnabled = true;
 
     private final Runnable animationFrame = new Runnable() {
         @Override
         public void run() {
-            if (attached && getVisibility() == VISIBLE) {
+            if (attached && animationEnabled && getVisibility() == VISIBLE) {
                 invalidate();
                 postDelayed(this, FRAME_DELAY_MS);
             }
@@ -39,6 +40,16 @@ public class PlaystationBackdropView extends View {
         super(context, attrs);
         density = getResources().getDisplayMetrics().density;
         setLayerType(View.LAYER_TYPE_HARDWARE, null);
+    }
+
+    public void setAnimationEnabled(boolean enabled) {
+        if (animationEnabled == enabled) return;
+        animationEnabled = enabled;
+        removeCallbacks(animationFrame);
+        if (enabled && attached) {
+            startTime = SystemClock.uptimeMillis();
+            post(animationFrame);
+        }
     }
 
     @Override
@@ -99,7 +110,7 @@ public class PlaystationBackdropView extends View {
         attached = true;
         startTime = SystemClock.uptimeMillis();
         removeCallbacks(animationFrame);
-        post(animationFrame);
+        if (animationEnabled) post(animationFrame);
     }
 
     @Override

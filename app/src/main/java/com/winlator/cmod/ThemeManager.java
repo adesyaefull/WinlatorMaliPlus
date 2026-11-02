@@ -30,49 +30,83 @@ import java.util.Collections;
 import java.util.List;
 
 public final class ThemeManager {
-    public static final String PREF_DARK_MODE = "dark_mode";
-    public static final String PREF_DARK_THEME_INDEX = "dark_theme_preset_index";
+    private static final String PREF_THEME_INDEX = "app_theme_index";
     public static final String PREF_CUSTOM_ACCENT = "custom_accent_color";
     public static final String PREF_CUSTOM_BG = "custom_background_color";
-    public static final String PREF_FULL_LIQUID_GLASS = "full_liquid_glass";
+    private static final String PREF_THEME_SELECTION_COMPLETE = "app_theme_selection_complete";
+    private static final String PREF_THEME_PALETTE_V2 = "app_theme_palette_v2";
+    public static final int THEME_LIQUID_GLASS = 0;
+    public static final int THEME_MIDNIGHT_NAVY = 1;
+    public static final int THEME_NEON_AMETHYST = 2;
+    public static final int THEME_VANILLA_PEARL = 3;
+    public static final int THEME_GRAPHITE_SHADOW = 4;
+    public static final int THEME_RUBY_FLARE = 5;
+    public static final int THEME_BLACK_AMOLED = 6;
 
     // =========================================================================
-    // CURATED THEME PRESETS (Midnight Ocean is default at index 0)
+    // Theme choices use one palette for the app, dialogs, and in-game overlays.
     // =========================================================================
-    public static final List<ThemePreset> DARK_PRESETS = Arrays.asList(
-        new ThemePreset("Midnight Ocean",       0xFF021024, 0xFF052659, 0xFF1D4274, 0xFF5483B3),
-        new ThemePreset("Obsidian OLED",        0xFF000000, 0xFF101010, 0xFF1A1A1A, 0xFF3D5AFE),
-        new ThemePreset("Cyberpunk Neon",       0xFF0D0221, 0xFF190933, 0xFF261447, 0xFFFF0055),
-        new ThemePreset("Crimson Dusk",         0xFF181A2F, 0xFF242E49, 0xFF37415C, 0xFFB4182D),
-        new ThemePreset("Classic (Dark Glass)", 0xFF121212, 0xFF1E1E1E, 0xFF2A2A2A, 0xFF0288D1),
-        new ThemePreset("Emerald Depth",        0xFF051F20, 0xFF0B2B26, 0xFF163832, 0xFF00E676),
-        new ThemePreset("Grape Sunset",         0xFF1D1A39, 0xFF451952, 0xFF662549, 0xFFF39F5A),
-        new ThemePreset("Violet Dream",         0xFF190019, 0xFF2B124C, 0xFF522B5B, 0xFF854F6C),
-        new ThemePreset("Custom Palette...",    0xFF021024, 0xFF052659, 0xFF1D4274, 0xFF5483B3)
+    public static final List<ThemePreset> THEME_PRESETS = Arrays.asList(
+        new ThemePreset("Liquid Glass Enhanced", 0xFF211829, 0xFF44334F, 0xFF624A72, 0xFFD8B4FE),
+        new ThemePreset("Midnight Navy",          0xFF0D1426, 0xFF19243A, 0xFF293650, 0xFF3E4784),
+        new ThemePreset("Neon Amethyst",          0xFF111020, 0xFF241C36, 0xFF382B50, 0xFF7A5AF8),
+        new ThemePreset("Vanilla Pearl",          0xFFFBF1EA, 0xFFFFF9F4, 0xFFF2E6DE, 0xFF536162),
+        new ThemePreset("Graphite Shadow",        0xFF12191A, 0xFF202829, 0xFF303A3B, 0xFF536162),
+        new ThemePreset("Ruby Flare",             0xFF1B1016, 0xFF2A1B22, 0xFF3A222C, 0xFFD82148),
+        new ThemePreset("Black AMOLED",           0xFF000000, 0xFF050505, 0xFF171717, 0xFFFFFFFF)
     );
 
     @StyleRes
-    private static final int[] DARK_STYLES = {
-        R.style.ThemePreset_OceanIce,
-        R.style.ThemePreset_ObsidianOLED,
-        R.style.ThemePreset_Cyberpunk,
-        R.style.ThemePreset_CrimsonDusk,
-        R.style.ThemePreset_DarkGlass,
-        R.style.ThemePreset_EmeraldDepth,
-        R.style.ThemePreset_GrapeSunset,
-        R.style.ThemePreset_VioletCream,
-        R.style.ThemePreset_Custom_Dark
+    private static final int[] THEME_STYLES = {
+        R.style.ThemePreset_LiquidGlassEnhanced,
+        R.style.ThemePreset_MidnightNavy,
+        R.style.ThemePreset_NeonAmethyst,
+        R.style.ThemePreset_VanillaPearl,
+        R.style.ThemePreset_GraphiteShadow,
+        R.style.ThemePreset_RubyFlare,
+        R.style.ThemePreset_BlackAmoled
     };
 
     private ThemeManager() {}
 
     public static boolean isDarkMode(Context context) {
-        return true;
+        return getSelectedPresetIndex(context) != THEME_VANILLA_PEARL;
     }
 
     public static boolean isFullLiquidGlassEnabled(Context context) {
-        return PreferenceManager.getDefaultSharedPreferences(context)
-                .getBoolean(PREF_FULL_LIQUID_GLASS, true);
+        return getSelectedPresetIndex(context) == THEME_LIQUID_GLASS;
+    }
+
+    public static boolean isInitialThemeSelectionRequired(Context context) {
+        return !PreferenceManager.getDefaultSharedPreferences(context)
+                .getBoolean(PREF_THEME_SELECTION_COMPLETE, false);
+    }
+
+    public static void selectTheme(Context context, int index) {
+        int selectedIndex = Math.max(0, Math.min(THEME_PRESETS.size() - 1, index));
+        PreferenceManager.getDefaultSharedPreferences(context).edit()
+                .putInt(PREF_THEME_INDEX, selectedIndex)
+                .putBoolean(PREF_THEME_SELECTION_COMPLETE, true)
+                .putBoolean(PREF_THEME_PALETTE_V2, true)
+                .apply();
+    }
+
+    public static void applyActivityTheme(Activity activity, boolean fullscreen) {
+        boolean dark = isDarkMode(activity);
+        int baseTheme = fullscreen
+                ? (dark ? R.style.AppThemeFullscreen_Dark : R.style.AppThemeFullscreen)
+                : (dark ? R.style.AppTheme_Dark : R.style.AppTheme);
+        activity.setTheme(baseTheme);
+        applyTheme(activity);
+    }
+
+    public static void applyToolbarBackground(View toolbar, Context context) {
+        if (toolbar == null || context == null) return;
+        if (isFullLiquidGlassEnabled(context)) {
+            toolbar.setBackground(createThemedSurfaceDrawable(context, 16));
+        } else {
+            toolbar.setBackgroundColor(getSurfaceColor(context));
+        }
     }
 
     public static void applyGlassBackdropEffect(Activity activity) {
@@ -86,21 +120,26 @@ public final class ThemeManager {
     private static void applyGlassBackdropEffect(Activity activity, boolean forceBlur) {
         if (activity == null) return;
         View backdrop = activity.findViewById(R.id.GlassBackdrop);
-        if (backdrop == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
+        if (backdrop == null) return;
+        boolean glassEnabled = isFullLiquidGlassEnabled(activity);
+        backdrop.setVisibility(glassEnabled ? View.VISIBLE : View.GONE);
+        if (!glassEnabled) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) backdrop.setRenderEffect(null);
+            return;
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
         if (backdrop.getWidth() == 0 || backdrop.getHeight() == 0) {
             backdrop.post(() -> {
                 if (backdrop.getWidth() > 0 && backdrop.getHeight() > 0) {
-                    applyGlassBackdropEffect(activity);
+                    applyGlassBackdropEffect(activity, forceBlur);
                 }
             });
             return;
         }
 
-        if (forceBlur || isFullLiquidGlassEnabled(activity)) {
+        if (forceBlur || glassEnabled) {
             float radius = 12f * activity.getResources().getDisplayMetrics().density;
             backdrop.setRenderEffect(RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP));
-        } else {
-            backdrop.setRenderEffect(null);
         }
     }
 
@@ -109,8 +148,49 @@ public final class ThemeManager {
         return new LiquidGlassSurfaceDrawable(context, fallbackResource, cornerRadiusDp);
     }
 
+    public static android.graphics.drawable.Drawable createThemedSurfaceDrawable(
+            Context context, float cornerRadiusDp) {
+        if (isFullLiquidGlassEnabled(context)) {
+            return createGlassSurfaceDrawable(context, R.drawable.liquid_glass_dialog, cornerRadiusDp);
+        }
+        android.graphics.drawable.GradientDrawable surface = new android.graphics.drawable.GradientDrawable();
+        surface.setColor(getSurfaceColor(context));
+        surface.setCornerRadius(cornerRadiusDp * context.getResources().getDisplayMetrics().density);
+        surface.setStroke(Math.max(1, Math.round(context.getResources().getDisplayMetrics().density)),
+                getDividerColor(context));
+        return surface;
+    }
+
+    public static android.graphics.drawable.Drawable createThemedNavigationItemBackground(Context context) {
+        int accent = getAccentColor(context);
+        int surface = getSurfaceColor(context);
+        int selectedColor = isFullLiquidGlassEnabled(context)
+                ? (accent & 0x00FFFFFF) | 0x55000000
+                : androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.22f);
+        int rippleColor = isFullLiquidGlassEnabled(context)
+                ? (accent & 0x00FFFFFF) | 0x33000000
+                : androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.30f);
+
+        android.graphics.drawable.GradientDrawable selected = new android.graphics.drawable.GradientDrawable();
+        selected.setCornerRadius(10 * context.getResources().getDisplayMetrics().density);
+        selected.setColor(selectedColor);
+
+        android.graphics.drawable.GradientDrawable idle = new android.graphics.drawable.GradientDrawable();
+        idle.setColor(android.graphics.Color.TRANSPARENT);
+
+        android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
+        states.addState(new int[]{android.R.attr.state_checked}, selected);
+        states.addState(new int[]{}, idle);
+
+        android.graphics.drawable.GradientDrawable mask = new android.graphics.drawable.GradientDrawable();
+        mask.setCornerRadius(10 * context.getResources().getDisplayMetrics().density);
+        mask.setColor(android.graphics.Color.WHITE);
+        return new android.graphics.drawable.RippleDrawable(
+                ColorStateList.valueOf(rippleColor), states, mask);
+    }
+
     public static List<ThemePreset> getPresets(Context context) {
-        return Collections.unmodifiableList(DARK_PRESETS);
+        return Collections.unmodifiableList(THEME_PRESETS);
     }
 
     public static String[] getPresetNames(Context context) {
@@ -124,27 +204,47 @@ public final class ThemeManager {
 
     public static int getSelectedPresetIndex(Context context) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        int max = DARK_PRESETS.size() - 1;
-        int index = prefs.getInt(PREF_DARK_THEME_INDEX, 0);
+        if (!prefs.getBoolean(PREF_THEME_PALETTE_V2, false)) {
+            int previousIndex = prefs.getInt(PREF_THEME_INDEX, 0);
+            int migratedIndex = 0;
+            if (prefs.getBoolean(PREF_THEME_SELECTION_COMPLETE, false)) {
+                int[] legacyPaletteMap = {
+                        THEME_LIQUID_GLASS,
+                        THEME_VANILLA_PEARL,
+                        THEME_GRAPHITE_SHADOW,
+                        THEME_GRAPHITE_SHADOW,
+                        THEME_MIDNIGHT_NAVY
+                };
+                if (previousIndex >= 0 && previousIndex < legacyPaletteMap.length) {
+                    migratedIndex = legacyPaletteMap[previousIndex];
+                }
+            }
+            prefs.edit()
+                    .putInt(PREF_THEME_INDEX, migratedIndex)
+                    .putBoolean(PREF_THEME_PALETTE_V2, true)
+                    .apply();
+        }
+        int max = THEME_PRESETS.size() - 1;
+        int index = prefs.getInt(PREF_THEME_INDEX, 0);
         if (index < 0 || index > max) index = 0;
         return index;
     }
 
     public static void setSelectedPresetIndex(Context context, int index) {
-        int max = DARK_PRESETS.size() - 1;
+        int max = THEME_PRESETS.size() - 1;
         if (index < 0 || index > max) index = 0;
         PreferenceManager.getDefaultSharedPreferences(context).edit()
-                .putInt(PREF_DARK_THEME_INDEX, index)
+                .putInt(PREF_THEME_INDEX, index)
+                .putBoolean(PREF_THEME_PALETTE_V2, true)
                 .apply();
     }
 
     public static boolean isCustomPresetSelected(Context context) {
-        int customIndex = DARK_PRESETS.size() - 1;
-        return getSelectedPresetIndex(context) == customIndex;
+        return false;
     }
 
     public static void selectCustomPreset(Context context) {
-        int customIndex = DARK_PRESETS.size() - 1;
+        int customIndex = THEME_PRESETS.size() - 1;
         setSelectedPresetIndex(context, customIndex);
     }
 
@@ -166,25 +266,20 @@ public final class ThemeManager {
     }
 
     public static ThemePreset getSelectedPreset(Context context) {
-        if (isCustomPresetSelected(context)) {
-            int accent = getCustomAccentColor(context);
-            int bg = getCustomBackgroundColor(context);
-            int surface = ThemePreset.lerp(bg, 0xFFFFFFFF, 0.08f);
-            int surfaceVariant = ThemePreset.lerp(bg, 0xFFFFFFFF, 0.14f);
-            return new ThemePreset("Custom", bg, surface, surfaceVariant, accent);
-        }
         int index = getSelectedPresetIndex(context);
-        return DARK_PRESETS.get(index);
+        return THEME_PRESETS.get(index);
     }
 
     public static void applyTheme(Context context) {
         Resources.Theme theme = context.getTheme();
         if (theme == null) return;
         int index = getSelectedPresetIndex(context);
-        theme.applyStyle(DARK_STYLES[index], true);
-        theme.applyStyle(R.style.LiquidGlassTheme, true);
-        theme.applyStyle(isFullLiquidGlassEnabled(context)
-                ? R.style.FullLiquidGlassTheme : R.style.SimpleLiquidGlassTheme, true);
+        theme.applyStyle(THEME_STYLES[index], true);
+        if (isFullLiquidGlassEnabled(context)) {
+            theme.applyStyle(R.style.FullLiquidGlassTheme, true);
+        } else {
+            theme.applyStyle(R.style.StandardTheme, true);
+        }
     }
 
     public static int getAccentColor(Context context) {
@@ -227,11 +322,12 @@ public final class ThemeManager {
         int surface = preset.surface;
         int divider = preset.divider;
 
-        applyThemeRecursively(view, true, onSurface, onSurfaceVariant, accent, surface, divider);
+        applyThemeRecursively(view, isDarkMode(context), onSurface, onSurfaceVariant, accent, surface, divider);
     }
 
     private static void applyThemeRecursively(View view, boolean isDarkMode, int onSurface, int onSurfaceVariant, int accent, int surface, int divider) {
         if (view == null) return;
+        boolean liquidGlass = isFullLiquidGlassEnabled(view.getContext());
 
         if (view instanceof EditText) {
             EditText et = (EditText) view;
@@ -244,7 +340,8 @@ public final class ThemeManager {
             cb.setButtonTintList(ColorStateList.valueOf(accent));
         } else if (view instanceof Spinner) {
             Spinner spinner = (Spinner) view;
-            spinner.setPopupBackgroundResource(R.drawable.liquid_glass_popup);
+            spinner.setPopupBackgroundResource(isFullLiquidGlassEnabled(view.getContext())
+                    ? R.drawable.liquid_glass_popup : R.drawable.theme_dialog_background);
             spinner.setBackgroundResource(isDarkMode ? R.drawable.combo_box_dark : R.drawable.combo_box);
             GlassSpinnerPopup.attach(spinner);
             int padStart = (int) (12 * spinner.getResources().getDisplayMetrics().density);
@@ -254,7 +351,7 @@ public final class ThemeManager {
             TabLayout tabLayout = (TabLayout) view;
             tabLayout.setBackgroundResource(isDarkMode ? R.drawable.tab_layout_background_dark : R.drawable.tab_layout_background);
             tabLayout.setSelectedTabIndicatorColor(accent);
-            int tabColor = isDarkMode ? 0xFFFFFFFF : 0xFF121212;
+            int tabColor = onSurface;
             tabLayout.setTabTextColors(tabColor, tabColor);
             for (int i = 0; i < tabLayout.getTabCount(); i++) {
                 TabLayout.Tab tab = tabLayout.getTabAt(i);
@@ -320,12 +417,16 @@ public final class ThemeManager {
             androidx.appcompat.widget.SwitchCompat sc = (androidx.appcompat.widget.SwitchCompat) view;
             sc.setTextColor(onSurface);
             sc.setThumbTintList(ColorStateList.valueOf(accent));
-            sc.setTrackTintList(ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 100)));
+            sc.setTrackTintList(ColorStateList.valueOf(liquidGlass
+                    ? androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 100)
+                    : androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.30f)));
         } else if (view instanceof android.widget.Switch) {
             android.widget.Switch sw = (android.widget.Switch) view;
             sw.setTextColor(onSurface);
             sw.setThumbTintList(ColorStateList.valueOf(accent));
-            sw.setTrackTintList(ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 100)));
+            sw.setTrackTintList(ColorStateList.valueOf(liquidGlass
+                    ? androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 100)
+                    : androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.30f)));
         } else if (view instanceof android.widget.RadioButton) {
             android.widget.RadioButton rb = (android.widget.RadioButton) view;
             rb.setTextColor(onSurface);
@@ -395,6 +496,8 @@ public final class ThemeManager {
 
     public static void styleButton(android.widget.Button btn, boolean isDarkMode, int onSurface, int onSurfaceVariant, int accent, int surface, int divider) {
         if (btn == null) return;
+        boolean liquidGlass = isFullLiquidGlassEnabled(btn.getContext());
+        int primaryText = liquidGlass ? accent : ThemePreset.onAccentFor(accent);
         int id = btn.getId();
         CharSequence text = btn.getText();
         String textStr = text != null ? text.toString().trim().toLowerCase(java.util.Locale.ROOT) : "";
@@ -413,18 +516,18 @@ public final class ThemeManager {
         int strokeWidth = (int) Math.max(1, com.winlator.cmod.core.UnitUtils.dpToPx(1));
 
         if (isConfirmOrPrimary) {
-            // Modern Glassmorphic Accent Button (Harmonized with Cancel glass card)
             android.graphics.drawable.StateListDrawable sld = new android.graphics.drawable.StateListDrawable();
             android.graphics.drawable.GradientDrawable normal = new android.graphics.drawable.GradientDrawable();
-            int normalBg = isDarkMode ? 0x1AFFFFFF : 0x22FFFFFF;
-            int strokeColor = isDarkMode ? 0x99FFFFFF : 0x66000000;
+            int normalBg = liquidGlass ? 0x1AFFFFFF : accent;
+            int strokeColor = liquidGlass ? 0x99FFFFFF : accent;
             int strokeWidthAccent = (int) Math.max(1, com.winlator.cmod.core.UnitUtils.dpToPx(1.5f));
             normal.setColor(normalBg);
             normal.setStroke(strokeWidthAccent, strokeColor);
             normal.setCornerRadius(cornerRadius);
 
             android.graphics.drawable.GradientDrawable pressed = new android.graphics.drawable.GradientDrawable();
-            int pressedBg = isDarkMode ? 0x40FFFFFF : 0x44FFFFFF;
+            int pressedBg = liquidGlass ? 0x40FFFFFF
+                    : androidx.core.graphics.ColorUtils.blendARGB(accent, primaryText, 0.12f);
             pressed.setColor(pressedBg);
             pressed.setStroke(strokeWidthAccent, strokeColor);
             pressed.setCornerRadius(cornerRadius);
@@ -436,21 +539,21 @@ public final class ThemeManager {
             btn.setBackground(sld);
             btn.setBackgroundTintList(null);
 
-            btn.setTextColor(accent);
+            btn.setTextColor(primaryText);
             btn.setTypeface(null, Typeface.BOLD);
         } else if (isCancelOrSecondary) {
-            // Modern Tonal/Outlined Cancel Button (1:1 identical structure/stroke/weight to OK button)
             android.graphics.drawable.StateListDrawable sld = new android.graphics.drawable.StateListDrawable();
             android.graphics.drawable.GradientDrawable normal = new android.graphics.drawable.GradientDrawable();
-            int normalBg = isDarkMode ? 0x1AFFFFFF : 0x22FFFFFF;
-            int strokeColor = isDarkMode ? 0x80FFFFFF : 0x66000000;
+            int normalBg = liquidGlass ? 0x1AFFFFFF : surface;
+            int strokeColor = liquidGlass ? 0x80FFFFFF : divider;
             int strokeWidthCancel = (int) Math.max(1, com.winlator.cmod.core.UnitUtils.dpToPx(1.5f));
             normal.setColor(normalBg);
             normal.setStroke(strokeWidthCancel, strokeColor);
             normal.setCornerRadius(cornerRadius);
 
             android.graphics.drawable.GradientDrawable pressed = new android.graphics.drawable.GradientDrawable();
-            int pressedBg = isDarkMode ? 0x40FFFFFF : 0x44FFFFFF;
+            int pressedBg = liquidGlass ? 0x40FFFFFF
+                    : androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.16f);
             pressed.setColor(pressedBg);
             pressed.setStroke(strokeWidthCancel, strokeColor);
             pressed.setCornerRadius(cornerRadius);
@@ -465,17 +568,17 @@ public final class ThemeManager {
             btn.setTextColor(onSurface);
             btn.setTypeface(null, Typeface.BOLD);
         } else {
-            // Modern Semi-Translucent Accent Outlined Button (Add, Download, Refresh, etc.)
             android.graphics.drawable.StateListDrawable sld = new android.graphics.drawable.StateListDrawable();
             android.graphics.drawable.GradientDrawable normal = new android.graphics.drawable.GradientDrawable();
-            int normalBg = isDarkMode ? 0x1AFFFFFF : 0x22FFFFFF;
-            int strokeColor = isDarkMode ? 0x80FFFFFF : 0x66000000;
+            int normalBg = liquidGlass ? 0x1AFFFFFF : surface;
+            int strokeColor = liquidGlass ? 0x80FFFFFF : divider;
             normal.setColor(normalBg);
             normal.setStroke(strokeWidth, strokeColor);
             normal.setCornerRadius(cornerRadius);
 
             android.graphics.drawable.GradientDrawable pressed = new android.graphics.drawable.GradientDrawable();
-            int pressedBg = isDarkMode ? 0x40FFFFFF : 0x44FFFFFF;
+            int pressedBg = liquidGlass ? 0x40FFFFFF
+                    : androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.16f);
             pressed.setColor(pressedBg);
             pressed.setStroke(strokeWidth, strokeColor);
             pressed.setCornerRadius(cornerRadius);
@@ -487,7 +590,7 @@ public final class ThemeManager {
             btn.setBackground(sld);
             btn.setBackgroundTintList(null);
 
-            btn.setTextColor(isDarkMode ? 0xFFFFFFFF : accent);
+            btn.setTextColor(onSurface);
             btn.setTypeface(null, Typeface.BOLD);
         }
     }
@@ -495,6 +598,7 @@ public final class ThemeManager {
     public static void styleImageButton(ImageButton ib, boolean isDarkMode, int onSurface, int onSurfaceVariant, int accent, int surface, int divider) {
         if (ib == null) return;
         ib.setImageTintList(ColorStateList.valueOf(accent));
+        boolean liquidGlass = isFullLiquidGlassEnabled(ib.getContext());
 
         int id = ib.getId();
         if (id == R.id.BTUpDir || id == R.id.BTSearch || id == R.id.BTCloseSearch || id == R.id.BTInfo) {
@@ -506,14 +610,20 @@ public final class ThemeManager {
 
         android.graphics.drawable.StateListDrawable sld = new android.graphics.drawable.StateListDrawable();
         android.graphics.drawable.GradientDrawable normal = new android.graphics.drawable.GradientDrawable();
-        int normalBg = androidx.core.graphics.ColorUtils.setAlphaComponent(accent, isDarkMode ? 35 : 25);
-        int strokeColor = androidx.core.graphics.ColorUtils.setAlphaComponent(accent, isDarkMode ? 120 : 90);
+        int normalBg = liquidGlass
+                ? androidx.core.graphics.ColorUtils.setAlphaComponent(accent, isDarkMode ? 35 : 25)
+                : surface;
+        int strokeColor = liquidGlass
+                ? androidx.core.graphics.ColorUtils.setAlphaComponent(accent, isDarkMode ? 120 : 90)
+                : divider;
         normal.setColor(normalBg);
         normal.setStroke(strokeWidth, strokeColor);
         normal.setCornerRadius(cornerRadius);
 
         android.graphics.drawable.GradientDrawable pressed = new android.graphics.drawable.GradientDrawable();
-        int pressedBg = androidx.core.graphics.ColorUtils.setAlphaComponent(accent, isDarkMode ? 90 : 60);
+        int pressedBg = liquidGlass
+                ? androidx.core.graphics.ColorUtils.setAlphaComponent(accent, isDarkMode ? 90 : 60)
+                : androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.16f);
         pressed.setColor(pressedBg);
         pressed.setStroke(strokeWidth, strokeColor);
         pressed.setCornerRadius(cornerRadius);

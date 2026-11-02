@@ -36,6 +36,7 @@ public final class PlayStationWaveBackgroundView extends View implements SensorE
     private final float density;
     private long startTimeNanos;
     private boolean attached;
+    private boolean animationEnabled = true;
     private SensorManager sensorManager;
     private Sensor accelerometer;
     private float motionX;
@@ -61,11 +62,29 @@ public final class PlayStationWaveBackgroundView extends View implements SensorE
         return value - (float) Math.floor(value);
     }
 
+    public void setAnimationEnabled(boolean enabled) {
+        if (animationEnabled == enabled) return;
+        animationEnabled = enabled;
+        if (enabled) {
+            startTimeNanos = System.nanoTime();
+            registerMotionSensor();
+            postInvalidateOnAnimation();
+        } else {
+            if (sensorManager != null) sensorManager.unregisterListener(this);
+        }
+    }
+
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         attached = true;
         startTimeNanos = System.nanoTime();
+        registerMotionSensor();
+        if (animationEnabled) postInvalidateOnAnimation();
+    }
+
+    private void registerMotionSensor() {
+        if (!attached || !animationEnabled) return;
         sensorManager = (SensorManager) getContext().getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -73,7 +92,6 @@ public final class PlayStationWaveBackgroundView extends View implements SensorE
                 sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI);
             }
         }
-        postInvalidateOnAnimation();
     }
 
     @Override
@@ -127,7 +145,7 @@ public final class PlayStationWaveBackgroundView extends View implements SensorE
         drawWaves(canvas, width, height, time);
         drawParticles(canvas, width, height, time);
 
-        if (attached) postInvalidateOnAnimation();
+        if (attached && animationEnabled) postInvalidateOnAnimation();
     }
 
     private void drawWaves(Canvas canvas, float width, float height, float time) {
@@ -222,7 +240,7 @@ public final class PlayStationWaveBackgroundView extends View implements SensorE
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.getType() != Sensor.TYPE_ACCELEROMETER) return;
+        if (!animationEnabled || event.sensor.getType() != Sensor.TYPE_ACCELEROMETER) return;
         float targetX = clamp(event.values[0] / SensorManager.GRAVITY_EARTH);
         float targetY = clamp(event.values[1] / SensorManager.GRAVITY_EARTH);
         float nextX = motionX + (targetX - motionX) * 0.12f;

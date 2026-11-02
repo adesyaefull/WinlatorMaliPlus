@@ -70,7 +70,7 @@ public class ContentsFragment extends Fragment {
         setHasOptionsMenu(false);
         manager = new ContentsManager(getContext());
         sp = PreferenceManager.getDefaultSharedPreferences(requireContext());
-        isDarkMode = sp.getBoolean("dark_mode", true);
+        isDarkMode = ThemeManager.isDarkMode(getContext());
     }
 
     @Override

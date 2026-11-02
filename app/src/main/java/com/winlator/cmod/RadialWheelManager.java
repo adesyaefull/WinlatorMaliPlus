@@ -38,12 +38,6 @@ public class RadialWheelManager {
 
     private static final float INNER_RADIUS_DP = 48f;
     private static final float OUTER_RADIUS_DP = 140f;
-    private static final int COLOR_DIM_BACKGROUND = 0x77000000;
-    private static final int COLOR_SLICE_IDLE = 0x99182232;
-    private static final int COLOR_SLICE_SELECTED = 0xEE0288D1;
-    private static final int COLOR_CENTER_IDLE = 0xBB0D131C;
-    private static final int COLOR_CENTER_SELECTED = 0xEE0D131C;
-
     public RadialWheelManager(InputControlsView icv, List<RadialWheelConfig> configs) {
         this.inputControlsView = icv;
         if (configs != null) {
@@ -317,10 +311,17 @@ public class RadialWheelManager {
         float density = inputControlsView.getContext().getResources().getDisplayMetrics().density;
         float innerRadius = INNER_RADIUS_DP * density;
         float outerRadius = OUTER_RADIUS_DP * density;
+        android.content.Context context = inputControlsView.getContext();
+        int accent = ThemeManager.getAccentColor(context);
+        int surface = ThemeManager.getSurfaceColor(context);
+        int onSurface = ThemeManager.getOnSurfaceTextColor(context);
+        int onAccent = ThemePreset.onAccentFor(accent);
+        int divider = ThemeManager.getDividerColor(context);
+        boolean liquidGlass = ThemeManager.isFullLiquidGlassEnabled(context);
 
         // Dim background
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(COLOR_DIM_BACKGROUND);
+        paint.setColor(liquidGlass ? 0x66000000 : Color.TRANSPARENT);
         canvas.drawRect(0, 0, viewWidth, viewHeight, paint);
 
         int sliceCount = activeConfig.slices.size();
@@ -349,35 +350,36 @@ public class RadialWheelManager {
 
             // Fill
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(i == selectedSlice ? COLOR_SLICE_SELECTED : COLOR_SLICE_IDLE);
+            paint.setColor(i == selectedSlice ? accent : liquidGlass
+                    ? androidx.core.graphics.ColorUtils.setAlphaComponent(surface, 220) : surface);
             canvas.drawPath(path, paint);
 
             // Border
             paint.setStyle(Paint.Style.STROKE);
-            paint.setColor(i == selectedSlice ? 0xFF81D4FA : 0x33FFFFFF);
+            paint.setColor(i == selectedSlice ? onAccent : divider);
             paint.setStrokeWidth(1.5f * density);
             canvas.drawPath(path, paint);
         }
 
         // Draw Outer Ring
         paint.setStyle(Paint.Style.STROKE);
-        paint.setColor(0x88FFFFFF);
+        paint.setColor(accent);
         paint.setStrokeWidth(2.5f * density);
         canvas.drawCircle(centerX, centerY, outerRadius, paint);
 
         // Draw Center Cancel Circle
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(selectedSlice == -1 ? COLOR_CENTER_SELECTED : COLOR_CENTER_IDLE);
+        paint.setColor(selectedSlice == -1 ? accent : surface);
         canvas.drawCircle(centerX, centerY, innerRadius, paint);
 
         paint.setStyle(Paint.Style.STROKE);
-        paint.setColor(selectedSlice == -1 ? 0xFFFF5252 : 0x55FFFFFF);
+        paint.setColor(selectedSlice == -1 ? onAccent : divider);
         paint.setStrokeWidth(2f * density);
         canvas.drawCircle(centerX, centerY, innerRadius, paint);
 
         // Center Cancel '✕'
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(selectedSlice == -1 ? 0xFFFF5252 : 0x99FFFFFF);
+        paint.setColor(selectedSlice == -1 ? onAccent : onSurface);
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setTextSize(20f * density);
         paint.setTypeface(Typeface.DEFAULT_BOLD);
@@ -385,7 +387,7 @@ public class RadialWheelManager {
 
         // Wheel Title Header
         if (activeConfig.name != null && !activeConfig.name.isEmpty()) {
-            paint.setColor(0xFF81D4FA);
+            paint.setColor(accent);
             paint.setTextSize(14f * density);
             paint.setTextAlign(Paint.Align.CENTER);
             paint.setTypeface(Typeface.DEFAULT_BOLD);
@@ -414,7 +416,9 @@ public class RadialWheelManager {
 
                     paint.setFilterBitmap(true);
                     if (slice.iconId <= com.winlator.cmod.inputcontrols.CustomIconManager.BUILTIN_ICON_MAX) {
-                        paint.setColorFilter(new android.graphics.PorterDuffColorFilter(i == selectedSlice ? 0xFFFFFFFF : 0xFF81D4FA, android.graphics.PorterDuff.Mode.SRC_IN));
+                        paint.setColorFilter(new android.graphics.PorterDuffColorFilter(
+                                i == selectedSlice ? onAccent : onSurface,
+                                android.graphics.PorterDuff.Mode.SRC_IN));
                     } else {
                         paint.setColorFilter(null);
                         paint.setAlpha(255);
@@ -432,10 +436,10 @@ public class RadialWheelManager {
             if (label.isEmpty()) continue;
 
             if (i == selectedSlice) {
-                paint.setColor(0xFFFFFFFF);
+                paint.setColor(onAccent);
                 paint.setTextSize(14f * density);
             } else {
-                paint.setColor(0xDDFFFFFF);
+                paint.setColor(onSurface);
                 paint.setTextSize(12f * density);
             }
             canvas.drawText(label, cx, cy + (paint.getTextSize() / 3f), paint);

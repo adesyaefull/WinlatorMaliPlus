@@ -2,12 +2,12 @@
     android:shape="rectangle">
     <gradient
         android:angle="90"
-        android:startColor="#66383D43"
-        android:centerColor="#5231363C"
-        android:endColor="#66383D43"
+        android:startColor="?attr/gamingSurfaceColor"
+        android:centerColor="?attr/semanticSurfaceVariant"
+        android:endColor="?attr/gamingSurfaceColor"
         android:type="linear" />
     <corners android:radius="15dp" />
     <stroke
         android:width="1dp"
-        android:color="#99FFFFFF" />
+        android:color="?attr/semanticDivider" />
 </shape>

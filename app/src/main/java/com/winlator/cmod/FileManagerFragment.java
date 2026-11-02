@@ -1263,7 +1263,7 @@ public class FileManagerFragment extends Fragment {
             }
 
             if (selectedFiles.contains(file)) {
-                holder.itemView.setBackgroundResource(R.drawable.liquid_glass_surface);
+                holder.itemView.setBackground(ThemeManager.createThemedSurfaceDrawable(getContext(), 12));
             } else {
                 holder.itemView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
             }

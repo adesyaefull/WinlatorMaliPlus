@@ -140,8 +140,12 @@ public final class PanvkReleaseManager {
             }
         }
         Collections.sort(releases, (left, right) -> {
+            int dateOrder = right.publishedAt.compareTo(left.publishedAt);
+            if (dateOrder != 0) return dateOrder;
             int ownerOrder = left.owner.compareToIgnoreCase(right.owner);
-            return ownerOrder != 0 ? ownerOrder : right.publishedAt.compareTo(left.publishedAt);
+            if (ownerOrder != 0) return ownerOrder;
+            int repositoryOrder = left.repository.compareToIgnoreCase(right.repository);
+            return repositoryOrder != 0 ? repositoryOrder : left.fileName.compareToIgnoreCase(right.fileName);
         });
         return releases;
     }

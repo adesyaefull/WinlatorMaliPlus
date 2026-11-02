@@ -109,7 +109,7 @@
                         android:padding="8dp"
                         android:scaleType="fitCenter"
                         android:src="@drawable/icon_play"
-                        app:tint="#FFFFFF" />
+                        app:tint="?attr/semanticOnSurface" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -125,7 +125,7 @@
                 android:padding="7dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/icon_list_item_menu"
-                app:tint="#FFFFFF" />
+                app:tint="?attr/semanticOnSurface" />
 
             <ImageButton
                 android:id="@+id/BTPlayLandscape"
@@ -139,7 +139,7 @@
                 android:scaleType="fitCenter"
                 android:src="@drawable/icon_play"
                 android:visibility="gone"
-                app:tint="#FFFFFF" />
+                app:tint="?attr/colorAccent" />
         </FrameLayout>
     </FrameLayout>
 </androidx.cardview.widget.CardView>

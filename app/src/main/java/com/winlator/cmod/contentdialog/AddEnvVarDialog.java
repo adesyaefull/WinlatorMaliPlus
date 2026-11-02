@@ -18,8 +18,7 @@ public class AddEnvVarDialog extends ContentDialog {
         final EditText etName = findViewById(R.id.ETName);
         final EditText etValue = findViewById(R.id.ETValue);
 
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        boolean isDarkMode = prefs.getBoolean("dark_mode", true);
+        boolean isDarkMode = com.winlator.cmod.ThemeManager.isDarkMode(context);
         applyDarkThemeToEditText(etName, isDarkMode);
         applyDarkThemeToEditText(etValue, isDarkMode);
 

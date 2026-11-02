@@ -2,9 +2,9 @@
     android:shape="rectangle">
     <gradient
         android:angle="90"
-        android:startColor="#C64C3865"
-        android:centerColor="#B845325E"
-        android:endColor="#C64C3865"
+        android:startColor="?attr/gamingSurfaceColor"
+        android:centerColor="?attr/semanticSurfaceVariant"
+        android:endColor="?attr/gamingSurfaceColor"
         android:type="linear" />
-    <stroke android:width="1dp" android:color="#99FFFFFF" />
+    <stroke android:width="1dp" android:color="?attr/semanticDivider" />
 </shape>

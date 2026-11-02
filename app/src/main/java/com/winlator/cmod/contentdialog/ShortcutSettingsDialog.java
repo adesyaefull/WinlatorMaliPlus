@@ -423,7 +423,8 @@ public class ShortcutSettingsDialog extends ContentDialog {
 
         final EnvVarsView envVarsView = createEnvVarsTab();
 
-        AppUtils.setupTabLayout(getContentView(), R.id.TabLayout, R.id.LLTabGeneral, R.id.LLTabWinComponents, R.id.LLTabEnvVars, R.id.LLTabAdvanced);
+        AppUtils.setupTabLayout(getContentView(), R.id.TabLayout, R.id.LLTabGeneral,
+                R.id.LLTabWinComponents, R.id.LLTabEnvVars, R.id.LLTabAdvanced);
 
         TabLayout tabLayout = findViewById(R.id.TabLayout);
 
@@ -551,7 +552,6 @@ public class ShortcutSettingsDialog extends ContentDialog {
 
                 String envVars = envVarsView.getEnvVars();
                 shortcut.putExtra("envVars", !envVars.isEmpty() ? envVars : null);
-
                 String fexcoreVersion = sFEXCoreVersion.getSelectedItem().toString();
                 shortcut.putExtra("fexcoreVersion", fexcoreVersion);
 
@@ -682,8 +682,7 @@ public class ShortcutSettingsDialog extends ContentDialog {
         final EnvVarsView envVarsView = view.findViewById(R.id.EnvVarsView);
 
         // Update the dark mode setting of the existing instance
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        boolean isDarkMode = prefs.getBoolean("dark_mode", true);
+        boolean isDarkMode = com.winlator.cmod.ThemeManager.isDarkMode(context);
         envVarsView.setDarkMode(isDarkMode);
 
         // Set the environment variables in the existing EnvVarsView

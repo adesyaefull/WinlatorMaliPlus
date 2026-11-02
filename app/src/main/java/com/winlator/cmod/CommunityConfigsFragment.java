@@ -518,7 +518,7 @@ public class CommunityConfigsFragment extends Fragment {
                 }
 
                 ivIcon.setImageResource(android.R.drawable.ic_menu_info_details);
-                boolean isDarkMode = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context).getBoolean("dark_mode", true);
+                boolean isDarkMode = ThemeManager.isDarkMode(context);
                 ivIcon.setColorFilter(isDarkMode ? android.graphics.Color.WHITE : android.graphics.Color.BLACK);
 
             } catch (JSONException e) {}

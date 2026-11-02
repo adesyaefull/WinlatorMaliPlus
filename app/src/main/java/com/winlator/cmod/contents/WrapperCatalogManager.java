@@ -172,27 +172,26 @@ public final class WrapperCatalogManager {
     public static File getInstalledWrapperFile(Context context, String id) {
         if (id == null || !SAFE_ID.matcher(id).matches()) return null;
         File driverDirectory = new File(context.getFilesDir(), LEGACY_WRAPPER_DIR);
-        File catalogFile = new File(new File(driverDirectory, "catalog"), id + ".tzst");
-        if (catalogFile.isFile()) return catalogFile;
-        File directFile = new File(driverDirectory, id + ".tzst");
-        if (directFile.isFile()) return directFile;
-
         File[] directories = driverDirectory.listFiles(File::isDirectory);
+        File catalogDirectory = new File(driverDirectory, "catalog");
+        File catalogFile = findWrapperArchive(catalogDirectory, id);
+        if (catalogFile != null) return catalogFile;
+        File directFile = findWrapperArchive(driverDirectory, id);
+        if (directFile != null) return directFile;
         if (directories != null) {
             for (File directory : directories) {
-                File wrapperFile = new File(directory, id + ".tzst");
-                if (wrapperFile.isFile()) return wrapperFile;
-            }
-        }
-        File[] candidates = driverDirectory.listFiles(File::isDirectory);
-        if (candidates != null) {
-            for (File directory : candidates) {
-                File[] archives = directory.listFiles((parent, name) ->
-                        name.equalsIgnoreCase(id + ".tzst"));
-                if (archives != null && archives.length > 0 && archives[0].isFile()) return archives[0];
+                File wrapperFile = findWrapperArchive(directory, id);
+                if (wrapperFile != null) return wrapperFile;
             }
         }
         return null;
+    }
+
+    private static File findWrapperArchive(File directory, String id) {
+        File[] archives = directory.listFiles((parent, name) ->
+                name.equalsIgnoreCase(id + ".tzst"));
+        return archives != null && archives.length > 0 && archives[0].isFile()
+                ? archives[0] : null;
     }
 
     public static List<Entry> getInstalledWrappers(Context context) {
@@ -202,7 +201,7 @@ public final class WrapperCatalogManager {
         for (Entry entry : catalog) {
             if (getInstalledWrapperFile(context, entry.id) != null) {
                 installed.add(entry);
-                installedIds.add(entry.id);
+                installedIds.add(entry.id.toLowerCase(Locale.ROOT));
             }
         }
 
@@ -219,14 +218,14 @@ public final class WrapperCatalogManager {
 
     private static void appendUncataloguedWrappers(File directory, java.util.Set<String> installedIds,
                                                     List<Entry> installed) {
-        File[] archives = directory.listFiles((dir, name) -> name.endsWith(".tzst")
+        File[] archives = directory.listFiles((dir, name) ->
+                name.toLowerCase(Locale.ROOT).endsWith(".tzst")
                 && SAFE_ID.matcher(name.substring(0, name.length() - 5)).matches());
         if (archives == null) return;
         for (File archive : archives) {
             String id = archive.getName().substring(0, archive.getName().length() - 5);
-            if ("wrapper".equals(id) || "leegao_bcn".equals(id)
-                    || "gladio-1.1".equals(id) || "extra_libs".equals(id)) continue;
-            if (installedIds.add(id)) {
+            if (isBundledWrapperId(id)) continue;
+            if (installedIds.add(id.toLowerCase(Locale.ROOT))) {
                 installed.add(new Entry(id, id, "", "", "", "", archive.length(), "",
                         Collections.singletonList("all")));
             }
@@ -303,6 +302,70 @@ public final class WrapperCatalogManager {
                 Log.w(TAG, "Unable to remove incomplete download " + temporary);
             }
         }
+    }
+
+    public static File importWrapper(Context context, InputStream input, String fileName)
+            throws IOException {
+        if (input == null) throw new IOException("The selected file could not be opened.");
+        if (fileName == null || !fileName.toLowerCase(Locale.ROOT).endsWith(".tzst")) {
+            throw new IOException("Select a wrapper archive with the .tzst extension.");
+        }
+        String id = fileName.substring(0, fileName.length() - 5).toLowerCase(Locale.ROOT);
+        if (!SAFE_ID.matcher(id).matches() || ".".equals(id) || "..".equals(id)) {
+            throw new IOException("The wrapper filename contains unsupported characters.");
+        }
+        if (isBundledWrapperId(id)) {
+            throw new IOException("This filename is reserved for a bundled graphics driver.");
+        }
+
+        synchronized (WrapperCatalogManager.class) {
+            if (getInstalledWrapperFile(context, id) != null) {
+                throw new IOException("A wrapper with this filename already exists.");
+            }
+            File directory = new File(context.getFilesDir(), LEGACY_WRAPPER_DIR);
+            if (!directory.isDirectory() && !directory.mkdirs()) {
+                throw new IOException("Unable to create the graphics driver directory.");
+            }
+            File destination = new File(directory, id + ".tzst");
+            File temporary = new File(directory, "." + id + ".tzst.importing");
+            try {
+                long imported = 0;
+                try (BufferedInputStream buffered = new BufferedInputStream(input);
+                     FileOutputStream output = new FileOutputStream(temporary)) {
+                    byte[] buffer = new byte[StreamUtils.BUFFER_SIZE];
+                    int count;
+                    while ((count = buffered.read(buffer)) != -1) {
+                        imported += count;
+                        if (imported > 512L * 1024 * 1024) {
+                            throw new IOException("The wrapper archive exceeds 512 MB.");
+                        }
+                        output.write(buffer, 0, count);
+                    }
+                    output.getFD().sync();
+                }
+                validateArchive(temporary);
+                try {
+                    java.nio.file.Files.move(temporary.toPath(), destination.toPath());
+                } catch (java.nio.file.FileAlreadyExistsException e) {
+                    throw new IOException("A wrapper with this filename already exists.", e);
+                }
+                return destination;
+            } finally {
+                if (temporary.exists() && !temporary.delete()) {
+                    Log.w(TAG, "Unable to remove temporary imported wrapper " + temporary);
+                }
+            }
+        }
+    }
+
+    private static boolean isBundledWrapperId(String id) {
+        for (String wrapperId : com.winlator.cmod.container.Container.WRAPPER_DRIVERS) {
+            if (wrapperId.equalsIgnoreCase(id)) return true;
+        }
+        return "leegao_bcn".equalsIgnoreCase(id)
+                || "leegao_bcn_legacy".equalsIgnoreCase(id)
+                || "gladio-1.1".equalsIgnoreCase(id)
+                || "extra_libs".equalsIgnoreCase(id);
     }
 
     private static MessageDigest newDigest() throws IOException {

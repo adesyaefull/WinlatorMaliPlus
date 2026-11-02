@@ -10,14 +10,14 @@
     android:clickable="true"
     android:focusable="true"
     android:foreground="?android:selectableItemBackground"
-    app:cardBackgroundColor="#66383D43"
+    app:cardBackgroundColor="?attr/gamingSurfaceColor"
     app:cardCornerRadius="18dp"
     app:cardElevation="8dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@drawable/liquid_glass_surface"
+        android:background="?attr/gamingSurfaceColor"
         android:gravity="center"
         android:orientation="vertical"
         android:padding="12dp">
@@ -27,7 +27,7 @@
             android:layout_height="52dp"
             android:contentDescription="Game controller"
             android:src="@drawable/icon_gamepad"
-            android:tint="#DCEBFF" />
+            android:tint="?attr/colorAccent" />
 
         <TextView
             android:layout_width="match_parent"
@@ -35,7 +35,7 @@
             android:layout_marginTop="8dp"
             android:gravity="center"
             android:text="Add game"
-            android:textColor="#FFFFFF"
+            android:textColor="?attr/semanticOnSurface"
             android:textSize="17sp"
             android:textStyle="bold" />
 
@@ -45,7 +45,7 @@
             android:layout_marginTop="4dp"
             android:gravity="center"
             android:text="Choose an .exe and container"
-            android:textColor="#DCEBFF"
+            android:textColor="?attr/semanticOnSurfaceVariant"
             android:textSize="11sp" />
     </LinearLayout>
 </androidx.cardview.widget.CardView>

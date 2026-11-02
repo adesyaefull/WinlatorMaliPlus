@@ -16,7 +16,7 @@
     <string name="no_items_to_display">No items to display</string>
     <string name="start_game_named">Start %1$s</string>
     <string name="play_shortcut">Play game</string>
-    <string name="shortcut_settings_details">Shortcut details</string>
+    <string name="shortcut_settings_details">--Shortcut Details--</string>
     <string name="shortcut_dxvk_details">DX wrapper: %1$s</string>
     <string name="shortcut_renderer_details">Renderer: %1$s</string>
     <string name="shortcut_frame_gen_details">Frame generation: %1$s</string>
@@ -24,6 +24,7 @@
     <string name="shortcut_fex_details">FEXCore: %1$s · Preset: %2$s</string>
     <string name="shortcut_box64_details">Box64: %1$s · Preset: %2$s</string>
     <string name="shortcut_cover_art">Game cover art</string>
+    <string name="steam">Steam</string>
     <string name="more_options">More options</string>
     <string name="new_container">New Container</string>
     <string name="edit_container">Edit Container</string>
@@ -753,7 +754,12 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="update_driver_confirm">Are you sure you want to replace %1$s with the selected file?\n\nThis will override the current version.</string>
     <string name="refresh_wrapper_catalog">Refresh Wrapper List</string>
     <string name="wrapper_catalog_title">Available Bannerlator Wrappers</string>
-    <string name="wrapper_catalog_instructions">You can add a wrapper by downloading it from this list. Downloaded wrappers become selectable in the Graphics Wrapper menu for containers and shortcuts.</string>
+    <string name="wrapper_catalog_instructions">Download a Bannerlator wrapper from the dropdown below. Installed wrappers appear in Manage Graphics Drivers and the Graphics Wrapper menus for containers and shortcuts.</string>
+    <string name="import_wrapper">Import local wrapper (.tzst)</string>
+    <string name="wrapper_import_success">Wrapper imported. It is now available in Manage Graphics Drivers and the Graphics Wrapper menus.</string>
+    <string name="wrapper_import_failed">Unable to import this wrapper: %1$s\n\nIf it still cannot be imported, rename the .tzst file to a unique name. The filename may conflict with an existing wrapper.</string>
+    <string name="wrapper_catalog_title_expanded">Available Bannerlator Wrappers  ▲</string>
+    <string name="wrapper_catalog_title_collapsed">Available Bannerlator Wrappers  ▼</string>
     <string name="wrapper_catalog_loading">Loading wrappers from the online repository…</string>
     <string name="wrapper_catalog_refreshing">Refreshing the wrapper list…</string>
     <string name="wrapper_catalog_cached">Could not refresh the list; showing the cached repository list. %1$s</string>

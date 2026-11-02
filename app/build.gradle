@@ -93,8 +93,8 @@ android {
         // We’re preserving Winlator’s request to keep targetSdkVersion at 28
         targetSdkVersion 28
 
-        versionCode 23
-        versionName "1.2.1 Bionic"
+        versionCode 28
+        versionName "1.2.1"
 
         // External native build from Winlator
         externalNativeBuild {
@@ -228,6 +228,9 @@ dependencies {
     implementation 'androidx.core:core:1.0.1'
     implementation 'androidx.palette:palette:1.0.0'
     implementation 'com.github.bumptech.glide:glide:4.11.0'
+    implementation 'in.dragonbra:javasteam:1.8.0'
+    implementation 'in.dragonbra:javasteam-depotdownloader:1.8.0'
+    implementation 'com.google.zxing:core:3.5.3'
     implementation 'com.kohlschutter.junixsocket:junixsocket-common:2.6.0'
     implementation 'com.kohlschutter.junixsocket:junixsocket-native-common:2.6.0'
     implementation 'com.caverock:androidsvg-aar:1.4'

@@ -308,11 +308,11 @@ public class ContainerDetailFragment extends Fragment {
         final View view = inflater.inflate(R.layout.container_detail_fragment, root, false);
 
         // Determine if dark mode is enabled
-        isDarkMode = preferences.getBoolean("dark_mode", true); // Adjust this based on how you store theme info
+        isDarkMode = ThemeManager.isDarkMode(context);
 
         // Apply dynamic styles
         applyDynamicStyles(view, isDarkMode);
-        view.setBackgroundResource(R.drawable.liquid_glass_editor_background);
+        view.setBackground(ThemeManager.createThemedSurfaceDrawable(context, 20));
 
         // Apply dynamic styles recursively
 //        applyDynamicStylesRecursively(view, isDarkMode);

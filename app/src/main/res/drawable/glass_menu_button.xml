@@ -1,14 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ripple
-    android:color="#4Dffffff"
-    xmlns:android="http://schemas.android.com/apk/res/android">
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/semanticSurfaceVariant">
     <item>
-        <shape
-            android:shape="oval">
-            <solid android:color="#66383D43" />
-            <stroke
-                android:width="1dp"
-                android:color="#99FFFFFF" />
+        <shape android:shape="oval">
+            <solid android:color="?attr/gamingSurfaceColor" />
         </shape>
     </item>
 </ripple>

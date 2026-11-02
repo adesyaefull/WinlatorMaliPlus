@@ -108,7 +108,7 @@ public class SettingsFragment extends Fragment {
         preferences = PreferenceManager.getDefaultSharedPreferences(context);
 
         // Check for Dark Mode preference
-        isDarkMode = preferences.getBoolean("dark_mode", true);
+        isDarkMode = ThemeManager.isDarkMode(context);
         // Apply dynamic styles
         applyDynamicStyles(view, isDarkMode);
 
@@ -166,47 +166,12 @@ public class SettingsFragment extends Fragment {
             });
         }
 
-        CheckBox fullLiquidGlass = view.findViewById(R.id.CBFullLiquidGlass);
-        if (fullLiquidGlass != null) {
-            fullLiquidGlass.setChecked(ThemeManager.isFullLiquidGlassEnabled(context));
-            fullLiquidGlass.setOnCheckedChangeListener((button, enabled) -> {
-                preferences.edit().putBoolean(ThemeManager.PREF_FULL_LIQUID_GLASS, enabled).apply();
-                ThemeManager.applyTheme(requireActivity());
-                ThemeManager.applyGlassBackdropEffect(requireActivity());
-                requireActivity().recreate();
-            });
-        }
-
-        final Spinner sThemePreset = view.findViewById(R.id.SThemePreset);
-        if (sThemePreset != null) {
-            String[] presetNames = ThemeManager.getPresetNames(context);
-            android.widget.ArrayAdapter<String> presetAdapter = new android.widget.ArrayAdapter<>(context, R.layout.custom_spinner_item, presetNames);
-            presetAdapter.setDropDownViewResource(R.layout.custom_spinner_dropdown_item);
-            sThemePreset.setAdapter(presetAdapter);
-            sThemePreset.setSelection(ThemeManager.getSelectedPresetIndex(context));
-            sThemePreset.setPopupBackgroundResource(isDarkMode ? R.drawable.content_dialog_background_dark : R.drawable.content_dialog_background);
-
-            sThemePreset.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(android.widget.AdapterView<?> parent, View v, int position, long id) {
-                    if (position != ThemeManager.getSelectedPresetIndex(context)) {
-                        ThemeManager.setSelectedPresetIndex(context, position);
-                        if (ThemeManager.isCustomPresetSelected(context)) {
-                            new com.winlator.cmod.contentdialog.CustomThemeDialog(context).show();
-                        } else {
-                            if (getActivity() != null) getActivity().recreate();
-                        }
-                    }
-                }
-
-                @Override
-                public void onNothingSelected(android.widget.AdapterView<?> parent) {}
-            });
-        }
-
-        View btCustomizeTheme = view.findViewById(R.id.BTCustomizeTheme);
-        if (btCustomizeTheme != null) {
-            btCustomizeTheme.setOnClickListener(v -> new com.winlator.cmod.contentdialog.CustomThemeDialog(context).show());
+        TextView selectAppTheme = view.findViewById(R.id.BTSelectAppTheme);
+        if (selectAppTheme != null) {
+            updateSelectedThemeLabel(selectAppTheme, context);
+            selectAppTheme.setOnClickListener(v ->
+                    com.winlator.cmod.contentdialog.ThemeSelectionDialog.show(
+                            requireActivity(), false, () -> requireActivity().recreate()));
         }
 
         initCustomApiKeySettings(view);
@@ -397,14 +362,14 @@ public class SettingsFragment extends Fragment {
                 "☁️ StevenMXZ Contents",
                 "🌐 Custom Catalog URL"
             };
-            boolean isDarkMode = preferences.getBoolean("dark_mode", true);
+            int appearanceTextColor = ThemeManager.getOnSurfaceTextColor(context);
             ArrayAdapter<String> adapter = new ArrayAdapter<String>(context, android.R.layout.simple_spinner_dropdown_item, presets) {
                 @NonNull
                 @Override
                 public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
                     View v = super.getView(position, convertView, parent);
                     if (v instanceof TextView) {
-                        ((TextView) v).setTextColor(isDarkMode ? Color.WHITE : Color.BLACK);
+                        ((TextView) v).setTextColor(appearanceTextColor);
                     }
                     return v;
                 }
@@ -413,14 +378,15 @@ public class SettingsFragment extends Fragment {
                 public View getDropDownView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
                     View v = super.getDropDownView(position, convertView, parent);
                     if (v instanceof TextView) {
-                        ((TextView) v).setTextColor(isDarkMode ? Color.WHITE : Color.BLACK);
-                        v.setBackgroundResource(R.drawable.liquid_glass_surface);
+                        ((TextView) v).setTextColor(appearanceTextColor);
+                        v.setBackground(ThemeManager.createThemedSurfaceDrawable(context, 10));
                     }
                     return v;
                 }
             };
             sCatalogPreset.setAdapter(adapter);
-            sCatalogPreset.setPopupBackgroundResource(isDarkMode ? R.drawable.content_dialog_background_dark : R.drawable.content_dialog_background);
+            sCatalogPreset.setPopupBackgroundResource(ThemeManager.isFullLiquidGlassEnabled(context)
+                    ? R.drawable.liquid_glass_popup : R.drawable.theme_dialog_background);
 
             if (savedCatalogUrl.equals(ContentsManager.BANNERLATOR_PROFILES)) {
                 sCatalogPreset.setSelection(0, false);
@@ -472,7 +438,6 @@ public class SettingsFragment extends Fragment {
         view.findViewById(R.id.BTConfirm).setOnClickListener((v) -> {
             SharedPreferences.Editor editor = preferences.edit();
 
-            editor.putBoolean("dark_mode", true);
             editor.putString("box64_preset", Box64PresetManager.getSpinnerSelectedId(sBox64Preset));
             editor.putString("fexcore_preset", FEXCorePresetManager.getSpinnerSelectedId(sFEXCorePreset));
             editor.putBoolean("use_dri3", cbUseDRI3.isChecked());
@@ -509,9 +474,13 @@ public class SettingsFragment extends Fragment {
     }
 
     private void updateTheme(boolean isDarkMode) {
-        getActivity().setTheme(R.style.AppTheme_Dark);
-        ThemeManager.applyTheme(getActivity());
+        ThemeManager.applyActivityTheme(getActivity(), false);
         getActivity().recreate();
+    }
+
+    private static void updateSelectedThemeLabel(TextView view, Context context) {
+        String themeName = ThemeManager.getSelectedPreset(context).name;
+        view.setText(themeName + "  ›");
     }
 
 
@@ -524,6 +493,34 @@ public class SettingsFragment extends Fragment {
         if (sFEXCorePreset != null) sFEXCorePreset.setPopupBackgroundResource(isDarkMode ? R.drawable.content_dialog_background_dark : R.drawable.content_dialog_background);
 
         com.winlator.cmod.ThemeManager.applyThemeToView(view, getContext());
+        applyLiquidGlassSettingsSurfaces(view);
+    }
+
+    private void applyLiquidGlassSettingsSurfaces(View view) {
+        Context context = getContext();
+        if (context == null) return;
+        applyLiquidGlassSettingsSurfacesRecursively(view, context);
+        com.google.android.material.tabs.TabLayout tabLayout = view.findViewById(R.id.TabLayout);
+        if (tabLayout != null) {
+            tabLayout.setBackground(ThemeManager.createThemedSurfaceDrawable(context, 14));
+        }
+        TextView themeButton = view.findViewById(R.id.BTSelectAppTheme);
+        if (themeButton != null) {
+            themeButton.setBackground(ThemeManager.createThemedSurfaceDrawable(context, 14));
+        }
+    }
+
+    private void applyLiquidGlassSettingsSurfacesRecursively(View view, Context context) {
+        if (view == null) return;
+        if ("settingsSurface".equals(view.getTag())) {
+            view.setBackground(ThemeManager.createThemedSurfaceDrawable(context, 14));
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                applyLiquidGlassSettingsSurfacesRecursively(group.getChildAt(i), context);
+            }
+        }
     }
 
     private void applyDynamicStylesRecursively(View view) {

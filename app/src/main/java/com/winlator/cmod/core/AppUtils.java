@@ -169,7 +169,9 @@ public abstract class AppUtils {
     public static PopupWindow showPopupWindow(View anchor, View contentView, int width, int height) {
         Context context = anchor.getContext();
         PopupWindow popupWindow = new PopupWindow(context);
-        popupWindow.setBackgroundDrawable(context.getDrawable(R.drawable.liquid_glass_popup));
+        int popupBackground = com.winlator.cmod.ThemeManager.isFullLiquidGlassEnabled(context)
+                ? R.drawable.liquid_glass_popup : R.drawable.theme_dialog_background;
+        popupWindow.setBackgroundDrawable(context.getDrawable(popupBackground));
         popupWindow.setElevation(5.0f);
 
         if (width == 0 && height == 0) {

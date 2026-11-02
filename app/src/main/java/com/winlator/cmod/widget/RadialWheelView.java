@@ -12,6 +12,8 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 
+import androidx.core.graphics.ColorUtils;
+
 import com.winlator.cmod.inputcontrols.Binding;
 import com.winlator.cmod.inputcontrols.RadialWheelConfig;
 import com.winlator.cmod.inputcontrols.RadialWheelSlice;
@@ -27,11 +29,6 @@ public class RadialWheelView extends View {
 
     private static final float INNER_RADIUS_DP = 36f;
     private static final float OUTER_RADIUS_DP = 100f;
-    private static final int COLOR_IDLE     = 0x66000000;
-    private static final int COLOR_SELECTED = 0xCC2196F3;
-    private static final int COLOR_CENTER   = 0x88000000;
-    private static final int COLOR_LABEL    = 0xFFFFFFFF;
-
     public RadialWheelView(Context context, RadialWheelConfig config, InputControlsView icv) {
         super(context);
         this.config = config;
@@ -127,6 +124,13 @@ public class RadialWheelView extends View {
 
         int sliceCount = config.slices.size();
         if (sliceCount == 0) return;
+        int accent = com.winlator.cmod.ThemeManager.getAccentColor(getContext());
+        int surface = com.winlator.cmod.ThemeManager.getSurfaceColor(getContext());
+        int onSurface = com.winlator.cmod.ThemeManager.getOnSurfaceTextColor(getContext());
+        int onAccent = com.winlator.cmod.ThemePreset.onAccentFor(accent);
+        boolean liquidGlass = com.winlator.cmod.ThemeManager.isFullLiquidGlassEnabled(getContext());
+        int idleSurface = ColorUtils.setAlphaComponent(surface, liquidGlass ? 150 : 255);
+        int selectedSurface = ColorUtils.setAlphaComponent(accent, liquidGlass ? 220 : 255);
 
         float sliceAngleDeg = 360f / sliceCount;
         // offset so slice 0 is at top
@@ -156,30 +160,31 @@ public class RadialWheelView extends View {
             path.close();
 
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(i == selectedSlice ? COLOR_SELECTED : COLOR_IDLE);
+            paint.setColor(i == selectedSlice ? selectedSurface : idleSurface);
             canvas.drawPath(path, paint);
 
             // Stroke between slices
             paint.setStyle(Paint.Style.STROKE);
-            paint.setColor(0x44FFFFFF);
+            paint.setColor(ColorUtils.setAlphaComponent(
+                    com.winlator.cmod.ThemeManager.getDividerColor(getContext()), 170));
             paint.setStrokeWidth(1f * density);
             canvas.drawPath(path, paint);
         }
 
         // Draw outer ring stroke
         paint.setStyle(Paint.Style.STROKE);
-        paint.setColor(0x88FFFFFF);
+        paint.setColor(accent);
         paint.setStrokeWidth(2f * density);
         canvas.drawCircle(touchX, touchY, outerRadius, paint);
 
         // Draw cancel center dot
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(COLOR_CENTER);
+        paint.setColor(surface);
         canvas.drawCircle(touchX, touchY, innerRadius, paint);
 
         // Draw cancel "✕" in center
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xAAFFFFFF);
+        paint.setColor(onSurface);
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setTextSize(16f * density);
         paint.setTypeface(Typeface.DEFAULT_BOLD);
@@ -207,7 +212,8 @@ public class RadialWheelView extends View {
 
                     paint.setFilterBitmap(true);
                     if (slice.iconId <= com.winlator.cmod.inputcontrols.CustomIconManager.BUILTIN_ICON_MAX) {
-                        paint.setColorFilter(new android.graphics.PorterDuffColorFilter(i == selectedSlice ? 0xFFFFFFFF : 0xFF81D4FA, android.graphics.PorterDuff.Mode.SRC_IN));
+                        paint.setColorFilter(new android.graphics.PorterDuffColorFilter(
+                                i == selectedSlice ? onAccent : accent, android.graphics.PorterDuff.Mode.SRC_IN));
                     } else {
                         paint.setColorFilter(null);
                         paint.setAlpha(255);
@@ -224,7 +230,7 @@ public class RadialWheelView extends View {
                     ? slice.label : (slice.binding != null && slice.binding != Binding.NONE ? slice.binding.toString() : "");
             if (label.isEmpty()) continue;
 
-            paint.setColor(i == selectedSlice ? 0xFFFFFFFF : COLOR_LABEL);
+            paint.setColor(i == selectedSlice ? onAccent : onSurface);
             paint.setTextSize((i == selectedSlice ? 13f : 11f) * density);
             canvas.drawText(label, lx, ly + (paint.getTextSize() / 3f), paint);
         }

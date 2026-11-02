@@ -48,7 +48,7 @@ public class FEXCoreEditPresetDialog extends ContentDialog {
 
         // Load the user's preferred theme
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
-        isDarkMode = sharedPreferences.getBoolean("dark_mode", true);
+        isDarkMode = com.winlator.cmod.ThemeManager.isDarkMode(context);
 
         TextView environmentVariablesLabel = findViewById(R.id.TVEnvironmentVariables);
         applyFieldSetLabelStyle(environmentVariablesLabel, isDarkMode);  // Apply the dark or light mode styles

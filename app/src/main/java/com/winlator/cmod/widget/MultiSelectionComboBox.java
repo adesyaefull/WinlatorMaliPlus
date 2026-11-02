@@ -123,7 +123,9 @@ public class MultiSelectionComboBox extends AppCompatTextView {
         popupWindow.setAdapter(adapter);
         popupWindow.setAnchorView(this);
         popupWindow.setWidth((int)UnitUtils.dpToPx(260));
-        popupWindow.setBackgroundDrawable(getContext().getDrawable(R.drawable.liquid_glass_popup));
+        int popupBackground = ThemeManager.isFullLiquidGlassEnabled(getContext())
+                ? R.drawable.liquid_glass_popup : R.drawable.theme_dialog_background;
+        popupWindow.setBackgroundDrawable(getContext().getDrawable(popupBackground));
 
         popupWindow.setOnItemClickListener((parent, view, position, id) -> {
             String item = items[position];

@@ -574,6 +574,13 @@ public class ControlElement {
         return ColorUtils.setAlphaComponent(Color.WHITE, (int) Math.min(255, Math.max(0, alpha)));
     }
 
+    private int glassContentColor(float alpha) {
+        int color = com.winlator.cmod.ThemeManager.isFullLiquidGlassEnabled(inputControlsView.getContext())
+                ? Color.WHITE
+                : com.winlator.cmod.ThemeManager.getOnSurfaceTextColor(inputControlsView.getContext());
+        return ColorUtils.setAlphaComponent(color, (int) Math.min(255, Math.max(0, alpha)));
+    }
+
     private boolean drawGlass(Canvas canvas, Paint paint, boolean pressed, float alpha, Binding b0, String label) {
         boolean button = type == Type.BUTTON || type == Type.EXPANDABLE_BUTTON || type == Type.BUTTON_GRID;
         if (button && customIconAsButton && iconId > 0)
@@ -631,7 +638,8 @@ public class ControlElement {
             }
             // Madeira labels every button with text (START / SELECT, LB, A ...); the profile's own icons are not drawn.
             String text = getDisplayText();
-            String key = w + "," + h + "," + (int) radius + "," + tint + "," + (int) alpha + "," + selected + "," + text + "," + pill;
+            String key = w + "," + h + "," + (int) radius + "," + tint + "," + (int) alpha + "," + selected + "," + text + "," + pill
+                    + "," + com.winlator.cmod.ThemeManager.getSelectedPresetIndex(inputControlsView.getContext());
             if (!key.equals(glassCacheKey)) {
                 recycleGlassCache();
                 glassCacheKey = key;
@@ -645,7 +653,8 @@ public class ControlElement {
 
         if (type == Type.STICK || type == Type.DYNAMIC_STICK) {
             int d = box.height();
-            String key = "stick," + d + "," + (int) alpha + "," + selected;
+            String key = "stick," + d + "," + (int) alpha + "," + selected
+                    + "," + com.winlator.cmod.ThemeManager.getSelectedPresetIndex(inputControlsView.getContext());
             if (!key.equals(glassCacheKey)) {
                 recycleGlassCache();
                 glassCacheKey = key;
@@ -655,7 +664,7 @@ public class ControlElement {
             drawGlassBitmap(canvas, glassCache[0], cx, cy);
             boolean held = getCurrentPointerId() != -1;
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(glassWhite(alpha * (held ? 0.65f : 0.38f)));
+            paint.setColor(glassContentColor(alpha * (held ? 0.65f : 0.38f)));
             canvas.drawCircle(getCurrentPosition().x, getCurrentPosition().y, d * 0.21f, paint);
             return true;
         }
@@ -663,7 +672,8 @@ public class ControlElement {
         // D-pad: four round buttons with an arrow each (up, right, down, left, as its states).
         float r = Math.min(box.width(), box.height()) * 0.19f;
         int d = Math.round(r * 2);
-        String key = "dpad," + d + "," + (int) alpha + "," + selected;
+        String key = "dpad," + d + "," + (int) alpha + "," + selected
+                + "," + com.winlator.cmod.ThemeManager.getSelectedPresetIndex(inputControlsView.getContext());
         if (!key.equals(glassCacheKey)) {
             recycleGlassCache();
             glassCacheKey = key;
@@ -689,7 +699,7 @@ public class ControlElement {
             arrow.close();
             paint.setStyle(Paint.Style.FILL);
             paint.setPathEffect(null);
-            paint.setColor(glassWhite(alpha * (down ? 1.0f : 0.92f)));
+            paint.setColor(glassContentColor(alpha * (down ? 1.0f : 0.92f)));
             canvas.drawPath(arrow, paint);
             canvas.restore();
         }
@@ -720,18 +730,24 @@ public class ControlElement {
         float cx = m + w * 0.5f, cy = m + h * 0.5f;
         if (pressed) c.scale(0.92f, 0.92f, cx, cy);
         RectF rect = new RectF(m, m, m + w, m + h);
-        com.winlator.cmod.widget.GlassPainter.paint(c, rect, radius, tint, alpha, pressed, selected);
+        android.content.Context context = inputControlsView.getContext();
+        boolean liquidGlass = com.winlator.cmod.ThemeManager.isFullLiquidGlassEnabled(context);
+        com.winlator.cmod.widget.GlassPainter.paint(c, rect, radius, tint, alpha, pressed, selected,
+                liquidGlass, com.winlator.cmod.ThemeManager.getSurfaceColor(context),
+                com.winlator.cmod.ThemeManager.getAccentColor(context));
 
         if (text != null && !text.isEmpty())
-            drawGlassLabel(c, new Paint(Paint.ANTI_ALIAS_FLAG), text, rect, pressed, alpha, pill);
+            drawGlassLabel(c, new Paint(Paint.ANTI_ALIAS_FLAG), text, rect, pressed, alpha, pill,
+                    liquidGlass ? Color.WHITE : com.winlator.cmod.ThemeManager.getOnSurfaceTextColor(context));
         return bitmap;
     }
 
-    private void drawGlassLabel(Canvas canvas, Paint paint, String text, RectF rect, boolean pressed, float alpha, boolean pill) {
+    private void drawGlassLabel(Canvas canvas, Paint paint, String text, RectF rect, boolean pressed,
+                                float alpha, boolean pill, int textColor) {
         paint.setTypeface(glassTypeface);
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(glassWhite(alpha));
+        paint.setColor(ColorUtils.setAlphaComponent(textColor, (int) Math.min(255, Math.max(0, alpha))));
         // A faint shadow keeps white labels readable over bright scenes (drawn once, into the cached bitmap).
         paint.setShadowLayer(Math.max(1f, rect.height() * 0.03f), 0, rect.height() * 0.01f, Color.argb((int) (alpha * 0.45f), 0, 0, 0));
         if (pill) paint.setLetterSpacing(0.06f);

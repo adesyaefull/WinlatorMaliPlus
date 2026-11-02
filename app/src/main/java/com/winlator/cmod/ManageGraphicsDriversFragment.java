@@ -21,7 +21,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
-import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.winlator.cmod.contentdialog.ContentDialog;
@@ -41,10 +40,16 @@ import java.util.List;
 import java.util.Set;
 
 public class ManageGraphicsDriversFragment extends Fragment {
+    private static final int IMPORT_WRAPPER_REQUEST_CODE =
+            MainActivity.OPEN_FILE_REQUEST_CODE + 1;
     private String selectedDriverFile;
-    private RecyclerView recyclerView;
+    private LinearLayout driverListView;
     private LinearLayout wrapperCatalogList;
     private TextView wrapperCatalogStatus;
+    private Button wrapperCatalogToggle;
+    private Button importWrapperButton;
+    private boolean wrapperCatalogExpanded;
+    private boolean wrapperCatalogStatusShown;
     private final List<DriverInfo> driverList = new ArrayList<>();
     private final List<WrapperCatalogManager.Entry> wrapperEntries = new ArrayList<>();
     private final Set<String> downloadingWrapperIds = new HashSet<>();
@@ -113,12 +118,20 @@ public class ManageGraphicsDriversFragment extends Fragment {
                     getString(R.string.manage_graphics_drivers_description), Html.FROM_HTML_MODE_LEGACY));
         }
 
-        recyclerView = view.findViewById(R.id.RecyclerView);
-        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        driverListView = view.findViewById(R.id.DriverList);
         wrapperCatalogList = view.findViewById(R.id.WrapperCatalogList);
         wrapperCatalogStatus = view.findViewById(R.id.TVWrapperCatalogStatus);
+        wrapperCatalogToggle = view.findViewById(R.id.BTWrapperCatalogToggle);
+        importWrapperButton = view.findViewById(R.id.BTImportWrapper);
+        wrapperCatalogToggle.setText(R.string.wrapper_catalog_title_collapsed);
+        wrapperCatalogToggle.setOnClickListener(v -> {
+            wrapperCatalogExpanded = !wrapperCatalogExpanded;
+            updateWrapperCatalogVisibility();
+        });
+        importWrapperButton.setOnClickListener(v -> openWrapperPicker());
 
         ThemeManager.applyThemeToView(view, getContext());
+        updateWrapperCatalogVisibility();
 
         loadDrivers();
         refreshWrapperCatalog();
@@ -144,6 +157,20 @@ public class ManageGraphicsDriversFragment extends Fragment {
 
             android.content.Context context = getContext();
             if (context != null) {
+                Set<String> knownDrivers = new HashSet<>();
+                for (DriverInfo info : driverList) {
+                    knownDrivers.add(info.fileName.toLowerCase(java.util.Locale.ROOT));
+                }
+                for (WrapperCatalogManager.Entry wrapper
+                        : WrapperCatalogManager.getInstalledWrappers(context)) {
+                    File importedFile = new File(context.getFilesDir(),
+                            "graphics_driver/" + wrapper.id + ".tzst");
+                    if (importedFile.isFile()
+                            && knownDrivers.add(importedFile.getName().toLowerCase(
+                            java.util.Locale.ROOT))) {
+                        driverList.add(new DriverInfo(importedFile.getName()));
+                    }
+                }
                 for (DriverInfo info : driverList) {
                     fetchDriverInfo(context, info);
                 }
@@ -152,7 +179,13 @@ public class ManageGraphicsDriversFragment extends Fragment {
             activity.runOnUiThread(() -> {
                 preloaderDialog.closeOnUiThread();
                 if (isAdded()) {
-                    recyclerView.setAdapter(new DriverAdapter(driverList));
+                    driverListView.removeAllViews();
+                    DriverAdapter adapter = new DriverAdapter(driverList);
+                    for (int i = 0; i < adapter.getItemCount(); i++) {
+                        DriverAdapter.ViewHolder holder = adapter.onCreateViewHolder(driverListView, 0);
+                        adapter.onBindViewHolder(holder, i);
+                        driverListView.addView(holder.itemView);
+                    }
                 }
             });
         }).start();
@@ -304,6 +337,18 @@ public class ManageGraphicsDriversFragment extends Fragment {
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == IMPORT_WRAPPER_REQUEST_CODE && resultCode == Activity.RESULT_OK
+                && data != null && data.getData() != null) {
+            Uri uri = data.getData();
+            String fileName = FileUtils.getUriFileName(getContext(), uri);
+            if (fileName == null) {
+                showWrapperImportFailure("The selected filename could not be determined.");
+            } else {
+                importWrapper(uri, fileName);
+            }
+            return;
+        }
         if (requestCode == MainActivity.OPEN_FILE_REQUEST_CODE && resultCode == Activity.RESULT_OK && data != null) {
             Uri uri = data.getData();
             String fileName = FileUtils.getUriFileName(getContext(), uri);
@@ -315,6 +360,67 @@ public class ManageGraphicsDriversFragment extends Fragment {
                 AppUtils.showToast(getContext(), errorMsg);
             }
         }
+    }
+
+    private void updateWrapperCatalogVisibility() {
+        if (wrapperCatalogToggle == null) return;
+        wrapperCatalogToggle.setText(wrapperCatalogExpanded
+                ? R.string.wrapper_catalog_title_expanded
+                : R.string.wrapper_catalog_title_collapsed);
+        int visibility = wrapperCatalogExpanded ? View.VISIBLE : View.GONE;
+        wrapperCatalogStatus.setVisibility(wrapperCatalogExpanded && wrapperCatalogStatusShown
+                ? View.VISIBLE : View.GONE);
+        wrapperCatalogList.setVisibility(visibility);
+    }
+
+    private void setWrapperCatalogStatusShown(boolean shown) {
+        wrapperCatalogStatusShown = shown;
+        wrapperCatalogStatus.setVisibility(shown && wrapperCatalogExpanded
+                ? View.VISIBLE : View.GONE);
+    }
+
+    private void openWrapperPicker() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        startActivityForResult(intent, IMPORT_WRAPPER_REQUEST_CODE);
+    }
+
+    private void importWrapper(Uri uri, String fileName) {
+        Activity activity = getActivity();
+        if (activity == null) return;
+        final PreloaderDialog progress = new PreloaderDialog(activity);
+        progress.showOnUiThread(R.string.updating_system_files);
+        new Thread(() -> {
+            Exception failure = null;
+            try (InputStream input = activity.getContentResolver().openInputStream(uri)) {
+                WrapperCatalogManager.importWrapper(activity, input, fileName);
+            } catch (Exception e) {
+                failure = e;
+                android.util.Log.e("ManageGraphicsDrivers",
+                        "Could not import graphics wrapper " + fileName, e);
+            }
+            Exception error = failure;
+            activity.runOnUiThread(() -> {
+                progress.closeOnUiThread();
+                if (!isAdded()) return;
+                if (error == null) {
+                    wrapperCatalogStatus.setText(R.string.wrapper_import_success);
+                    setWrapperCatalogStatusShown(true);
+                    AppUtils.showToast(activity, R.string.wrapper_import_success);
+                    loadDrivers();
+                } else {
+                    showWrapperImportFailure(error.getMessage() == null
+                            ? error.getClass().getSimpleName() : error.getMessage());
+                }
+            });
+        }, "ImportGraphicsWrapper").start();
+    }
+
+    private void showWrapperImportFailure(String reason) {
+        Activity activity = getActivity();
+        if (activity == null) return;
+        ContentDialog.alert(activity, getString(R.string.wrapper_import_failed, reason), null);
     }
 
     private void updateDriver(Uri uri) {
@@ -356,11 +462,11 @@ public class ManageGraphicsDriversFragment extends Fragment {
         List<WrapperCatalogManager.Entry> cached = WrapperCatalogManager.getCachedCatalog(activity);
         if (!cached.isEmpty()) {
             showWrapperCatalogEntries(cached);
-            wrapperCatalogStatus.setVisibility(View.VISIBLE);
             wrapperCatalogStatus.setText(R.string.wrapper_catalog_refreshing);
+            setWrapperCatalogStatusShown(true);
         } else {
-            wrapperCatalogStatus.setVisibility(View.VISIBLE);
             wrapperCatalogStatus.setText(R.string.wrapper_catalog_loading);
+            setWrapperCatalogStatusShown(true);
         }
         new Thread(() -> {
             List<WrapperCatalogManager.Entry> entries;
@@ -378,16 +484,16 @@ public class ManageGraphicsDriversFragment extends Fragment {
                 if (!isAdded()) return;
                 showWrapperCatalogEntries(result);
                 if (result.isEmpty()) {
-                    wrapperCatalogStatus.setVisibility(View.VISIBLE);
                     wrapperCatalogStatus.setText(getString(R.string.wrapper_catalog_unavailable,
                             error == null ? "No cached catalog is available." : error));
+                    setWrapperCatalogStatusShown(true);
                     return;
                 }
-                wrapperCatalogStatus.setVisibility(error == null ? View.GONE : View.VISIBLE);
                 if (error != null) {
                     wrapperCatalogStatus.setText(getString(R.string.wrapper_catalog_cached,
                             error));
                 }
+                setWrapperCatalogStatusShown(error != null);
             });
         }).start();
     }
@@ -449,8 +555,8 @@ public class ManageGraphicsDriversFragment extends Fragment {
                 renderWrapperCatalogEntries();
                 if (error == null) {
                     AppUtils.showToast(activity, getString(R.string.wrapper_download_success, entry.name));
-                    wrapperCatalogStatus.setVisibility(View.VISIBLE);
                     wrapperCatalogStatus.setText(R.string.wrapper_catalog_downloaded_selectable);
+                    setWrapperCatalogStatusShown(true);
                 } else {
                     ContentDialog.alert(activity, getString(R.string.wrapper_download_failed,
                             error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage()), null);

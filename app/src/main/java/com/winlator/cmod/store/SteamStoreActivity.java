@@ -316,8 +316,15 @@ public final class SteamStoreActivity extends AppCompatActivity
         if (isFinishing() || loginPromptDismissed || repository.isLoggedIn()
                 || !repository.isConnected()) return;
         if (reconnectDialog != null && reconnectDialog.isShowing()) reconnectDialog.dismiss();
-        if (loginDialog != null && loginDialog.isShowing()) return;
-        loginDialog = new AlertDialog.Builder(this)
+        if (loginDialog != null) {
+            if (loginDialog.isShowing()) return;
+            loginDialog = null;
+        }
+        android.view.ViewParent loginPanelParent = loginPanel.getParent();
+        if (loginPanelParent instanceof ViewGroup) {
+            ((ViewGroup) loginPanelParent).removeView(loginPanel);
+        }
+        AlertDialog loginAlertDialog = new AlertDialog.Builder(this)
                 .setTitle("Sign in to Steam")
                 .setView(loginPanel)
                 .setNegativeButton("Close", (dialog, which) -> {
@@ -327,17 +334,23 @@ public final class SteamStoreActivity extends AppCompatActivity
                     statusView.setText("Tap here to sign in to Steam");
                 })
                 .create();
-        loginDialog.setOnShowListener(dialog -> {
-            styleFullBlurDialog(loginDialog);
-            if (loginDialog.getWindow() != null) {
-                loginDialog.getWindow().setSoftInputMode(
+        loginDialog = loginAlertDialog;
+        loginAlertDialog.setOnDismissListener(ignored -> {
+            android.view.ViewParent parent = loginPanel.getParent();
+            if (parent instanceof ViewGroup) ((ViewGroup) parent).removeView(loginPanel);
+            if (loginDialog == loginAlertDialog) loginDialog = null;
+        });
+        loginAlertDialog.setOnShowListener(ignored -> {
+            styleFullBlurDialog(loginAlertDialog);
+            if (loginAlertDialog.getWindow() != null) {
+                loginAlertDialog.getWindow().setSoftInputMode(
                         android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-                loginDialog.getWindow().setLayout(
+                loginAlertDialog.getWindow().setLayout(
                         getResources().getDisplayMetrics().widthPixels - dp(36),
                         ViewGroup.LayoutParams.WRAP_CONTENT);
             }
         });
-        loginDialog.show();
+        loginAlertDialog.show();
     }
 
     private void showReconnectDialog() {
@@ -495,8 +508,8 @@ public final class SteamStoreActivity extends AppCompatActivity
         usernameInput = new EditText(this);
         usernameInput.setSingleLine(true);
         usernameInput.setHint("Steam account name");
-        usernameInput.setTextColor(Color.WHITE);
-        usernameInput.setHintTextColor(0xBFFFFFFF);
+        usernameInput.setTextColor(ThemeManager.getOnSurfaceTextColor(this));
+        usernameInput.setHintTextColor(ThemeManager.getSelectedPreset(this).onSurfaceVariant);
         usernameInput.setTextSize(16);
         usernameInput.setMinHeight(dp(50));
         usernameInput.setMinimumHeight(dp(50));
@@ -506,8 +519,8 @@ public final class SteamStoreActivity extends AppCompatActivity
         passwordInput = new EditText(this);
         passwordInput.setSingleLine(true);
         passwordInput.setHint("Password");
-        passwordInput.setTextColor(Color.WHITE);
-        passwordInput.setHintTextColor(0xBFFFFFFF);
+        passwordInput.setTextColor(ThemeManager.getOnSurfaceTextColor(this));
+        passwordInput.setHintTextColor(ThemeManager.getSelectedPreset(this).onSurfaceVariant);
         passwordInput.setTextSize(16);
         passwordInput.setMinHeight(dp(50));
         passwordInput.setMinimumHeight(dp(50));
@@ -624,6 +637,7 @@ public final class SteamStoreActivity extends AppCompatActivity
 
         activityRoot.addView(root, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        activityRoot.setBackgroundColor(ThemeManager.getBackgroundColor(this));
         setContentView(activityRoot);
         ThemeManager.applyThemeToView(activityRoot, this);
         applySteamShadowPolicy(activityRoot);
@@ -2194,10 +2208,13 @@ public final class SteamStoreActivity extends AppCompatActivity
                     if (container == null) continue;
                     File installDirectory = findOfficialSteamGameDirectory(container, game.appId);
                     if (installDirectory == null) continue;
-                    if (!game.installed || !installDirectory.getAbsolutePath()
+                    if (!game.installed || game.installedSizeBytes <= 0
+                            || !installDirectory.getAbsolutePath()
                             .equals(new File(game.installedPath).getAbsolutePath())) {
+                        long actualSize = SteamDepotDownloadManager.getDirectorySizeBytes(
+                                installDirectory);
                         repository.getDatabase().markInstalled(game.appId,
-                                installDirectory.getAbsolutePath());
+                                installDirectory.getAbsolutePath(), actualSize);
                         changed = true;
                     }
                 }
@@ -3068,6 +3085,22 @@ public final class SteamStoreActivity extends AppCompatActivity
         return drawable;
     }
 
+    private GradientDrawable createThemedDownloadActionBackground() {
+        int accent = ThemeManager.getAccentColor(this);
+        int surface = ThemeManager.getSurfaceColor(this);
+        boolean liquidGlass = ThemeManager.isFullLiquidGlassEnabled(this);
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setShape(GradientDrawable.RECTANGLE);
+        drawable.setCornerRadius(dp(9));
+        drawable.setColor(liquidGlass
+                ? androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 88)
+                : androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.28f));
+        drawable.setStroke(dp(1), liquidGlass
+                ? androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 180)
+                : ThemeManager.getDividerColor(this));
+        return drawable;
+    }
+
     private void styleGlassDialog(AlertDialog dialog) {
         if (dialog.getWindow() == null) return;
         dialog.getWindow().setBackgroundDrawable(ThemeManager.createThemedSurfaceDrawable(this, 22));
@@ -3231,8 +3264,9 @@ public final class SteamStoreActivity extends AppCompatActivity
             holder.title.setText(game.name);
             holder.details.setText((game.installed
                     ? appManagedInstall ? "Installed" : "Installed via Steam client"
-                    : "Steam game")
-                    + "  ·  " + formatSize(game.sizeBytes));
+                    : "Owned by account")
+                    + (game.installed && game.installedSizeBytes > 0
+                    ? "  ·  " + formatSize(game.installedSizeBytes) : ""));
             holder.badge.setText(downloading ? "DOWNLOADING" : game.installed ? "INSTALLED" : "OWNED");
             boolean paused = SteamDepotDownloadManager.isPaused(game.appId);
             holder.action.setText(game.installed ? "Add shortcut"
@@ -3685,13 +3719,16 @@ public final class SteamStoreActivity extends AppCompatActivity
                 pauseResume.setAllCaps(false);
                 pauseResume.setMinHeight(dp(44));
                 pauseResume.setMinimumHeight(dp(44));
-                pauseResume.setBackground(rectangularButton(0xFF176B36, 0xFF34A853));
+                pauseResume.setBackground(createThemedDownloadActionBackground());
+                pauseResume.setTextColor(ThemeManager.getOnSurfaceTextColor(SteamStoreActivity.this));
                 Button cancel = new Button(SteamStoreActivity.this);
                 cancel.setAllCaps(false);
                 cancel.setText("Cancel");
                 cancel.setMinHeight(dp(44));
                 cancel.setMinimumHeight(dp(44));
-                cancel.setBackground(rectangularButton(0xFF303746, 0xFF626D7F));
+                cancel.setBackground(ThemeManager.createThemedSurfaceDrawable(
+                        SteamStoreActivity.this, 9));
+                cancel.setTextColor(ThemeManager.getOnSurfaceTextColor(SteamStoreActivity.this));
                 LinearLayout.LayoutParams actionButtonParams = new LinearLayout.LayoutParams(
                         0, dp(44), 1);
                 actionButtonParams.setMargins(0, 0, dp(5), 0);
@@ -3718,14 +3755,17 @@ public final class SteamStoreActivity extends AppCompatActivity
                         : download.paused ? "Paused" : download.status);
                 boolean failed = download.status.startsWith("Failed");
                 holder.status.setTextColor(failed ? 0xFFFF8B8B : 0xFFE0E7F0);
-                holder.progress.setIndeterminate(download.totalBytes <= 0 && !failed && !complete);
-                holder.progress.setProgress(download.getProgressPercent());
-                String progressLabel = complete ? "100% complete · "
-                        : download.totalBytes > 0
-                        ? "About " + download.getProgressPercent() + "% · " : "";
-                holder.size.setText(progressLabel + "Transferred " + formatSize(download.downloadedBytes)
-                        + (download.totalBytes > 0
-                        ? " · estimated install size ~" + formatSize(download.totalBytes) : ""));
+                boolean hasDepotProgress = download.currentDepotProgress >= 0;
+                holder.progress.setIndeterminate(!failed && !complete && !download.paused
+                        && !hasDepotProgress);
+                holder.progress.setProgress(complete ? 100
+                        : hasDepotProgress ? download.currentDepotProgress : 0);
+                String progressLabel = complete ? "Download complete"
+                        : hasDepotProgress ? "Current depot · "
+                        + download.currentDepotProgress + "%" : download.status;
+                holder.size.setText(progressLabel + " · Transfer from Steam "
+                        + formatSize(download.downloadedBytes)
+                        + " (compressed data, not installed size)");
                 holder.actions.setVisibility(complete ? View.GONE : View.VISIBLE);
                 holder.pauseResume.setText(failed ? "Retry"
                         : download.paused ? "Resume" : "Pause");

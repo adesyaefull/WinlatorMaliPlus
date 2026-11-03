@@ -138,6 +138,8 @@ public class MultiSelectionComboBox extends AppCompatTextView {
         });
 
         popupWindow.show();
+        Runnable restorePopupBlur = GlassWindowEffects.applyPopupBackdropBlur(this);
+        popupWindow.setOnDismissListener(restorePopupBlur::run);
         if (popupWindow.getListView() != null) {
             popupWindow.getListView().setBackgroundColor(Color.TRANSPARENT);
             popupWindow.getListView().setCacheColorHint(Color.TRANSPARENT);

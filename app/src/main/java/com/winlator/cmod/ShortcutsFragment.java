@@ -65,6 +65,7 @@ import com.winlator.cmod.core.CommunityConfigUtils;
 import com.winlator.cmod.core.CoverArtManager;
 import com.winlator.cmod.core.FileUtils;
 import com.winlator.cmod.core.ImageUtils;
+import com.winlator.cmod.widget.GlassPopupMenu;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -317,8 +318,6 @@ public class ShortcutsFragment extends Fragment {
     @Override
     public void onDestroyView() {
         if (getActivity() instanceof AppCompatActivity) {
-            androidx.appcompat.app.ActionBar actionBar = ((AppCompatActivity) getActivity()).getSupportActionBar();
-            if (actionBar != null) actionBar.setTitle("");
             Toolbar toolbar = getActivity().findViewById(R.id.Toolbar);
             if (toolbar != null && previousToolbarBackground != null) {
                 toolbar.setBackground(previousToolbarBackground);
@@ -480,10 +479,15 @@ public class ShortcutsFragment extends Fragment {
             child.setScaleY(scale);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 RecyclerView.ViewHolder holder = recyclerView.getChildViewHolder(child);
-                View blurTarget = holder instanceof ShortcutsAdapter.ViewHolder
-                        ? ((ShortcutsAdapter.ViewHolder) holder).innerArea : child;
-                blurTarget.setRenderEffect(blurRadius > 0.05f
-                        ? RenderEffect.createBlurEffect(blurRadius, blurRadius, Shader.TileMode.CLAMP) : null);
+                if (holder instanceof ShortcutsAdapter.AddGameViewHolder) {
+                    child.setRenderEffect(null);
+                } else {
+                    View blurTarget = holder instanceof ShortcutsAdapter.ViewHolder
+                            ? ((ShortcutsAdapter.ViewHolder) holder).innerArea : child;
+                    blurTarget.setRenderEffect(blurRadius > 0.05f
+                            ? RenderEffect.createBlurEffect(
+                                    blurRadius, blurRadius, Shader.TileMode.CLAMP) : null);
+                }
             }
             child.setAlpha(1f - distance * 0.4f);
             RecyclerView.ViewHolder holder = recyclerView.getChildViewHolder(child);
@@ -1308,6 +1312,12 @@ public class ShortcutsFragment extends Fragment {
         public void onBindViewHolder(@NonNull RecyclerView.ViewHolder recyclerHolder, int position) {
             if (recyclerHolder instanceof AddGameViewHolder) {
                 AddGameViewHolder holder = (AddGameViewHolder) recyclerHolder;
+                Context cardContext = holder.card.getContext();
+                if (ThemeManager.isFullLiquidGlassEnabled(cardContext)) {
+                    holder.card.setCardBackgroundColor(android.graphics.Color.TRANSPARENT);
+                    holder.card.setCardElevation(0f);
+                    holder.card.setBackground(ThemeManager.createThemedSurfaceDrawable(cardContext, 18));
+                }
                 ViewGroup.LayoutParams params = holder.card.getLayoutParams();
                 if (params != null && shortcutCardWidthPx > 0) {
                     params.width = shortcutCardWidthPx;
@@ -1514,7 +1524,7 @@ public class ShortcutsFragment extends Fragment {
 
         private void showListItemMenu(View anchorView, final Shortcut shortcut) {
             final Context context = getContext();
-            PopupMenu listItemMenu = new PopupMenu(context, anchorView);
+            PopupMenu listItemMenu = new GlassPopupMenu(context, anchorView);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) listItemMenu.setForceShowIcon(true);
 
             listItemMenu.inflate(R.menu.shortcut_popup_menu);

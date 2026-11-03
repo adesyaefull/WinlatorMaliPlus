@@ -10,6 +10,7 @@ import android.widget.PopupMenu;
 import androidx.preference.PreferenceManager;
 
 import com.winlator.cmod.R;
+import com.winlator.cmod.widget.GlassPopupMenu;
 import com.winlator.cmod.widget.EnvVarsView;
 
 public class AddEnvVarDialog extends ContentDialog {
@@ -26,7 +27,7 @@ public class AddEnvVarDialog extends ContentDialog {
         setIcon(R.drawable.icon_env_var);
 
         findViewById(R.id.BTMenu).setOnClickListener((v) -> {
-            PopupMenu popupMenu = new PopupMenu(context, v);
+            PopupMenu popupMenu = new GlassPopupMenu(context, v);
             Menu menu = popupMenu.getMenu();
             for (String[] knownEnvVar : EnvVarsView.knownEnvVars) menu.add(knownEnvVar[0]);
 

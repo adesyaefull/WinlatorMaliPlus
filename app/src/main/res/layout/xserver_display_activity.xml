@@ -24,7 +24,7 @@
         app:headerLayout="@layout/main_menu_header"
         app:itemBackground="@drawable/navigation_item_background"
         app:itemIconTint="?attr/colorAccent"
-        app:itemTextColor="#ffffff"
+        app:itemTextColor="?attr/semanticOnSurface"
         app:itemShapeInsetStart="10dp"
         app:itemShapeInsetEnd="10dp"
         app:itemHorizontalPadding="16dp"

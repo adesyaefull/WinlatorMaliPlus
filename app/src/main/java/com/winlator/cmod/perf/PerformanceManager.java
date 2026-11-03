@@ -20,6 +20,10 @@ public class PerformanceManager {
     public static final String PREF_PREFER_BIG_CORES = "perf_prefer_big_cores";
     public static final String PREF_SUSTAINED_PERFORMANCE = "perf_sustained_performance";
     public static final String PREF_SAMSUNG_PERF_BOOST = "perf_samsung_boost";
+    public static final String PREF_ROOT_PERFORMANCE_PROFILE = "perf_root_profile";
+    public static final String PREF_ROOT_CPU_GOVERNOR = "perf_root_cpu_governor";
+    public static final String PREF_ROOT_GPU_GOVERNOR = "perf_root_gpu_governor";
+    public static final String PREF_ROOT_IO_SCHEDULER = "perf_root_io_scheduler";
 
     private static SamsungSPerfDriver samsungDriver = null;
     private static int currentGuestPid = -1;
@@ -66,6 +70,7 @@ public class PerformanceManager {
         if (prefs.getBoolean(PREF_SAMSUNG_PERF_BOOST, true) && samsungDriver != null && samsungDriver.isSupported()) {
             samsungDriver.startBoost();
         }
+        applyRootPerformanceProfile(activity, prefs);
 
         Log.d(TAG, "Performance profile applied on game start (pid=" + guestRootPid + ")");
     }
@@ -96,6 +101,7 @@ public class PerformanceManager {
         if (prefs.getBoolean(PREF_SAMSUNG_PERF_BOOST, true) && samsungDriver != null && samsungDriver.isSupported()) {
             samsungDriver.startBoost();
         }
+        applyRootPerformanceProfile(activity, prefs);
     }
 
     public static void onGamePause(Activity activity) {
@@ -105,6 +111,13 @@ public class PerformanceManager {
         if (samsungDriver != null && samsungDriver.isSupported()) {
             samsungDriver.stopBoost();
         }
+        RootPerformanceManager.restore(activity, error -> {
+            if (error != null) {
+                android.widget.Toast.makeText(activity.getApplicationContext(),
+                        "Could not restore CPU governor: " + error,
+                        android.widget.Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     public static void onGameStop(Activity activity) {
@@ -116,6 +129,13 @@ public class PerformanceManager {
         if (samsungDriver != null && samsungDriver.isSupported()) {
             samsungDriver.stopBoost();
         }
+        RootPerformanceManager.restore(activity, error -> {
+            if (error != null) {
+                android.widget.Toast.makeText(activity.getApplicationContext(),
+                        "Could not restore CPU governor: " + error,
+                        android.widget.Toast.LENGTH_LONG).show();
+            }
+        });
         currentGuestPid = -1;
         Log.d(TAG, "Performance profile restored on game stop");
     }
@@ -131,6 +151,11 @@ public class PerformanceManager {
         }
 
         setSustainedPerformance(activity, prefs.getBoolean(PREF_SUSTAINED_PERFORMANCE, false));
+        if (prefs.getBoolean(PREF_ROOT_PERFORMANCE_PROFILE, false)) {
+            applyRootPerformanceProfile(activity, prefs);
+        } else {
+            RootPerformanceManager.restore(activity, null);
+        }
 
         if (prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true)) {
             if (currentGuestPid > 0) PerfPriority.boost(currentGuestPid);
@@ -167,6 +192,21 @@ public class PerformanceManager {
 
     public static boolean isSamsungSupported() {
         return samsungDriver != null && samsungDriver.isSupported();
+    }
+
+    private static void applyRootPerformanceProfile(Activity activity, SharedPreferences prefs) {
+        if (!prefs.getBoolean(PREF_ROOT_PERFORMANCE_PROFILE, false)) return;
+        String cpuGovernor = prefs.getString(PREF_ROOT_CPU_GOVERNOR, "performance");
+        String gpuGovernor = prefs.getString(PREF_ROOT_GPU_GOVERNOR, "");
+        String ioScheduler = prefs.getString(PREF_ROOT_IO_SCHEDULER, "");
+        RootPerformanceManager.applyPerformanceProfile(
+                activity, cpuGovernor, gpuGovernor, ioScheduler, error -> {
+            if (error != null) {
+                android.widget.Toast.makeText(activity.getApplicationContext(),
+                        "Could not apply root performance profile: " + error,
+                        android.widget.Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     private static void setSustainedPerformance(Activity activity, boolean enable) {

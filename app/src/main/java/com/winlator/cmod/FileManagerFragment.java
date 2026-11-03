@@ -28,6 +28,7 @@ import com.winlator.cmod.container.Container;
 import com.winlator.cmod.container.ContainerManager;
 import com.winlator.cmod.contentdialog.ContentDialog;
 import com.winlator.cmod.core.AppUtils;
+import com.winlator.cmod.widget.GlassPopupMenu;
 import com.winlator.cmod.core.Callback;
 import com.winlator.cmod.core.TarCompressorUtils;
 import com.winlator.cmod.core.ExeIconExtractor;
@@ -384,7 +385,7 @@ public class FileManagerFragment extends Fragment {
     }
 
     private void showDriveMenu() {
-        PopupMenu popupMenu = new PopupMenu(requireContext(), tvDriveName);
+        PopupMenu popupMenu = new GlassPopupMenu(requireContext(), tvDriveName);
         popupMenu.getMenu().add(0, 1, 0, "Drive D: (Downloads)");
         popupMenu.getMenu().add(0, 6, 0, "Internal Storage");
         popupMenu.getMenu().add(0, 2, 0, "Drive C: (Wine System)");
@@ -423,7 +424,7 @@ public class FileManagerFragment extends Fragment {
     }
 
     private void showSortMenu() {
-        PopupMenu popupMenu = new PopupMenu(requireContext(), tvDriveName);
+        PopupMenu popupMenu = new GlassPopupMenu(requireContext(), tvDriveName);
         popupMenu.getMenu().add(0, 1, 0, R.string.by_name);
         popupMenu.getMenu().add(0, 2, 0, R.string.by_date);
         popupMenu.getMenu().add(0, 3, 0, R.string.by_size);
@@ -482,7 +483,7 @@ public class FileManagerFragment extends Fragment {
     }
 
     private void showFileOptions(File file, View anchor) {
-        PopupMenu popupMenu = new PopupMenu(requireContext(), anchor);
+        PopupMenu popupMenu = new GlassPopupMenu(requireContext(), anchor);
         String nameLower = file.getName().toLowerCase();
         if (file.isDirectory()) {
             popupMenu.getMenu().add(0, 8, 0, R.string.new_folder);
@@ -973,7 +974,7 @@ public class FileManagerFragment extends Fragment {
     }
 
     private void showSelectionOptions(View anchor) {
-        PopupMenu popupMenu = new PopupMenu(requireContext(), anchor);
+        PopupMenu popupMenu = new GlassPopupMenu(requireContext(), anchor);
         popupMenu.getMenu().add(0, 1, 0, R.string.copy);
         popupMenu.getMenu().add(0, 2, 0, R.string.cut);
         popupMenu.getMenu().add(0, 3, 0, "Delete");

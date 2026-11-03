@@ -106,7 +106,7 @@
     <style name="FullGlassAlertDialog" parent="@style/ThemeOverlay.AppCompat.Dialog.Alert">
         <item name="android:windowBackground">@drawable/liquid_glass_dialog</item>
         <item name="android:windowBlurBehindEnabled">true</item>
-        <item name="android:windowBlurBehindRadius">28dp</item>
+        <item name="android:windowBlurBehindRadius">30dp</item>
         <item name="android:backgroundDimAmount">0.16</item>
     </style>
 

@@ -4,9 +4,16 @@ import android.content.Context;
 import android.util.Log;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -38,25 +45,29 @@ final class SteamDepotDownloadManager {
         final int appId;
         final String name;
         final File installDirectory;
-        final long totalBytes;
         final AtomicLong downloadedBytes = new AtomicLong();
-        final Map<Integer, Long> depotBytes = new ConcurrentHashMap<>();
+        final Map<Integer, DepotByteCount> depotBytes = new HashMap<>();
         final AtomicBoolean cancelled = new AtomicBoolean();
         final AtomicBoolean failureReported = new AtomicBoolean();
         volatile DepotDownloader downloader;
         volatile String status = "Queued";
+        volatile int currentDepotProgress = -1;
         volatile boolean paused;
         volatile int runGeneration;
         volatile String failure;
         volatile long lastActivityAt;
         volatile ScheduledFuture<?> watchdog;
 
-        DownloadTask(int appId, String name, File installDirectory, long totalBytes) {
+        DownloadTask(int appId, String name, File installDirectory) {
             this.appId = appId;
             this.name = name;
             this.installDirectory = installDirectory;
-            this.totalBytes = totalBytes;
         }
+    }
+
+    private static final class DepotByteCount {
+        long compressedBytes;
+        boolean complete;
     }
 
     private SteamDepotDownloadManager() {}
@@ -76,7 +87,7 @@ final class SteamDepotDownloadManager {
         java.util.ArrayList<SteamDownload> result = new java.util.ArrayList<>();
         for (DownloadTask task : TASKS.values()) {
             result.add(new SteamDownload(task.appId, task.name, task.status,
-                    task.downloadedBytes.get(), task.totalBytes, task.paused));
+                    task.downloadedBytes.get(), task.currentDepotProgress, task.paused));
         }
         result.sort(java.util.Comparator.comparing(download -> download.name.toLowerCase(
                 java.util.Locale.ROOT)));
@@ -121,7 +132,7 @@ final class SteamDepotDownloadManager {
             throw new java.io.IOException("Could not create the game's install directory.");
         }
 
-        DownloadTask task = new DownloadTask(appId, game.name, installDirectory, game.sizeBytes);
+        DownloadTask task = new DownloadTask(appId, game.name, installDirectory);
         DownloadTask previous = TASKS.get(appId);
         if (previous != null && (previous.status.startsWith("Failed")
                 || "Complete".equals(previous.status))) {
@@ -168,7 +179,10 @@ final class SteamDepotDownloadManager {
             task.paused = false;
             task.status = "Preparing to resume";
             task.downloadedBytes.set(0L);
-            task.depotBytes.clear();
+            task.currentDepotProgress = -1;
+            synchronized (task.depotBytes) {
+                task.depotBytes.clear();
+            }
             task.failure = null;
             task.failureReported.set(false);
             try {
@@ -233,7 +247,11 @@ final class SteamDepotDownloadManager {
 
             @Override
             public void onFileCompleted(int depotId, String fileName, float depotPercentComplete) {
-                if (isCurrentRun(task, generation)) recordActivity(task);
+                if (!isCurrentRun(task, generation)) return;
+                recordActivity(task);
+                updateCurrentDepotProgress(task, depotPercentComplete);
+                repository.emit("DownloadProgress:" + task.appId + ":"
+                        + task.downloadedBytes.get() + ":" + task.currentDepotProgress);
             }
 
             @Override
@@ -241,7 +259,15 @@ final class SteamDepotDownloadManager {
                                          long compressedBytes, long uncompressedBytes) {
                 if (!isCurrentRun(task, generation)) return;
                 recordActivity(task);
-                task.depotBytes.merge(depotId, Math.max(0L, compressedBytes), Long::sum);
+                updateCurrentDepotProgress(task, depotPercentComplete);
+                synchronized (task.depotBytes) {
+                    DepotByteCount depot = task.depotBytes.computeIfAbsent(
+                            depotId, ignored -> new DepotByteCount());
+                    if (!depot.complete) {
+                        depot.compressedBytes = saturatedAdd(depot.compressedBytes,
+                                Math.max(0L, compressedBytes));
+                    }
+                }
                 updateDownloadedBytes(task, repository);
             }
 
@@ -249,7 +275,13 @@ final class SteamDepotDownloadManager {
             public void onDepotCompleted(int depotId, long compressedBytes, long uncompressedBytes) {
                 if (!isCurrentRun(task, generation)) return;
                 recordActivity(task);
-                task.depotBytes.put(depotId, Math.max(0L, compressedBytes));
+                task.currentDepotProgress = 100;
+                synchronized (task.depotBytes) {
+                    DepotByteCount depot = task.depotBytes.computeIfAbsent(
+                            depotId, ignored -> new DepotByteCount());
+                    depot.compressedBytes = Math.max(0L, compressedBytes);
+                    depot.complete = true;
+                }
                 updateDownloadedBytes(task, repository);
             }
         });
@@ -278,10 +310,17 @@ final class SteamDepotDownloadManager {
                         stopWatchdog(task);
                         reportFailure(task, repository, task.failure);
                     } else {
-                        task.downloadedBytes.set(sumDepotBytes(task));
+                        updateDownloadedBytes(task, repository);
                         task.status = "Complete";
+                        long actualSize = 0L;
+                        try {
+                            actualSize = getDirectorySizeBytes(task.installDirectory);
+                        } catch (IOException e) {
+                            Log.e(TAG, "Could not measure installed game files for app "
+                                    + task.appId, e);
+                        }
                         repository.getDatabase().markInstalled(task.appId,
-                                task.installDirectory.getAbsolutePath());
+                                task.installDirectory.getAbsolutePath(), actualSize);
                         TASKS.remove(task.appId, task);
                         repository.emit("DownloadComplete:" + task.appId);
                     }
@@ -344,17 +383,54 @@ final class SteamDepotDownloadManager {
         long downloaded = sumDepotBytes(task);
         task.downloadedBytes.set(downloaded);
         repository.emit("DownloadProgress:" + task.appId + ":" + downloaded
-                + ":" + task.totalBytes);
+                + ":" + task.currentDepotProgress);
+    }
+
+    private static void updateCurrentDepotProgress(DownloadTask task, float progress) {
+        if (Float.isNaN(progress) || Float.isInfinite(progress)) return;
+        task.currentDepotProgress = (int) Math.max(0, Math.min(100,
+                Math.round(progress * 100f)));
     }
 
     private static long sumDepotBytes(DownloadTask task) {
         synchronized (task.depotBytes) {
-            long total = 0L;
-            for (long bytes : task.depotBytes.values()) {
-                total = total > Long.MAX_VALUE - bytes ? Long.MAX_VALUE : total + bytes;
+            long compressedTotal = 0L;
+            for (DepotByteCount bytes : task.depotBytes.values()) {
+                compressedTotal = saturatedAdd(compressedTotal, bytes.compressedBytes);
             }
-            return total;
+            return compressedTotal;
         }
+    }
+
+    private static long saturatedAdd(long first, long second) {
+        return first > Long.MAX_VALUE - second ? Long.MAX_VALUE : first + second;
+    }
+
+    static long getDirectorySizeBytes(File directory) throws IOException {
+        if (!directory.isDirectory()) {
+            throw new IOException("Installed game directory is missing: " + directory);
+        }
+        long[] total = {0L};
+        Files.walkFileTree(directory.toPath(), new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                    throws IOException {
+                if (!attrs.isRegularFile()) return FileVisitResult.CONTINUE;
+                long size = attrs.size();
+                if (total[0] > Long.MAX_VALUE - size) {
+                    throw new IOException("Installed game size exceeds supported range: " + directory);
+                }
+                total[0] += size;
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException error)
+                    throws IOException {
+                throw error;
+            }
+        });
+        return total[0];
     }
 
     static void cancel(int appId) {
@@ -405,5 +481,9 @@ final class SteamDepotDownloadManager {
 
     static void cancelAll() {
         for (Integer appId : TASKS.keySet()) cancel(appId);
+    }
+
+    static void pauseAll() {
+        for (Integer appId : TASKS.keySet()) pause(appId);
     }
 }

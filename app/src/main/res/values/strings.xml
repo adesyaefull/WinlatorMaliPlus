@@ -699,7 +699,7 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="install_drivers">Install Drivers</string>
     <string name="install_drivers_message">You will now be prompted to pick a driver. These must be the same ones used in other emulators like Yuzu, Dolphin, Citra, etc.</string>
     <string name="install_drivers_warning">Be warned that because of limitations of current PC emulators, Qualcomm Drivers may not work on chipsets below 8 Gen2 without getting patched.</string>
-    <string name="panvk_download_releases">Browse / refresh PanVK driver releases</string>
+    <string name="panvk_download_releases">Browse &amp; Download PanVK Driver</string>
     <string name="panvk_experimental_warning">PanVK is experimental. It may be less smooth or stable than the built-in system driver, and compatibility depends on your GPU, device, and kernel. Use at your own risk; switch back to System if you encounter problems.</string>
     <string name="panvk_release_list_title">PanVK Driver Releases</string>
     <string name="panvk_fetching_releases">Checking GitHub for the latest PanVK releases…</string>

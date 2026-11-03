@@ -36,7 +36,19 @@ public final class PanvkReleaseManager {
                     "panvk-"),
             new Repository("Noysz", "panvk-g99-jm",
                     "Mali-G57 MC2 / Helio G99 (MT6789); experimental FourFectVK test builds",
-                    "fourfectvk-g57-")
+                    "fourfectvk-g57-"),
+            new Repository("faux123", "panvk-faux123-driver-ace",
+                    "GameForce Ace — Mali-G610 MC4",
+                    "panvk_faux123_"),
+            new Repository("faux123", "panvk-faux123-driver-rp4pro",
+                    "Retroid Pocket 4 Pro — Mali-G77 MC9",
+                    "panvk_faux123_"),
+            new Repository("faux123", "panvk-faux123-driver-rg556",
+                    "Anbernic RG556 — Unisoc T820, Mali-G57",
+                    "panvk_faux123_"),
+            new Repository("faux123", "panvk-faux123-driver-pixel7",
+                    "Google Pixel 7 — Tensor G2, Mali-G710",
+                    "panvk_faux123_")
     };
 
     public interface ProgressListener {

@@ -11,6 +11,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.graphics.Rect;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
 import android.widget.ListAdapter;
@@ -76,13 +77,18 @@ public final class GlassSpinnerPopup {
         dialog.setContentView(surface);
         dialog.setOnDismissListener(ignored -> spinner.requestFocus());
 
-        int screenWidth = context.getResources().getDisplayMetrics().widthPixels;
-        int screenHeight = context.getResources().getDisplayMetrics().heightPixels;
-        int width = Math.min(Math.max(spinner.getWidth(), dp(context, 280)), screenWidth - dp(context, 32));
+        Rect visibleFrame = new Rect();
+        spinner.getRootView().getWindowVisibleDisplayFrame(visibleFrame);
+        int screenWidth = visibleFrame.width() > 0
+                ? visibleFrame.width() : context.getResources().getDisplayMetrics().widthPixels;
+        int screenHeight = visibleFrame.height() > 0
+                ? visibleFrame.height() : context.getResources().getDisplayMetrics().heightPixels;
+        int maxWidth = Math.max(dp(context, 1), screenWidth - dp(context, 32));
+        int width = Math.min(Math.max(spinner.getWidth(), dp(context, 280)), maxWidth);
         int rowHeight = dp(context, 52);
         int height = Math.min(source.getCount() * rowHeight + verticalInset * 2,
-                Math.round(screenHeight * 0.72f));
-        height = Math.max(dp(context, 120), height);
+                Math.round(screenHeight * 0.58f));
+        height = Math.min(screenHeight, Math.max(dp(context, 96), height));
 
         Window window = dialog.getWindow();
         if (window != null) {
@@ -103,7 +109,7 @@ public final class GlassSpinnerPopup {
             window.setLayout(width, height);
             if (ThemeManager.isFullLiquidGlassEnabled(context)) {
                 window.setElevation(0f);
-                GlassWindowEffects.applyDialogBlur(window, context);
+                GlassWindowEffects.applyFullDialogBlur(window, context);
             }
         }
     }
@@ -144,7 +150,9 @@ public final class GlassSpinnerPopup {
         @NonNull
         @Override
         public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
-            return source.getDropDownView(position, convertView, parent);
+            View itemView = source.getDropDownView(position, convertView, parent);
+            itemView.setBackgroundColor(Color.TRANSPARENT);
+            return itemView;
         }
 
         @Override

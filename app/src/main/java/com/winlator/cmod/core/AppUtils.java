@@ -199,6 +199,9 @@ public abstract class AppUtils {
 
         popupWindow.update();
         popupWindow.showAsDropDown(anchor);
+        Runnable restorePopupBlur = com.winlator.cmod.widget.GlassWindowEffects
+                .applyPopupBackdropBlur(anchor);
+        popupWindow.setOnDismissListener(restorePopupBlur::run);
 
         popupWindow.setFocusable(true);
         popupWindow.update();

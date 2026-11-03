@@ -41,6 +41,7 @@ import com.winlator.cmod.contents.ContentProfile;
 import com.winlator.cmod.contents.ContentsManager;
 import com.winlator.cmod.contents.Downloader;
 import com.winlator.cmod.core.AppUtils;
+import com.winlator.cmod.widget.GlassPopupMenu;
 import com.winlator.cmod.core.FileUtils;
 import com.winlator.cmod.core.PreloaderDialog;
 
@@ -776,7 +777,7 @@ public class ContentsFragment extends Fragment {
             holder.ibMenu.setVisibility(View.VISIBLE);
             holder.ibMenu.setOnClickListener(v -> {
                 if (getContext() == null) return;
-                PopupMenu selectionMenu = new PopupMenu(getContext(), holder.ibMenu);
+                PopupMenu selectionMenu = new GlassPopupMenu(getContext(), holder.ibMenu);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                     selectionMenu.setForceShowIcon(true);
                 selectionMenu.inflate(R.menu.content_popup_menu);

@@ -126,5 +126,76 @@
                     android:layout_marginStart="32dp" />
             </LinearLayout>
         </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Root Performance Profile"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:textColor="?attr/colorAccent"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bordered_panel_dark"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Root only. Grant Winlator access in your root manager to unlock these controls. The CPU governor is changed only while a game runs and restored when it pauses or exits."
+                android:textSize="11sp"
+                android:textColor="?android:attr/textColorSecondary"
+                android:layout_marginBottom="8dp" />
+
+            <Button
+                android:id="@+id/BTRequestRootPerformanceAccess"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Grant root access" />
+
+            <TextView
+                android:id="@+id/TVRootPerformanceAccessStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:textSize="11sp"
+                android:textColor="?android:attr/textColorSecondary"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="4dp" />
+
+            <LinearLayout
+                android:id="@+id/LLRootPerformanceOptions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <CheckBox
+                    android:id="@+id/CBRootPerformanceProfile"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Enable performance profile while gaming"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="CPU governor"
+                    android:textSize="12sp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginStart="4dp" />
+
+                <Spinner
+                    android:id="@+id/SPRootCpuGovernor"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:spinnerMode="dropdown" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

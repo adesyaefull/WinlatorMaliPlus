@@ -50,6 +50,7 @@ import com.winlator.cmod.contents.ContentProfile;
 import com.winlator.cmod.contents.ContentsManager;
 import com.winlator.cmod.contents.WrapperCatalogManager;
 import com.winlator.cmod.core.AppUtils;
+import com.winlator.cmod.widget.GlassPopupMenu;
 import com.winlator.cmod.core.Callback;
 import com.winlator.cmod.core.DefaultVersion;
 import com.winlator.cmod.core.EnvVars;
@@ -466,7 +467,7 @@ public class ContainerDetailFragment extends Fragment {
 
         final View btShowLCALL = view.findViewById(R.id.BTShowLCALL);
         btShowLCALL.setOnClickListener(v -> {
-            PopupMenu popupMenu = new PopupMenu(context, v);
+            PopupMenu popupMenu = new GlassPopupMenu(context, v);
             String[] lcs = getResources().getStringArray(R.array.some_lc_all);
             for (int i = 0; i < lcs.length; i++)
                 popupMenu.getMenu().add(Menu.NONE, i, Menu.NONE, lcs[i]);

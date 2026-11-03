@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.View;
+import android.graphics.Rect;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -14,6 +15,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.winlator.cmod.ThemeManager;
 import com.winlator.cmod.ThemePreset;
+import com.winlator.cmod.widget.GlassWindowEffects;
 
 public final class ThemeSelectionDialog {
     private static final String[] DESCRIPTIONS = {
@@ -81,12 +83,16 @@ public final class ThemeSelectionDialog {
         ScrollView scrollView = new ScrollView(activity);
         scrollView.setFillViewport(false);
         scrollView.setNestedScrollingEnabled(true);
-        scrollView.setClipToPadding(false);
+        scrollView.setClipToPadding(true);
         scrollView.setVerticalScrollBarEnabled(false);
+        Rect visibleFrame = new Rect();
+        activity.getWindow().getDecorView().getWindowVisibleDisplayFrame(visibleFrame);
+        int availableHeight = visibleFrame.height() > 0
+                ? visibleFrame.height() : activity.getResources().getDisplayMetrics().heightPixels;
         LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                Math.min(dp(activity, 420), Math.max(dp(activity, 132),
-                        activity.getResources().getDisplayMetrics().heightPixels - dp(activity, 240))));
+                Math.min(dp(activity, 420), Math.max(dp(activity, 120),
+                        availableHeight - dp(activity, 280))));
         scrollParams.topMargin = dp(activity, 12);
         content.addView(scrollView, scrollParams);
 
@@ -113,6 +119,9 @@ public final class ThemeSelectionDialog {
 
         dialog.setContentView(content);
         dialog.show();
+        if (ThemeManager.isFullLiquidGlassEnabled(activity)) {
+            GlassWindowEffects.applyFullDialogBlur(dialog.getWindow(), activity);
+        }
         View bottomSheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
         if (bottomSheet != null) {
             bottomSheet.setBackgroundColor(Color.TRANSPARENT);

@@ -192,8 +192,9 @@ public final class SteamConnectionService extends Service implements SteamReposi
             lastProgressNotification = now;
             String[] parts = event.split(":", 4);
             notificationText = parts.length == 4
-                    ? "Downloaded " + formatSize(parseLong(parts[2])) + " / ~"
-                    + formatSize(parseLong(parts[3])) : "Downloading game";
+                    ? "Current depot " + parts[3] + "% · Steam transfer "
+                    + formatSize(parseLong(parts[2])) + " (compressed)"
+                    : "Downloading game";
         } else if (event.startsWith("DownloadStatus:")) {
             notificationText = "Installing Steam game";
         } else if (event.startsWith("DownloadPaused:")) {
@@ -219,11 +220,27 @@ public final class SteamConnectionService extends Service implements SteamReposi
     }
 
     @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        Log.i(TAG, "Winlator task removed; pausing Steam downloads and stopping notification");
+        SteamRepository.getInstance().removeListener(this);
+        SteamDepotDownloadManager.pauseAll();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } else {
+            stopForeground(true);
+        }
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) manager.cancel(NOTIFICATION_ID);
+        stopSelf();
+        super.onTaskRemoved(rootIntent);
+    }
+
+    @Override
     public void onDestroy() {
         SteamRepository repository = SteamRepository.getInstance();
         unregisterNetworkCallback();
         repository.removeListener(this);
-        SteamDepotDownloadManager.cancelAll();
+        SteamDepotDownloadManager.pauseAll();
         repository.disconnect();
         super.onDestroy();
     }

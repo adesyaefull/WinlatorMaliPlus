@@ -909,31 +909,19 @@ final class SteamRepository {
         KeyValue depots = child(root, "depots");
         List<KeyValue> depotChildren = depots == null ? null : depots.getChildren();
         StringBuilder depotIds = new StringBuilder();
-        long totalSize = 0L;
         if (depotChildren != null) {
             for (KeyValue depot : depotChildren) {
                 try {
                     int depotId = Integer.parseInt(depot.getName());
                     if (depotIds.length() > 0) depotIds.append(',');
                     depotIds.append(depotId);
-                    String osList = value(child(child(depot, "config"), "oslist"))
-                            .toLowerCase(java.util.Locale.ROOT);
-                    if (osList.isEmpty() || osList.contains("windows")) {
-                        String size = value(child(child(child(depot, "manifests"), "public"), "size"));
-                        if (size.isEmpty()) size = value(child(depot, "maxsize"));
-                        if (!size.isEmpty()) {
-                            long depotSize = Long.parseLong(size);
-                            totalSize = totalSize > Long.MAX_VALUE - depotSize
-                                    ? Long.MAX_VALUE : totalSize + depotSize;
-                        }
-                    }
                 } catch (NumberFormatException ignored) {
                     Log.w(TAG, "Ignoring malformed Steam depot metadata for app " + product.getId());
                 }
             }
         }
         return new SteamGame(product.getId(), name, installDirectory, type,
-                depotIds.toString(), totalSize, false, "");
+                depotIds.toString(), 0L, 0L, false, "");
     }
 
     private static KeyValue child(KeyValue parent, String key) {

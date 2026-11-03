@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
 import android.os.Environment;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -59,6 +60,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 public class SettingsFragment extends Fragment {
     public static final String DEFAULT_WINE_DEBUG_CHANNELS = "warn,err,fixme";
@@ -420,6 +422,35 @@ public class SettingsFragment extends Fragment {
         final CheckBox cbSustainedPerformance = view.findViewById(R.id.CBSustainedPerformance);
         final CheckBox cbSamsungBoost = view.findViewById(R.id.CBSamsungBoost);
         final View llSamsungBoost = view.findViewById(R.id.LLSamsungBoost);
+        final Button requestRootPerformanceAccess =
+                view.findViewById(R.id.BTSettingsRequestRootPerformanceAccess);
+        final TextView rootPerformanceAccessStatus =
+                view.findViewById(R.id.TVSettingsRootPerformanceAccessStatus);
+        final View rootPerformanceOptions =
+                view.findViewById(R.id.LLSettingsRootPerformanceOptions);
+        final CheckBox cbRootPerformance =
+                view.findViewById(R.id.CBSettingsRootPerformanceProfile);
+        final Spinner rootCpuGovernor = view.findViewById(R.id.SPSettingsRootCpuGovernor);
+        final TextView rootCpuGovernorLabel =
+                view.findViewById(R.id.TVSettingsRootCpuGovernorLabel);
+        final Spinner rootGpuGovernor = view.findViewById(R.id.SPSettingsRootGpuGovernor);
+        final TextView rootGpuGovernorLabel =
+                view.findViewById(R.id.TVSettingsRootGpuGovernorLabel);
+        final Spinner rootIoScheduler = view.findViewById(R.id.SPSettingsRootIoScheduler);
+        final TextView rootIoSchedulerLabel =
+                view.findViewById(R.id.TVSettingsRootIoSchedulerLabel);
+        final boolean[] rootAccessGranted = {false};
+        LinearLayout deviceInfoGrid = view.findViewById(R.id.LLSettingsDeviceInfoGrid);
+        View deviceInfoHeader = view.findViewById(R.id.LLSettingsDeviceInfoHeader);
+        TextView deviceInfoExpand = view.findViewById(R.id.TVSettingsDeviceInfoExpand);
+        populateDeviceInfo(deviceInfoGrid, context);
+        deviceInfoHeader.setOnClickListener(header -> {
+            boolean expanded = deviceInfoGrid.getVisibility() != View.VISIBLE;
+            deviceInfoGrid.setVisibility(expanded ? View.VISIBLE : View.GONE);
+            deviceInfoExpand.setText(expanded ? "⌃" : "⌄");
+            deviceInfoHeader.setContentDescription(
+                    expanded ? "Collapse device information" : "Expand device information");
+        });
 
         if (cbGameModeSignal != null) cbGameModeSignal.setChecked(preferences.getBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_GAME_MODE_SIGNAL, true));
         if (cbThreadPriorityBoost != null) cbThreadPriorityBoost.setChecked(preferences.getBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_THREAD_PRIORITY_BOOST, true));
@@ -430,6 +461,47 @@ public class SettingsFragment extends Fragment {
         if (llSamsungBoost != null) {
             llSamsungBoost.setVisibility(com.winlator.cmod.perf.SamsungSPerfDriver.isSamsungDevice() ? View.VISIBLE : View.GONE);
         }
+        requestRootPerformanceAccess.setOnClickListener(button -> {
+            requestRootPerformanceAccess.setEnabled(false);
+            requestRootPerformanceAccess.setText("Waiting for root manager...");
+            com.winlator.cmod.perf.RootPerformanceManager.requestAccess(requireContext(),
+                    (controls, error) -> {
+                if (!isAdded() || getView() != view) return;
+                requestRootPerformanceAccess.setEnabled(true);
+                if (error != null) {
+                    requestRootPerformanceAccess.setText("Grant root access");
+                    AppUtils.showToast(getContext(),
+                            "Root performance options remain locked: " + error);
+                    return;
+                }
+
+                rootAccessGranted[0] = true;
+                rootPerformanceOptions.setVisibility(View.VISIBLE);
+                rootPerformanceAccessStatus.setText("Root access granted by the root manager.");
+                rootPerformanceAccessStatus.setVisibility(View.VISIBLE);
+                requestRootPerformanceAccess.setText("Root access granted");
+                requestRootPerformanceAccess.setEnabled(false);
+
+                List<String> cpuOptions = withNoChange(controls.cpuGovernors);
+                List<String> gpuOptions = withNoChange(controls.gpuGovernors);
+                List<String> ioOptions = withNoChange(controls.ioSchedulers);
+                configureRootTuningSpinner(rootCpuGovernor, rootCpuGovernorLabel,
+                        cpuOptions, preferences.getString(
+                        com.winlator.cmod.perf.PerformanceManager.PREF_ROOT_CPU_GOVERNOR,
+                        cpuOptions.contains("performance") ? "performance" : "No change"));
+                configureRootTuningSpinner(rootGpuGovernor, rootGpuGovernorLabel,
+                        gpuOptions, preferences.getString(
+                        com.winlator.cmod.perf.PerformanceManager.PREF_ROOT_GPU_GOVERNOR,
+                        "No change"));
+                configureRootTuningSpinner(rootIoScheduler, rootIoSchedulerLabel,
+                        ioOptions, preferences.getString(
+                        com.winlator.cmod.perf.PerformanceManager.PREF_ROOT_IO_SCHEDULER,
+                        "No change"));
+                cbRootPerformance.setChecked(preferences.getBoolean(
+                        com.winlator.cmod.perf.PerformanceManager.PREF_ROOT_PERFORMANCE_PROFILE,
+                        false));
+            });
+        });
 
         view.findViewById(R.id.BTReInstallImagefs).setOnClickListener(v -> {
             ContentDialog.confirm(context, R.string.do_you_want_to_reinstall_imagefs, () -> ImageFsInstaller.installFromAssets((MainActivity) getActivity()));
@@ -455,6 +527,17 @@ public class SettingsFragment extends Fragment {
             if (cbHighRefreshRate != null) editor.putBoolean("high_refresh_rate_mode", cbHighRefreshRate.isChecked());
             if (cbSustainedPerformance != null) editor.putBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_SUSTAINED_PERFORMANCE, cbSustainedPerformance.isChecked());
             if (cbSamsungBoost != null) editor.putBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_SAMSUNG_PERF_BOOST, cbSamsungBoost.isChecked());
+            if (rootAccessGranted[0]) {
+                editor.putBoolean(
+                        com.winlator.cmod.perf.PerformanceManager.PREF_ROOT_PERFORMANCE_PROFILE,
+                        cbRootPerformance.isChecked());
+                saveRootSpinnerSelection(editor, rootCpuGovernor,
+                        com.winlator.cmod.perf.PerformanceManager.PREF_ROOT_CPU_GOVERNOR);
+                saveRootSpinnerSelection(editor, rootGpuGovernor,
+                        com.winlator.cmod.perf.PerformanceManager.PREF_ROOT_GPU_GOVERNOR);
+                saveRootSpinnerSelection(editor, rootIoScheduler,
+                        com.winlator.cmod.perf.PerformanceManager.PREF_ROOT_IO_SCHEDULER);
+            }
 
             editor.putString("downloadable_contents_url", etDownloadableContentsURL.getText().toString());
 
@@ -481,6 +564,161 @@ public class SettingsFragment extends Fragment {
     private static void updateSelectedThemeLabel(TextView view, Context context) {
         String themeName = ThemeManager.getSelectedPreset(context).name;
         view.setText(themeName + "  ›");
+    }
+
+    private List<String> withNoChange(List<String> values) {
+        ArrayList<String> options = new ArrayList<>();
+        options.add("No change");
+        options.addAll(values);
+        return options;
+    }
+
+    private void configureRootTuningSpinner(Spinner spinner, TextView label,
+                                            List<String> options, String selected) {
+        if (options.size() <= 1) return;
+        spinner.setAdapter(createRootTuningAdapter(requireContext(), options));
+        com.winlator.cmod.widget.GlassSpinnerPopup.attach(spinner);
+        spinner.setPopupBackgroundResource(isDarkMode
+                ? R.drawable.content_dialog_background_dark
+                : R.drawable.content_dialog_background);
+        spinner.setSelection(Math.max(0, options.indexOf(selected)), false);
+        spinner.setVisibility(View.VISIBLE);
+        label.setVisibility(View.VISIBLE);
+    }
+
+    private ArrayAdapter<String> createRootTuningAdapter(Context context, List<String> options) {
+        int textColor = ThemeManager.getOnSurfaceTextColor(context);
+        return new ArrayAdapter<String>(context, android.R.layout.simple_spinner_dropdown_item,
+                options) {
+            @NonNull
+            @Override
+            public View getView(int position, @Nullable View convertView,
+                                @NonNull ViewGroup parent) {
+                View itemView = super.getView(position, convertView, parent);
+                if (itemView instanceof TextView) ((TextView) itemView).setTextColor(textColor);
+                return itemView;
+            }
+
+            @Override
+            public View getDropDownView(int position, @Nullable View convertView,
+                                        @NonNull ViewGroup parent) {
+                View itemView = super.getDropDownView(position, convertView, parent);
+                if (itemView instanceof TextView) {
+                    TextView text = (TextView) itemView;
+                    text.setTextColor(textColor);
+                    text.setSingleLine(true);
+                    text.setPaddingRelative(dp(context, 18), dp(context, 12),
+                            dp(context, 18), dp(context, 12));
+                }
+                itemView.setBackgroundColor(ThemeManager.isFullLiquidGlassEnabled(context)
+                        ? Color.TRANSPARENT : ThemeManager.getSurfaceColor(context));
+                return itemView;
+            }
+        };
+    }
+
+    private void populateDeviceInfo(LinearLayout grid, Context context) {
+        String chip = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                ? (Build.SOC_MANUFACTURER + " " + Build.SOC_MODEL).trim()
+                : Build.HARDWARE;
+        if (chip.isEmpty()) chip = Build.HARDWARE;
+        String[] abis = Build.SUPPORTED_ABIS;
+        String abi = abis.length == 0 ? "Unknown" : abis[0];
+        String version = "Unknown";
+        try {
+            android.content.pm.PackageInfo packageInfo = context.getPackageManager()
+                    .getPackageInfo(context.getPackageName(), 0);
+            version = packageInfo.versionName == null ? "Unknown" : packageInfo.versionName;
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            android.util.Log.w("SettingsFragment", "Could not read Winlator version", e);
+        }
+        String selinuxStatus = readSelinuxStatus();
+        String deviceName = (Build.MANUFACTURER + " " + Build.MODEL).trim();
+        String androidVersion = Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")";
+        String fingerprint = Build.FINGERPRINT == null || Build.FINGERPRINT.isEmpty()
+                ? "Unknown" : Build.FINGERPRINT;
+        String kernelVersion = System.getProperty("os.version", "Unknown");
+        String[][] items = {
+                {"Kernel version", kernelVersion},
+                {"Device name", deviceName},
+                {"Platform chip", chip},
+                {"Winlator version", version},
+                {"Build fingerprint", fingerprint},
+                {"SELinux status", selinuxStatus},
+                {"Android ABI", abi},
+                {"Android version", androidVersion}
+        };
+        grid.removeAllViews();
+        for (int i = 0; i < items.length; i += 2) {
+            LinearLayout row = new LinearLayout(context);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (i > 0) rowParams.topMargin = dp(context, 8);
+            grid.addView(row, rowParams);
+            addDeviceInfoCell(row, context, items[i][0], items[i][1], true);
+            addDeviceInfoCell(row, context, items[i + 1][0], items[i + 1][1], false);
+        }
+    }
+
+    private String readSelinuxStatus() {
+        File enforceFile = new File("/sys/fs/selinux/enforce");
+        if (!enforceFile.canRead()) return "Unavailable";
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.FileReader(enforceFile))) {
+            String value = reader.readLine();
+            if ("1".equals(value)) return "Enforcing";
+            if ("0".equals(value)) return "Permissive";
+        } catch (IOException e) {
+            android.util.Log.w("SettingsFragment", "Could not read SELinux status", e);
+        }
+        return "Unavailable";
+    }
+
+    private void addDeviceInfoCell(LinearLayout row, Context context, String label, String value,
+                                   boolean first) {
+        LinearLayout cell = new LinearLayout(context);
+        cell.setOrientation(LinearLayout.VERTICAL);
+        cell.setPadding(dp(context, 14), dp(context, 14),
+                dp(context, 14), dp(context, 14));
+        cell.setBackground(ThemeManager.createThemedSurfaceDrawable(context, 22));
+
+        TextView labelView = new TextView(context);
+        labelView.setText(label);
+        labelView.setTextColor(androidx.core.graphics.ColorUtils.setAlphaComponent(
+                ThemeManager.getOnSurfaceTextColor(context), 185));
+        labelView.setTextSize(12);
+        cell.addView(labelView);
+
+        TextView valueView = new TextView(context);
+        valueView.setText(value);
+        valueView.setTextColor(ThemeManager.getOnSurfaceTextColor(context));
+        valueView.setTextSize(14);
+        valueView.setTypeface(null, android.graphics.Typeface.BOLD);
+        valueView.setMaxLines(2);
+        valueView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams valueParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        valueParams.topMargin = dp(context, 4);
+        cell.addView(valueView, valueParams);
+
+        LinearLayout.LayoutParams cellParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
+        if (first) cellParams.rightMargin = dp(context, 8);
+        row.addView(cell, cellParams);
+    }
+
+    private static int dp(Context context, int value) {
+        return Math.round(value * context.getResources().getDisplayMetrics().density);
+    }
+
+    private static void saveRootSpinnerSelection(SharedPreferences.Editor editor, Spinner spinner,
+                                                 String preferenceKey) {
+        Object selected = spinner.getSelectedItem();
+        if (selected != null) {
+            String value = selected.toString();
+            editor.putString(preferenceKey, "No change".equals(value) ? "" : value);
+        }
     }
 
 

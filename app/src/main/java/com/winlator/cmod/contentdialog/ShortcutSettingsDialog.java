@@ -34,6 +34,7 @@ import com.winlator.cmod.container.Shortcut;
 import com.winlator.cmod.contents.ContentProfile;
 import com.winlator.cmod.contents.ContentsManager;
 import com.winlator.cmod.core.AppUtils;
+import com.winlator.cmod.widget.GlassPopupMenu;
 import com.winlator.cmod.core.DefaultVersion;
 import com.winlator.cmod.core.EnvVars;
 import com.winlator.cmod.core.StringUtils;
@@ -147,7 +148,7 @@ public class ShortcutSettingsDialog extends ContentDialog {
 
         final View btShowLCALL = findViewById(R.id.BTShowLCALL);
         btShowLCALL.setOnClickListener(v -> {
-            PopupMenu popupMenu = new PopupMenu(context, v);
+            PopupMenu popupMenu = new GlassPopupMenu(context, v);
             String[] lcs = context.getResources().getStringArray(R.array.some_lc_all);
             for (int i = 0; i < lcs.length; i++)
                 popupMenu.getMenu().add(Menu.NONE, i, Menu.NONE, lcs[i]);
@@ -435,7 +436,7 @@ public class ShortcutSettingsDialog extends ContentDialog {
         }
 
         findViewById(R.id.BTExtraArgsMenu).setOnClickListener((v) -> {
-            PopupMenu popupMenu = new PopupMenu(context, v);
+            PopupMenu popupMenu = new GlassPopupMenu(context, v);
             popupMenu.inflate(R.menu.extra_args_popup_menu);
             popupMenu.setOnMenuItemClickListener((menuItem) -> {
                 String value = String.valueOf(menuItem.getTitle());

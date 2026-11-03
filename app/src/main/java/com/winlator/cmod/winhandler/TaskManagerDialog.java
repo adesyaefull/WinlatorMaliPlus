@@ -21,6 +21,7 @@ import com.winlator.cmod.core.FileUtils;
 import com.winlator.cmod.core.ProcessHelper;
 import com.winlator.cmod.core.StringUtils;
 import com.winlator.cmod.widget.CPUListView;
+import com.winlator.cmod.widget.GlassPopupMenu;
 import com.winlator.cmod.xenvironment.ImageFs;
 import com.winlator.cmod.xserver.Window;
 import com.winlator.cmod.xserver.XLock;
@@ -76,7 +77,7 @@ public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfo
     }
 
     private void showListItemMenu(final View anchorView, final ProcessInfo processInfo) {
-        PopupMenu listItemMenu = new PopupMenu(activity, anchorView);
+        PopupMenu listItemMenu = new GlassPopupMenu(activity, anchorView);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) listItemMenu.setForceShowIcon(true);
 
         listItemMenu.inflate(R.menu.process_popup_menu);

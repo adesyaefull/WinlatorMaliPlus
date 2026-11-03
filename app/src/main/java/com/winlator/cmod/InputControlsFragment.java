@@ -45,6 +45,7 @@ import androidx.preference.PreferenceManager;
 
 import com.winlator.cmod.R;
 import com.winlator.cmod.core.AppUtils;
+import com.winlator.cmod.widget.GlassPopupMenu;
 import com.winlator.cmod.core.Callback;
 import com.winlator.cmod.core.FileUtils;
 import com.winlator.cmod.core.HttpUtils;
@@ -228,7 +229,7 @@ public class InputControlsFragment extends Fragment {
         });
 
         view.findViewById(R.id.BTImportProfile).setOnClickListener((v) -> {
-            android.widget.PopupMenu popupMenu = new PopupMenu(context, v);
+            android.widget.PopupMenu popupMenu = new GlassPopupMenu(context, v);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) popupMenu.setForceShowIcon(true);
             popupMenu.inflate(R.menu.open_file_popup_menu);
             popupMenu.setOnMenuItemClickListener((menuItem) -> {

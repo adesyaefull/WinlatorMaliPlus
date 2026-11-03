@@ -291,6 +291,7 @@
                                 android:src="@drawable/icon_popup_menu_download" />
                         </LinearLayout>
                     </LinearLayout>
+
                 </LinearLayout>
 
                 <!-- ========================================================= -->
@@ -634,6 +635,61 @@
                     android:orientation="vertical"
                     android:visibility="gone">
 
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        android:background="@drawable/bordered_panel_dark"
+                        android:orientation="vertical"
+                        android:padding="14dp"
+                        android:tag="settingsSurface">
+
+                        <LinearLayout
+                            android:id="@+id/LLSettingsDeviceInfoHeader"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <ImageView
+                                android:layout_width="42dp"
+                                android:layout_height="42dp"
+                                android:layout_marginEnd="12dp"
+                                android:background="@drawable/device_info_icon_background"
+                                android:contentDescription="Device information"
+                                android:padding="10dp"
+                                android:src="@drawable/icon_info"
+                                android:tint="?attr/colorAccent" />
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Device info"
+                                android:textColor="?attr/semanticOnSurface"
+                                android:textSize="16sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/TVSettingsDeviceInfoExpand"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:padding="8dp"
+                                android:text="⌃"
+                                android:textColor="?attr/semanticOnSurface"
+                                android:textSize="20sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/LLSettingsDeviceInfoGrid"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:orientation="vertical" />
+                    </LinearLayout>
+
                     <!-- System Performance Enhancements -->
                     <TextView
                         android:id="@+id/TVPerformanceHeader"
@@ -766,6 +822,166 @@
                                 android:textSize="11sp"
                                 android:textColor="?android:attr/textColorSecondary"
                                 android:layout_marginStart="32dp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Root Performance Profile"
+                        android:textStyle="bold"
+                        android:textSize="14sp"
+                        android:textColor="?attr/colorAccent"
+                        android:layout_marginBottom="8dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
+                        android:padding="14dp"
+                        android:orientation="vertical"
+                        android:layout_marginBottom="16dp">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Root only. Grant Winlator access in your root manager to unlock profile and CPU governor options. The selected governor is applied only while a game is running and restored when it pauses or exits."
+                            android:textSize="11sp"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:layout_marginBottom="8dp" />
+
+                        <Button
+                            android:id="@+id/BTSettingsRequestRootPerformanceAccess"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Grant root access" />
+
+                        <TextView
+                            android:id="@+id/TVSettingsRootPerformanceAccessStatus"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:visibility="gone"
+                            android:textSize="11sp"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:layout_marginTop="4dp"
+                            android:layout_marginBottom="4dp" />
+
+                        <LinearLayout
+                            android:id="@+id/LLSettingsRootPerformanceOptions"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:visibility="gone">
+
+                            <CheckBox
+                                android:id="@+id/CBSettingsRootPerformanceProfile"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Enable performance profile while gaming"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="CPU Settings"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:textColor="?attr/colorAccent"
+                                android:layout_marginTop="8dp" />
+
+                            <TextView
+                                android:id="@+id/TVSettingsRootCpuGovernorLabel"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="CPU governor"
+                                android:textSize="12sp"
+                                android:textColor="?android:attr/textColorSecondary"
+                                android:layout_marginStart="4dp"
+                                android:visibility="gone" />
+
+                            <Spinner
+                                android:id="@+id/SPSettingsRootCpuGovernor"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:visibility="gone"
+                                android:spinnerMode="dropdown" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="I/O Settings"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:textColor="?attr/colorAccent"
+                                android:layout_marginTop="8dp" />
+
+                            <TextView
+                                android:id="@+id/TVSettingsRootIoSchedulerLabel"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="I/O scheduler"
+                                android:textSize="12sp"
+                                android:textColor="?android:attr/textColorSecondary"
+                                android:layout_marginStart="4dp"
+                                android:visibility="gone" />
+
+                            <Spinner
+                                android:id="@+id/SPSettingsRootIoScheduler"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:spinnerMode="dropdown"
+                                android:visibility="gone" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="GPU Settings"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:textColor="?attr/colorAccent"
+                                android:layout_marginTop="8dp" />
+
+                            <TextView
+                                android:id="@+id/TVSettingsRootGpuGovernorLabel"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="GPU governor"
+                                android:textSize="12sp"
+                                android:textColor="?android:attr/textColorSecondary"
+                                android:layout_marginStart="4dp"
+                                android:visibility="gone" />
+
+                            <Spinner
+                                android:id="@+id/SPSettingsRootGpuGovernor"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:spinnerMode="dropdown"
+                                android:visibility="gone" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="GPU frequency offset"
+                                android:textSize="12sp"
+                                android:textColor="?android:attr/textColorSecondary"
+                                android:layout_marginTop="8dp" />
+
+                            <SeekBar
+                                android:id="@+id/SBSettingsRootGpuFrequencyOffset"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:max="6"
+                                android:progress="0"
+                                android:enabled="false" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Disabled: this device's kernel does not expose a verified safe GPU frequency-offset control."
+                                android:textSize="11sp"
+                                android:textColor="?android:attr/textColorSecondary" />
                         </LinearLayout>
                     </LinearLayout>
                 </LinearLayout>

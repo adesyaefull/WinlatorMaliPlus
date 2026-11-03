@@ -1206,6 +1206,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         final CheckBox cbSustainedPerf = dialog.findViewById(R.id.CBDialogSustainedPerf);
         final CheckBox cbSamsungBoost = dialog.findViewById(R.id.CBDialogSamsungBoost);
         final View llSamsungBoost = dialog.findViewById(R.id.LLDialogSamsungBoost);
+        final Button requestRootAccess = dialog.findViewById(R.id.BTRequestRootPerformanceAccess);
+        final TextView rootAccessStatus = dialog.findViewById(R.id.TVRootPerformanceAccessStatus);
+        final View rootPerformanceOptions = dialog.findViewById(R.id.LLRootPerformanceOptions);
+        final CheckBox cbRootPerformance = dialog.findViewById(R.id.CBRootPerformanceProfile);
+        final Spinner rootGovernor = dialog.findViewById(R.id.SPRootCpuGovernor);
+        final boolean[] rootAccessGranted = {false};
 
         if (cbGameModeSignal != null) cbGameModeSignal.setChecked(preferences.getBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_GAME_MODE_SIGNAL, true));
         if (cbThreadPriority != null) cbThreadPriority.setChecked(preferences.getBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_THREAD_PRIORITY_BOOST, true));
@@ -1215,6 +1221,36 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         if (llSamsungBoost != null) {
             llSamsungBoost.setVisibility(com.winlator.cmod.perf.SamsungSPerfDriver.isSamsungDevice() ? View.VISIBLE : View.GONE);
         }
+        requestRootAccess.setOnClickListener(view -> {
+            requestRootAccess.setEnabled(false);
+            requestRootAccess.setText("Waiting for root manager...");
+            com.winlator.cmod.perf.RootPerformanceManager.requestAccess(this, (controls, error) -> {
+                if (isFinishing()) return;
+                requestRootAccess.setEnabled(true);
+                if (error != null) {
+                    requestRootAccess.setText("Grant root access");
+                    showToast(this, "Root performance options remain locked: " + error);
+                    return;
+                }
+                rootAccessGranted[0] = true;
+                rootPerformanceOptions.setVisibility(View.VISIBLE);
+                rootAccessStatus.setText("Root access granted by the root manager.");
+                rootAccessStatus.setVisibility(View.VISIBLE);
+                requestRootAccess.setText("Root access granted");
+                requestRootAccess.setEnabled(false);
+                rootGovernor.setAdapter(createThemedSpinnerAdapter(
+                        this, controls.cpuGovernors, isDarkMode));
+                String savedGovernor = preferences.getString(
+                        com.winlator.cmod.perf.PerformanceManager.PREF_ROOT_CPU_GOVERNOR,
+                        "performance");
+                int selectedIndex = controls.cpuGovernors.indexOf(savedGovernor);
+                if (selectedIndex < 0) selectedIndex = controls.cpuGovernors.indexOf("performance");
+                rootGovernor.setSelection(Math.max(0, selectedIndex), false);
+                cbRootPerformance.setChecked(preferences.getBoolean(
+                        com.winlator.cmod.perf.PerformanceManager.PREF_ROOT_PERFORMANCE_PROFILE,
+                        false));
+            });
+        });
 
         dialog.setOnConfirmCallback(() -> {
             SharedPreferences.Editor editor = preferences.edit();
@@ -1223,6 +1259,14 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             if (cbBigCores != null) editor.putBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_PREFER_BIG_CORES, cbBigCores.isChecked());
             if (cbSustainedPerf != null) editor.putBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_SUSTAINED_PERFORMANCE, cbSustainedPerf.isChecked());
             if (cbSamsungBoost != null) editor.putBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_SAMSUNG_PERF_BOOST, cbSamsungBoost.isChecked());
+            if (rootAccessGranted[0]) {
+                editor.putBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_ROOT_PERFORMANCE_PROFILE,
+                        cbRootPerformance.isChecked());
+                if (rootGovernor.getSelectedItem() != null) {
+                    editor.putString(com.winlator.cmod.perf.PerformanceManager.PREF_ROOT_CPU_GOVERNOR,
+                            rootGovernor.getSelectedItem().toString());
+                }
+            }
             editor.apply();
 
             com.winlator.cmod.perf.PerformanceManager.applySettingsLive(this, preferences);

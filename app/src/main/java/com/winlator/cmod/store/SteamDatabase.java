@@ -11,7 +11,7 @@ import java.util.List;
 
 final class SteamDatabase extends SQLiteOpenHelper {
     private static final String NAME = "steam_library.db";
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
 
     SteamDatabase(Context context) {
         super(context.getApplicationContext(), NAME, null, VERSION);
@@ -26,6 +26,7 @@ final class SteamDatabase extends SQLiteOpenHelper {
                 "type TEXT NOT NULL," +
                 "depot_ids TEXT NOT NULL," +
                 "size_bytes INTEGER NOT NULL," +
+                "installed_size_bytes INTEGER NOT NULL DEFAULT 0," +
                 "owned INTEGER NOT NULL DEFAULT 1," +
                 "installed INTEGER NOT NULL DEFAULT 0," +
                 "installed_path TEXT NOT NULL DEFAULT '')");
@@ -33,8 +34,14 @@ final class SteamDatabase extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        throw new IllegalStateException("Unsupported Steam library database upgrade: "
-                + oldVersion + " -> " + newVersion);
+        if (oldVersion < 2 && newVersion >= 2) {
+            db.execSQL("ALTER TABLE games ADD COLUMN installed_size_bytes INTEGER NOT NULL DEFAULT 0");
+            oldVersion = 2;
+        }
+        if (oldVersion != newVersion) {
+            throw new IllegalStateException("Unsupported Steam library database upgrade: "
+                    + oldVersion + " -> " + newVersion);
+        }
     }
 
     synchronized void replaceOwnedGames(List<SteamGame> games) {
@@ -64,13 +71,14 @@ final class SteamDatabase extends SQLiteOpenHelper {
     synchronized List<SteamGame> getOwnedGames() {
         List<SteamGame> games = new ArrayList<>();
         try (Cursor cursor = getReadableDatabase().rawQuery(
-                "SELECT app_id,name,install_directory,type,depot_ids,size_bytes,installed,installed_path " +
+                "SELECT app_id,name,install_directory,type,depot_ids,size_bytes,installed_size_bytes,installed,installed_path " +
                         "FROM games WHERE owned = 1 AND lower(type) = 'game' " +
                         "ORDER BY name COLLATE NOCASE", null)) {
             while (cursor.moveToNext()) {
                 games.add(new SteamGame(cursor.getInt(0), cursor.getString(1),
                         cursor.getString(2), cursor.getString(3), cursor.getString(4),
-                        cursor.getLong(5), cursor.getInt(6) != 0, cursor.getString(7)));
+                        cursor.getLong(5), cursor.getLong(6), cursor.getInt(7) != 0,
+                        cursor.getString(8)));
             }
         }
         return games;
@@ -78,13 +86,14 @@ final class SteamDatabase extends SQLiteOpenHelper {
 
     synchronized SteamGame getGame(int appId) {
         try (Cursor cursor = getReadableDatabase().rawQuery(
-                "SELECT app_id,name,install_directory,type,depot_ids,size_bytes,installed,installed_path " +
+                "SELECT app_id,name,install_directory,type,depot_ids,size_bytes,installed_size_bytes,installed,installed_path " +
                         "FROM games WHERE app_id = ? AND lower(type) = 'game'",
                 new String[]{String.valueOf(appId)})) {
             if (!cursor.moveToFirst()) return null;
             return new SteamGame(cursor.getInt(0), cursor.getString(1),
                     cursor.getString(2), cursor.getString(3), cursor.getString(4),
-                    cursor.getLong(5), cursor.getInt(6) != 0, cursor.getString(7));
+                    cursor.getLong(5), cursor.getLong(6), cursor.getInt(7) != 0,
+                    cursor.getString(8));
         }
     }
 
@@ -96,10 +105,11 @@ final class SteamDatabase extends SQLiteOpenHelper {
         }
     }
 
-    synchronized void markInstalled(int appId, String path) {
+    synchronized void markInstalled(int appId, String path, long actualSizeBytes) {
         ContentValues values = new ContentValues();
         values.put("installed", 1);
         values.put("installed_path", path);
+        values.put("installed_size_bytes", Math.max(0L, actualSizeBytes));
         getWritableDatabase().update("games", values, "app_id = ?",
                 new String[]{String.valueOf(appId)});
     }
@@ -108,6 +118,7 @@ final class SteamDatabase extends SQLiteOpenHelper {
         ContentValues values = new ContentValues();
         values.put("installed", 0);
         values.put("installed_path", "");
+        values.put("installed_size_bytes", 0L);
         getWritableDatabase().update("games", values, "app_id = ?",
                 new String[]{String.valueOf(appId)});
     }

@@ -47,6 +47,7 @@ import com.winlator.cmod.core.ImageUtils;
 import com.winlator.cmod.core.PreloaderDialog;
 import com.winlator.cmod.container.ContainerManager;
 import com.winlator.cmod.core.WineThemeManager;
+import com.winlator.cmod.widget.PlayStationWaveBackgroundView;
 import com.winlator.cmod.xenvironment.ImageFsInstaller;
 
 import java.io.File;
@@ -71,15 +72,25 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         // Get shared preferences
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        if (com.winlator.cmod.perf.RootPerformanceManager.hasPendingRestore(this)) {
+            com.winlator.cmod.perf.RootPerformanceManager.restore(this, error -> {
+                if (error != null) {
+                    android.util.Log.e("MainActivity", "Could not recover CPU governor settings: " + error);
+                }
+            });
+        }
         isDarkMode = ThemeManager.isDarkMode(this);
         ThemeManager.applyActivityTheme(this, false);
         boolean requireInitialThemeSelection = ThemeManager.isInitialThemeSelectionRequired(this);
 
         applyOrientationSystemUi();
         setContentView(R.layout.main_activity);
+        View mainContentRoot = findViewById(R.id.MainContentRoot);
+        if (mainContentRoot != null) {
+            mainContentRoot.setBackgroundColor(ThemeManager.getBackgroundColor(this));
+        }
         ThemeManager.applyGlassBackdropEffect(this);
         applyOrientationSystemUi();
         androidx.appcompat.widget.Toolbar toolbar = findViewById(R.id.Toolbar);
@@ -258,6 +269,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     protected void onResume() {
         super.onResume();
+        applyDrawerBackdropBlur(0f);
+        PlayStationWaveBackgroundView backdrop = findViewById(R.id.GlassBackdrop);
+        if (backdrop != null) {
+            backdrop.setAnimationEnabled(true);
+            backdrop.invalidate();
+        }
         ThemeManager.applyGlassBackdropEffect(this);
         NavigationView navigationView = findViewById(R.id.NavigationView);
         if (navigationView != null) {
@@ -793,14 +810,17 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void applyDrawerBackdropBlur(float slideOffset) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S
-                || !ThemeManager.isFullLiquidGlassEnabled(this)
-                || drawerLayout == null || drawerLayout.getChildCount() == 0) return;
+        if (drawerLayout == null || drawerLayout.getChildCount() == 0) return;
         View content = drawerLayout.getChildAt(0);
         if (slideOffset <= 0f) {
-            content.setRenderEffect(null);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                content.setRenderEffect(null);
+                content.invalidate();
+            }
             return;
         }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                || !ThemeManager.isFullLiquidGlassEnabled(this)) return;
         float radius = 16f * getResources().getDisplayMetrics().density * slideOffset;
         content.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(
                 radius, radius, android.graphics.Shader.TileMode.CLAMP));

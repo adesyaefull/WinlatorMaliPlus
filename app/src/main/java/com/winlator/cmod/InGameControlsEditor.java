@@ -34,6 +34,7 @@ import com.winlator.cmod.inputcontrols.ControlsProfile;
 import com.winlator.cmod.math.Mathf;
 import com.winlator.cmod.widget.InputControlsView;
 import com.winlator.cmod.widget.NumberPicker;
+import com.winlator.cmod.widget.GlassWindowEffects;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -456,7 +457,9 @@ public final class InGameControlsEditor implements View.OnClickListener {
 
         currentPopup = popupWindow;
         popupWindow.showAtLocation(anchorView, Gravity.NO_GRAVITY, windowPos[0], windowPos[1]);
+        Runnable restorePopupBlur = GlassWindowEffects.applyPopupBackdropBlur(anchorView);
         popupWindow.setOnDismissListener(() -> {
+            restorePopupBlur.run();
             currentIconListLayout = null;
             profile.save();
             inputControlsView.invalidate();

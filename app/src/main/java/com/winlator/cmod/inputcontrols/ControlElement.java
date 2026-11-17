@@ -1847,7 +1847,7 @@ public class ControlElement {
                     }
                 }
 
-                inputControlsView.invalidate();
+                // The parent InputControlsView owns redraw scheduling and dirty-region invalidation.
             }
             else if (type == Type.TRACKPAD || type == Type.MOUSE_AREA) {
                 Binding firstBinding = getBindingAt(0);
@@ -1938,7 +1938,6 @@ public class ControlElement {
                         }
                     }
                     touchTime = null;
-                    inputControlsView.invalidate();
                 }
                 else if (!toggleSwitch || selected) {
                     for (byte i = 0; i < 4; i++) {
@@ -1949,7 +1948,6 @@ public class ControlElement {
 
                 if (toggleSwitch) {
                     selected = !selected;
-                    inputControlsView.invalidate();
                 }
             }
             else if (type == Type.RANGE_BUTTON || type == Type.D_PAD || type == Type.STICK || type == Type.DYNAMIC_STICK || type == Type.TRACKPAD || type == Type.MOUSE_AREA) {
@@ -1973,10 +1971,6 @@ public class ControlElement {
                 if (type == Type.RANGE_BUTTON) {
                     scroller.handleTouchUp();
                 }
-                else if (type == Type.STICK || type == Type.DYNAMIC_STICK) {
-                    inputControlsView.invalidate();
-                }
-
                 if (currentPosition != null) currentPosition = null;
             }
             currentPointerId = -1;

@@ -58,6 +58,8 @@ public class InputControlsView extends View {
     private boolean drawOpaqueBackground = true;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
+    private final Rect drawClipBounds = new Rect();
+    public static final long TOUCHSCREEN_TIMEOUT_MS = 15_000L;
     private final ColorFilter colorFilter = new PorterDuffColorFilter(0xffffffff, PorterDuff.Mode.SRC_IN);
     private final Point cursor = new Point();
     private boolean readyToDraw = false;
@@ -194,12 +196,16 @@ public class InputControlsView extends View {
             drawCursor(canvas);
         }
 
-        if (stickElement != null) stickElement.draw(canvas);
+        canvas.getClipBounds(drawClipBounds);
+
+        if (stickElement != null && shouldDrawElement(stickElement, drawClipBounds)) {
+            stickElement.draw(canvas);
+        }
 
         if (profile != null && showTouchscreenControls && !isFocusedOnStick()) {
             if (!profile.isElementsLoaded()) profile.loadElements(this);
             for (ControlElement element : profile.getElements()) {
-                element.draw(canvas);
+                if (shouldDrawElement(element, drawClipBounds)) element.draw(canvas);
             }
         }
 
@@ -775,9 +781,10 @@ public class InputControlsView extends View {
         return true;
     }
 
-    // Dirty-region rendering keeps high-frequency analog movement from invalidating the full-screen
-    // transparent overlay. Updates are coalesced to roughly 60 Hz, even on 120 Hz touch displays.
-    private static final long MOVE_REDRAW_INTERVAL_MS = 16;
+    // Dirty-region rendering avoids walking and drawing controls outside the damaged region.
+    // Input events still reach the game at the device's full touch sampling rate; only the
+    // decorative stick/D-pad artwork is capped to about 40 redraws per second.
+    private static final long MOVE_REDRAW_INTERVAL_MS = 24;
     private long lastMoveRedraw = 0;
     private boolean moveRedrawPending = false;
     private final Rect pendingMoveDirtyRect = new Rect();
@@ -791,10 +798,22 @@ public class InputControlsView extends View {
         }
     };
 
+    private boolean shouldDrawElement(ControlElement element, Rect clipBounds) {
+        if (element == null || clipBounds == null || clipBounds.isEmpty()) return false;
+        Rect bounds = element.getBoundingBox();
+        // Include bitmap margins, strokes and subtle glass/controller highlights.
+        int padding = Math.max(12, (int) (Math.max(bounds.width(), bounds.height()) * 0.22f));
+        return bounds.right + padding > clipBounds.left
+                && bounds.left - padding < clipBounds.right
+                && bounds.bottom + padding > clipBounds.top
+                && bounds.top - padding < clipBounds.bottom;
+    }
+
     private void includeElementDirtyRect(Rect dirtyRect, ControlElement element) {
         if (dirtyRect == null || element == null) return;
         Rect bounds = element.getBoundingBox();
-        int padding = Math.max(8, snappingSize / 2);
+        // The draw bounds include cached bitmap margins and the controller-style rim glow.
+        int padding = Math.max(12, (int) (Math.max(bounds.width(), bounds.height()) * 0.22f));
         int left = Math.max(0, bounds.left - padding);
         int top = Math.max(0, bounds.top - padding);
         int right = Math.min(getWidth(), bounds.right + padding);
@@ -827,10 +846,22 @@ public class InputControlsView extends View {
         }
     }
 
+    public boolean hasActiveTouches() {
+        if (stickElement != null && stickElement.getCurrentPointerId() != -1) return true;
+        if (profile == null || !profile.isElementsLoaded()) return false;
+        for (ControlElement element : profile.getElements()) {
+            if (element.getCurrentPointerId() != -1) return true;
+        }
+        return false;
+    }
+
     private void resetTouchscreenTimeout() {
-        if (timeoutHandler != null && hideControlsRunnable != null) {
+        if (timeoutHandler == null || hideControlsRunnable == null) return;
+        if (preferences != null && preferences.getBoolean("touchscreen_timeout_enabled", false)) {
             timeoutHandler.removeCallbacks(hideControlsRunnable);
-            timeoutHandler.postDelayed(hideControlsRunnable, 5000);
+            timeoutHandler.postDelayed(hideControlsRunnable, TOUCHSCREEN_TIMEOUT_MS);
+        } else {
+            timeoutHandler.removeCallbacks(hideControlsRunnable);
         }
     }
 

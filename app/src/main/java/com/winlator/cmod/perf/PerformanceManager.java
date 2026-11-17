@@ -63,11 +63,6 @@ public class PerformanceManager {
             PerfPriority.boost(guestRootPid);
         }
 
-        // 4. Prefer Big Cores
-        if (HelioDeviceProfileManager.shouldPreferBigCores(activity, prefs) && guestRootPid > 0) {
-            CpuTopology.applyBigCoreAffinity(guestRootPid);
-        }
-
         // 5. Samsung Galaxy Performance SDK Boost
         if (prefs.getBoolean(PREF_SAMSUNG_PERF_BOOST, true) && samsungDriver != null && samsungDriver.isSupported()) {
             samsungDriver.startBoost();
@@ -95,10 +90,6 @@ public class PerformanceManager {
 
         if (prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true) && currentGuestPid > 0) {
             PerfPriority.boost(currentGuestPid);
-        }
-
-        if (HelioDeviceProfileManager.shouldPreferBigCores(activity, prefs) && currentGuestPid > 0) {
-            CpuTopology.applyBigCoreAffinity(currentGuestPid);
         }
 
         if (prefs.getBoolean(PREF_SAMSUNG_PERF_BOOST, true) && samsungDriver != null && samsungDriver.isSupported()) {
@@ -224,7 +215,7 @@ public class PerformanceManager {
             PowerManager pm = (PowerManager) activity.getSystemService(Context.POWER_SERVICE);
             if (pm == null) return;
             PowerManager.OnThermalStatusChangedListener listener = status -> {
-                if (!isSessionActive || currentGuestPid <= 0 || !bigCoreAffinityApplied) return;
+                if (!isSessionActive || currentGuestPid <= 0) return;
                 SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(activity);
                 if (!HelioDeviceProfileManager.isBigCoreProfileSelected(activity, prefs)) {
                     restoreGuestAffinity(currentGuestPid);

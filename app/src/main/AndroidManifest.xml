@@ -110,6 +110,13 @@
             </intent-filter>
         </receiver>
 
+        <!-- Read-only container discovery and launch API for the paired PC Game Launcher. -->
+        <provider
+            android:name="com.winlator.cmod.integration.LauncherBridgeProvider"
+            android:authorities="${applicationId}.launcherbridge"
+            android:exported="true"
+            android:grantUriPermissions="false" />
+
         <!-- FileProvider for sharing files -->
         <provider
             android:name="androidx.core.content.FileProvider"

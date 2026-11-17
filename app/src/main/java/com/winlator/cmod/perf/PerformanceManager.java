@@ -52,9 +52,8 @@ public class PerformanceManager {
         }
 
         // 2. Sustained Performance Mode
-        if (prefs.getBoolean(PREF_SUSTAINED_PERFORMANCE, false)) {
-            setSustainedPerformance(activity, true);
-        }
+        setSustainedPerformance(activity,
+                HelioDeviceProfileManager.shouldUseSustainedPerformance(activity, prefs));
 
         // 3. Thread Priority Boost
         if (prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true) && guestRootPid > 0) {
@@ -62,7 +61,7 @@ public class PerformanceManager {
         }
 
         // 4. Prefer Big Cores
-        if (prefs.getBoolean(PREF_PREFER_BIG_CORES, false) && guestRootPid > 0) {
+        if (HelioDeviceProfileManager.shouldPreferBigCores(activity, prefs) && guestRootPid > 0) {
             CpuTopology.applyBigCoreAffinity(guestRootPid);
         }
 
@@ -86,15 +85,14 @@ public class PerformanceManager {
             GameModeSignal.enterGameplay(activity);
         }
 
-        if (prefs.getBoolean(PREF_SUSTAINED_PERFORMANCE, false)) {
-            setSustainedPerformance(activity, true);
-        }
+        setSustainedPerformance(activity,
+                HelioDeviceProfileManager.shouldUseSustainedPerformance(activity, prefs));
 
         if (prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true) && currentGuestPid > 0) {
             PerfPriority.boost(currentGuestPid);
         }
 
-        if (prefs.getBoolean(PREF_PREFER_BIG_CORES, false) && currentGuestPid > 0) {
+        if (HelioDeviceProfileManager.shouldPreferBigCores(activity, prefs) && currentGuestPid > 0) {
             CpuTopology.applyBigCoreAffinity(currentGuestPid);
         }
 
@@ -150,7 +148,8 @@ public class PerformanceManager {
             GameModeSignal.exitGameplay(activity);
         }
 
-        setSustainedPerformance(activity, prefs.getBoolean(PREF_SUSTAINED_PERFORMANCE, false));
+        setSustainedPerformance(activity,
+                HelioDeviceProfileManager.shouldUseSustainedPerformance(activity, prefs));
         if (prefs.getBoolean(PREF_ROOT_PERFORMANCE_PROFILE, false)) {
             applyRootPerformanceProfile(activity, prefs);
         } else {
@@ -163,7 +162,7 @@ public class PerformanceManager {
             PerfPriority.restore();
         }
 
-        if (prefs.getBoolean(PREF_PREFER_BIG_CORES, false)) {
+        if (HelioDeviceProfileManager.shouldPreferBigCores(activity, prefs)) {
             if (currentGuestPid > 0) CpuTopology.applyBigCoreAffinity(currentGuestPid);
         }
 
@@ -184,7 +183,7 @@ public class PerformanceManager {
             if (prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true)) {
                 PerfPriority.boost(pid);
             }
-            if (prefs.getBoolean(PREF_PREFER_BIG_CORES, false)) {
+            if (HelioDeviceProfileManager.shouldPreferBigCores(activity, prefs)) {
                 CpuTopology.applyBigCoreAffinity(pid);
             }
         }

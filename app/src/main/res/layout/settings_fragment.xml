@@ -690,6 +690,76 @@
                             android:orientation="vertical" />
                     </LinearLayout>
 
+
+                    <!-- Helio G99/G100 chipset-aware runtime profile -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        android:background="@drawable/bordered_panel_dark"
+                        android:orientation="vertical"
+                        android:padding="14dp"
+                        android:tag="settingsSurface">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="MediaTek Helio G99 / G100 Smart Profile"
+                            android:textColor="?attr/colorAccent"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/TVHelioDetected"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="Detecting chipset and GPU…"
+                            android:textColor="?attr/semanticOnSurface"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/TVHelioThermal"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:layout_marginBottom="8dp"
+                            android:text="Battery and thermal status"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="11sp" />
+
+                        <CheckBox
+                            android:id="@+id/CBHelioProfileEnabled"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Enable chipset-aware runtime profile"
+                            android:textStyle="bold"
+                            android:textSize="13sp" />
+
+                        <Spinner
+                            android:id="@+id/SHelioProfile"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:spinnerMode="dropdown" />
+
+                        <TextView
+                            android:id="@+id/TVHelioProfileDescription"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="Profile description"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="Uses Android-supported sustained mode and existing guest-thread affinity controls. It does not unlock clocks, disable thermal protection, or guarantee a fixed FPS."
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
                     <!-- System Performance Enhancements -->
                     <TextView
                         android:id="@+id/TVPerformanceHeader"
@@ -1045,6 +1115,41 @@
                             android:layout_height="wrap_content"
                             android:textSize="13sp"
                             android:hint="https://.../contents.json" />
+                    </LinearLayout>
+
+
+                    <!-- Native game port workspace -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Native Game Porting"
+                        android:textStyle="bold"
+                        android:textSize="14sp"
+                        android:textColor="?attr/colorAccent"
+                        android:layout_marginBottom="8dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bordered_panel_dark"
+                        android:tag="settingsSurface"
+                        android:padding="14dp"
+                        android:orientation="vertical"
+                        android:layout_marginBottom="16dp">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Import and inspect game source projects for native Android ARM64 builds. Source code and Android-compatible engine support are required; a Windows EXE cannot be recompiled from the binary alone."
+                            android:textSize="12sp"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:layout_marginBottom="10dp" />
+
+                        <Button
+                            android:id="@+id/BTNativePortWorkspace"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Open Native Port Workspace" />
                     </LinearLayout>
 
                     <!-- System Features -->

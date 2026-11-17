@@ -189,3 +189,15 @@ Do not describe these as new features of this port unless the newer upstream rev
 ## Current validation caveat
 
 The current working tree has built successfully for all four release flavors (`standard`, `ludashi`, `antutu`, and `futuremark`) using the commands above. This is compile/package validation only: it does not certify every GPU, downloaded-wrapper archive, Android version, or experimental renderer path. The latest PanVK ZIP from each listed repository was checked for expected Adrenotools metadata/library structure; that is a package-format check, not a compatibility test. On-device Vulkan/native scanout, frame-generation output, PanVK compatibility/performance, popup appearance across Android versions, `.exe` picker flow, root tuning behavior, Steam task-removal pause behavior, and repeated/cloud cover-art edge cases still need targeted regression tests when those components are changed.
+
+
+## Helio G99/G100 runtime profile and native port workspace
+
+- Adds runtime chipset detection using Android SoC/build properties and the system GL renderer. Device matching is best-effort and uses a compatible MediaTek/Mali profile when firmware does not expose an exact commercial chipset name.
+- Adds Stable/Sustained, Balanced, and Performance/Big Cores profiles in Settings > Performance. The profile is consumed by the game start, resume, live-settings, and guest-PID paths through `PerformanceManager`.
+- The profile only selects Android sustained-performance mode and the existing guest big-core affinity behavior. It does not modify clock/voltage controls, disable thermal services, or promise a fixed FPS.
+- Battery temperature is not presented as a CPU/GPU junction-temperature reading.
+- Adds Native Port Workspace in Settings > Advanced. ZIP import is extracted privately, path-traversal checked, limited to 1.5 GB of extracted data and 20,000 archive entries, and treated as untrusted input. The importer inspects build metadata without running scripts or executables.
+- Native source analysis recognizes Android Gradle projects, CMake/C++ source, Unity, Unreal, Godot, and Windows EXE-only archives. Only projects already packaged as Android Gradle applications are accepted by the generic native build workflow.
+- Adds `.github/workflows/native-port-build.yml` for manually building an Android Gradle game project stored under `native-ports/`. The workflow has read-only repository permissions and receives no repository secrets.
+- Validation required: build the Standard and Ludashi APK flavors, test chipset detection on real Helio G99/G100 hardware, and verify imported-project classifications with representative source archives. Compilation does not prove game compatibility or runtime FPS.

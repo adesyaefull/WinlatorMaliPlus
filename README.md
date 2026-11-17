@@ -306,3 +306,20 @@ The local `bionic-mali-1.2` integration keeps the upstream native EGL/Gladio ren
 * **ZeroFG**: Apache 2.0 / BSD 3-Clause
 * **Inter Font**: SIL Open Font License 1.1 ([rsms/inter](https://github.com/rsms/inter))
 * **Android Open Source Project (AOSP)**: Apache 2.0
+
+
+## Helio G99/G100 runtime profile
+
+The Settings > Performance page includes a MediaTek profile detector and three runtime profiles:
+
+- **Stable / sustained** requests Android sustained-performance mode where supported and avoids forcing guest threads onto big CPU cores.
+- **Balanced** keeps standard Android Game Mode and guest-thread priority controls without sustained mode or big-core affinity.
+- **Performance / big cores** uses the existing guest-process big-core affinity path. It may increase heat and battery use.
+
+Detection uses Android SoC/build metadata and the system graphics renderer. Exact model identification is best-effort because OEM firmware may hide or rename SoC properties. Battery temperature is labelled as battery temperature; it is not a CPU/GPU junction sensor. The profile does not bypass thermal protections or write CPU/GPU voltage and frequency controls.
+
+## Native Port Workspace
+
+The Native Port Workspace imports a ZIP into private app storage, extracts it with path and size limits, and identifies Android Gradle, CMake/C++, Unity, Unreal, Godot, or EXE-only projects. It writes a `NATIVE_PORT_REPORT.md` readiness report and does not execute imported code.
+
+An existing Android Gradle project can be built remotely by placing it in `native-ports/<project-folder>`, pushing it to this repository, and running **Actions → Build native Android game project**. The workflow expects a Gradle wrapper, AndroidManifest.xml, and Android Gradle build files. C/C++ source without an Android application layer still requires engine-specific porting and NDK integration. A closed-source Windows EXE or game-data archive cannot be automatically converted into native ARM64 code.

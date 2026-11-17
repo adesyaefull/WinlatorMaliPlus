@@ -1,0 +1,97 @@
+name: Build native Android game project
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_dir:
+        description: 'Android Gradle game project directory inside native-ports/'
+        required: true
+        default: 'native-ports/example'
+        type: string
+      build_type:
+        description: 'Android build variant'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-port-build-\${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-native-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate native Android project
+        env:
+          PROJECT_DIR: \${{ inputs.project_dir }}
+        run: |
+          case "$PROJECT_DIR" in
+            native-ports/*) ;;
+            *) echo "::error::Project must be located inside native-ports/"; exit 1 ;;
+          esac
+          case "$PROJECT_DIR" in
+            *".."*|*"\\"*) echo "::error::Unsafe project path"; exit 1 ;;
+          esac
+          test -d "$PROJECT_DIR" || { echo "::error::Project directory not found"; exit 1; }
+          test -f "$PROJECT_DIR/gradlew" || {
+            echo "::error::Project needs its own Gradle wrapper (gradlew).";
+            exit 1;
+          }
+          find "$PROJECT_DIR" -type f -name AndroidManifest.xml -print -quit | grep -q . || {
+            echo "::error::No AndroidManifest.xml found. A raw CMake/Windows project is not a complete Android app.";
+            exit 1;
+          }
+          find "$PROJECT_DIR" -type f \( -name build.gradle -o -name build.gradle.kts \) -print -quit | grep -q . || {
+            echo "::error::No Gradle build file found.";
+            exit 1;
+          }
+          echo "Validated existing Android Gradle project at $PROJECT_DIR"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platforms;android-34" "build-tools;35.0.0" "ndk;29.0.14206865"
+
+      - name: Build native Android APK
+        env:
+          PROJECT_DIR: \${{ inputs.project_dir }}
+          BUILD_TYPE: \${{ inputs.build_type }}
+        run: |
+          chmod +x "$PROJECT_DIR/gradlew"
+          if [ "$BUILD_TYPE" = "release" ]; then
+            TASK="assembleRelease"
+          else
+            TASK="assembleDebug"
+          fi
+          cd "$PROJECT_DIR"
+          ./gradlew "$TASK" --no-daemon --stacktrace
+
+      - name: Upload native APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-android-game-\${{ inputs.build_type }}
+          path: \${{ inputs.project_dir }}/**/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14

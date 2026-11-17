@@ -427,15 +427,16 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         handler.postDelayed(savePlaytimeRunnable, SAVE_INTERVAL_MS);
 
 
-        // Handler and Runnable to manage timeout for hiding controls
-
-        boolean isTimeoutEnabled = preferences.getBoolean("touchscreen_timeout_enabled", true);
-
+        // The preference is read when the timeout fires, not captured during Activity creation.
+        // Do not hide the overlay while a virtual button or stick is actively being held.
         hideControlsRunnable = () -> {
-            if (isTimeoutEnabled) {
-                inputControlsView.setVisibility(View.GONE);
-                Log.d("XServerDisplayActivity", "Touchscreen controls hidden after timeout.");
+            if (!preferences.getBoolean("touchscreen_timeout_enabled", false) || inputControlsView == null) return;
+            if (inputControlsView.hasActiveTouches()) {
+                timeoutHandler.postDelayed(hideControlsRunnable, InputControlsView.TOUCHSCREEN_TIMEOUT_MS);
+                return;
             }
+            inputControlsView.setVisibility(View.GONE);
+            Log.d("XServerDisplayActivity", "Touchscreen controls hidden after inactivity timeout.");
         };
 
 

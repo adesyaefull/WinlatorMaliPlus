@@ -1114,6 +1114,185 @@ public class ControlElement {
         return bitmap;
     }
 
+    /**
+     * Low-resource control renderer. Static artwork is rasterized once per state and then
+     * blitted as a small cached bitmap. It avoids glass shaders, gradients, blur shadows and
+     * repeated text layout while preserving the control's original touch/input geometry.
+     */
+    private boolean drawLightweight(Canvas canvas, boolean pressed, float alpha) {
+        Rect box = getBoundingBox();
+        int width = Math.max(1, box.width());
+        int height = Math.max(1, box.height());
+        String label = getDisplayText();
+
+        if (type == Type.BUTTON || type == Type.EXPANDABLE_BUTTON || type == Type.BUTTON_GRID) {
+            if (customIconAsButton && iconId > 0) return false;
+            String key = "lite-button," + width + "," + height + "," + shape + "," + (int) alpha
+                    + "," + selected + "," + label;
+            if (!key.equals(glassCacheKey)) {
+                recycleGlassCache();
+                glassCacheKey = key;
+            }
+            int state = pressed ? 1 : 0;
+            if (glassCache[state] == null) {
+                glassCache[state] = makeLightweightBitmap(width, height, pressed, alpha, label, false, 0, false);
+            }
+            drawGlassBitmap(canvas, glassCache[state], box.centerX(), box.centerY());
+            return true;
+        }
+
+        if (type == Type.D_PAD) {
+            int stateMask = 0;
+            for (int i = 0; i < 4; i++) if (states[i]) stateMask |= (1 << i);
+            String key = "lite-dpad," + width + "," + height + "," + (int) alpha + "," + stateMask;
+            if (!key.equals(glassCacheKey)) {
+                recycleGlassCache();
+                glassCacheKey = key;
+            }
+            if (glassCache[0] == null) {
+                glassCache[0] = makeLightweightBitmap(width, height, false, alpha, null, true, stateMask, false);
+            }
+            drawGlassBitmap(canvas, glassCache[0], box.centerX(), box.centerY());
+            return true;
+        }
+
+        if (type == Type.STICK || type == Type.DYNAMIC_STICK) {
+            String key = "lite-stick," + width + "," + height + "," + (int) alpha;
+            if (!key.equals(glassCacheKey)) {
+                recycleGlassCache();
+                glassCacheKey = key;
+            }
+            if (glassCache[0] == null) {
+                glassCache[0] = makeLightweightBitmap(width, height, false, alpha, null, false, 0, true);
+            }
+            drawGlassBitmap(canvas, glassCache[0], box.centerX(), box.centerY());
+
+            Paint livePaint = inputControlsView.getPaint();
+            livePaint.clearShadowLayer();
+            livePaint.setPathEffect(null);
+            livePaint.setColorFilter(null);
+            float thumbRadius = Math.max(2f, inputControlsView.getSnappingSize() * 2.4f * scale);
+            PointF position = getCurrentPosition();
+            livePaint.setStyle(Paint.Style.FILL);
+            livePaint.setColor(Color.argb((int) (alpha * 0.48f), 32, 40, 52));
+            canvas.drawCircle(position.x, position.y, thumbRadius, livePaint);
+            livePaint.setStyle(Paint.Style.STROKE);
+            livePaint.setStrokeWidth(Math.max(1.5f, inputControlsView.getSnappingSize() * 0.08f * scale));
+            livePaint.setColor(Color.argb((int) (alpha * 0.95f), 235, 242, 250));
+            canvas.drawCircle(position.x, position.y, thumbRadius, livePaint);
+            livePaint.setStyle(Paint.Style.FILL);
+            livePaint.setStrokeWidth(1f);
+            livePaint.setPathEffect(null);
+            return true;
+        }
+
+        if (type == Type.TRACKPAD || type == Type.MOUSE_AREA) {
+            String key = "lite-trackpad," + width + "," + height + "," + (int) alpha;
+            if (!key.equals(glassCacheKey)) {
+                recycleGlassCache();
+                glassCacheKey = key;
+            }
+            if (glassCache[0] == null) {
+                glassCache[0] = makeLightweightBitmap(width, height, false, alpha, null, false, 0, false);
+            }
+            drawGlassBitmap(canvas, glassCache[0], box.centerX(), box.centerY());
+            return true;
+        }
+
+        // RANGE_BUTTON retains its scrolling labels and therefore uses the regular renderer.
+        return false;
+    }
+
+    private Bitmap makeLightweightBitmap(int width, int height, boolean pressed, float alpha,
+                                         String label, boolean dpad, int dpadStateMask, boolean stick) {
+        int margin = 3;
+        Bitmap bitmap = Bitmap.createBitmap(width + margin * 2, height + margin * 2, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(bitmap);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float opacity = Math.max(0.05f, Math.min(1.0f, alpha / 255.0f));
+        int fillAlpha = Math.max(1, Math.min(255, (int) (255 * opacity * (pressed ? 0.58f : 0.38f))));
+        int edgeAlpha = Math.max(1, Math.min(255, (int) (255 * opacity * 0.88f)));
+        int fillColor = Color.argb(fillAlpha, 18, 27, 38);
+        int edgeColor = Color.argb(edgeAlpha, selected ? 0 : 220, selected ? 229 : 232, selected ? 255 : 242);
+        Rect bounds = new Rect(margin, margin, margin + width, margin + height);
+
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(fillColor);
+        p.setStrokeWidth(1f);
+
+        if (dpad) {
+            float r = Math.min(width, height) * 0.17f;
+            float cx = bounds.centerX();
+            float cy = bounds.centerY();
+            float offset = Math.min(width, height) * 0.29f;
+            for (int i = 0; i < 4; i++) {
+                float px = i == 1 ? cx + offset : (i == 3 ? cx - offset : cx);
+                float py = i == 0 ? cy - offset : (i == 2 ? cy + offset : cy);
+                boolean down = (dpadStateMask & (1 << i)) != 0;
+                p.setColor(down ? Color.argb(edgeAlpha, 42, 112, 174) : fillColor);
+                c.drawCircle(px, py, r, p);
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(Math.max(1f, r * 0.08f));
+                p.setColor(edgeColor);
+                c.drawCircle(px, py, r, p);
+                p.setStyle(Paint.Style.FILL);
+                Path arrow = new Path();
+                float tip = r * 0.48f;
+                float base = r * 0.30f;
+                arrow.moveTo(px, py - tip);
+                arrow.lineTo(px + base, py + base * 0.45f);
+                arrow.lineTo(px - base, py + base * 0.45f);
+                arrow.close();
+                c.save();
+                c.rotate(90f * i, px, py);
+                p.setColor(Color.argb(edgeAlpha, 235, 242, 250));
+                c.drawPath(arrow, p);
+                c.restore();
+            }
+            return bitmap;
+        }
+
+        if (stick) {
+            float radius = Math.min(width, height) * 0.46f;
+            c.drawCircle(bounds.centerX(), bounds.centerY(), radius, p);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(Math.max(1f, radius * 0.06f));
+            p.setColor(edgeColor);
+            c.drawCircle(bounds.centerX(), bounds.centerY(), radius, p);
+            return bitmap;
+        }
+
+        if (type == Type.TRACKPAD || type == Type.MOUSE_AREA) {
+            float radius = Math.min(width, height) * 0.13f;
+            c.drawRoundRect(new RectF(bounds), radius, radius, p);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(Math.max(1f, Math.min(width, height) * 0.025f));
+            p.setColor(edgeColor);
+            c.drawRoundRect(new RectF(bounds), radius, radius, p);
+            return bitmap;
+        }
+
+        drawShape(c, bounds, fillColor, p);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(Math.max(1f, Math.min(width, height) * 0.035f));
+        p.setColor(edgeColor);
+        drawShape(c, bounds, edgeColor, p);
+
+        if (label != null && !label.isEmpty()) {
+            p.setStyle(Paint.Style.FILL);
+            p.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD));
+            p.setTextAlign(Paint.Align.CENTER);
+            p.setColor(Color.argb((int) (255 * opacity), 255, 255, 255));
+            float textSize = Math.min(height * 0.42f, width * 0.42f);
+            p.setTextSize(Math.max(7f, textSize));
+            float available = width * 0.76f;
+            float measured = p.measureText(label);
+            if (measured > available && measured > 0) p.setTextSize(Math.max(6f, p.getTextSize() * available / measured));
+            c.drawText(label, bounds.centerX(), bounds.centerY() - (p.descent() + p.ascent()) * 0.5f, p);
+        }
+        return bitmap;
+    }
+
     public void draw(Canvas canvas) {
         int snappingSize = inputControlsView.getSnappingSize();
         Paint paint = inputControlsView.getPaint();
@@ -1145,6 +1324,7 @@ public class ControlElement {
         // The three styles never fade below "clearly there": the opacity setting fades them down to 55 %, no further
         // (clear glass and dark plastic all but vanished over the game below that, while coloured parts still showed).
         float styledAlpha = Math.max(alpha, 255f * 0.55f);
+        if (stylePreset == ControlStylePreset.LIGHTWEIGHT && drawLightweight(canvas, pressed, alpha)) return;
         if (stylePreset == ControlStylePreset.GLASS && drawGlass(canvas, paint, pressed, styledAlpha, b0, label))
             return;
         if ((stylePreset == ControlStylePreset.XBOX || stylePreset == ControlStylePreset.PLAYSTATION) &&

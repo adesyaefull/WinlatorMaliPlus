@@ -381,6 +381,9 @@ public class InputControlsView extends View {
 
     @Override
     protected void onDetachedFromWindow() {
+        removeCallbacks(moveRedraw);
+        moveRedrawPending = false;
+        pendingMoveDirtyRect.setEmpty();
         if (mouseMoveTimer != null) mouseMoveTimer.cancel();
         synchronized(keyPressures) {
             for (Map.Entry<Binding, Boolean> entry : keyStates.entrySet()) {
@@ -672,6 +675,7 @@ public class InputControlsView extends View {
             switch (actionMasked) {
                 case MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                     float x = event.getX(actionIndex), y = event.getY(actionIndex);
+                    Rect dirtyRect = new Rect();
                     for (ControlElement element : profile.getElements()) {
                         boolean contains = element.containsPoint(x, y);
                         if (contains && radialWheelManager != null && !radialWheelManager.getConfigs().isEmpty()) {
@@ -686,6 +690,7 @@ public class InputControlsView extends View {
                         }
                         if (element.handleTouchDown(pointerId, x, y)) {
                             handled = true;
+                            includeElementDirtyRect(dirtyRect, element);
                             if (preferences.getBoolean("touchscreen_haptics_enabled", true)) {
                                 if (cachedVibrator != null && cachedHapticEffect != null) cachedVibrator.vibrate(cachedHapticEffect);
                             }
@@ -695,7 +700,8 @@ public class InputControlsView extends View {
                         }
                     }
                     if (!handled && touchpadView != null) touchpadView.onTouchEvent(event);
-                    invalidate();
+                    if (radialWheelManager != null && radialWheelManager.isOpen()) invalidate();
+                    else if (!dirtyRect.isEmpty()) invalidateImmediately(dirtyRect);
                 }
                 case MotionEvent.ACTION_MOVE -> {
                     if (radialWheelManager != null && radialWheelManager.isOpen()) {
@@ -704,19 +710,15 @@ public class InputControlsView extends View {
                         return true;
                     }
                     boolean hasUnhandledPointer = false;
-                    boolean needsRedraw = false;
-                    for (byte i = 0; i < event.getPointerCount(); i++) {
+                    Rect dirtyRect = new Rect();
+                    for (int i = 0; i < event.getPointerCount(); i++) {
                         boolean elementHandled = false;
                         for (ControlElement element : profile.getElements()) {
                             if (element.handleTouchMove(event.getPointerId(i), event.getX(i), event.getY(i))) {
                                 elementHandled = true;
-                                // Only request canvas redraw if the element has visual changes
-                                // during move (stick knob, D-pad direction, range scroller).
-                                // Static buttons (A/B/X/Y, triggers, bumpers) don't change
-                                // appearance while held, so skip the expensive full-view redraw.
-                                if (element.isDynamicVisual()) {
-                                    needsRedraw = true;
-                                }
+                                // Static buttons do not change appearance while held. For dynamic
+                                // controls, redraw only their bounds and throttle to display cadence.
+                                if (element.isDynamicVisual()) includeElementDirtyRect(dirtyRect, element);
                                 break;
                             }
                         }
@@ -725,9 +727,7 @@ public class InputControlsView extends View {
                     if (hasUnhandledPointer && touchpadView != null) {
                         touchpadView.onTouchEvent(event);
                     }
-                    if (needsRedraw) {
-                        invalidateThrottled();
-                    }
+                    if (!dirtyRect.isEmpty()) invalidateThrottled(dirtyRect);
                 }
                 case MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
                     if (radialWheelManager != null && radialWheelManager.isOpen()) {
@@ -736,17 +736,20 @@ public class InputControlsView extends View {
                         return true;
                     }
                     if (actionMasked == MotionEvent.ACTION_CANCEL) {
+                        Rect dirtyRect = new Rect();
                         for (ControlElement element : profile.getElements()) {
                             int pid = element.getCurrentPointerId();
                             if (pid != -1) {
+                                includeElementDirtyRect(dirtyRect, element);
                                 element.handleTouchUp(pid);
                             }
                         }
                         handleMouseMovement(0, 0);
                         if (touchpadView != null) touchpadView.onTouchEvent(event);
-                        invalidate();
+                        if (!dirtyRect.isEmpty()) invalidateImmediately(dirtyRect);
                         return true;
                     }
+                    Rect dirtyRect = new Rect();
                     for (ControlElement element : profile.getElements()) {
                         if (element.getCurrentPointerId() == pointerId) {
                             for (int b = 0; b < element.getBindingCount(); b++) {
@@ -758,32 +761,63 @@ public class InputControlsView extends View {
                         }
                         if (element.handleTouchUp(pointerId)) {
                             handled = true;
+                            includeElementDirtyRect(dirtyRect, element);
                             if (touchpadView != null && element.getBindingAt(0) == Binding.MOUSE_LEFT_BUTTON) {
                                 touchpadView.setPointerButtonLeftEnabled(true);
                             }
                         }
                     }
                     if (!handled && touchpadView != null) touchpadView.onTouchEvent(event);
-                    invalidate();
+                    if (!dirtyRect.isEmpty()) invalidateImmediately(dirtyRect);
                 }
             }
         }
         return true;
     }
 
-    // A moving stick knob or D-pad redraws the overlay at most 60 times a second: touch events come at up to the
-    // screen's 120 Hz, and every redraw is GPU work the game shares. Presses and releases still redraw at once.
+    // Dirty-region rendering keeps high-frequency analog movement from invalidating the full-screen
+    // transparent overlay. Updates are coalesced to roughly 60 Hz, even on 120 Hz touch displays.
     private static final long MOVE_REDRAW_INTERVAL_MS = 16;
     private long lastMoveRedraw = 0;
     private boolean moveRedrawPending = false;
+    private final Rect pendingMoveDirtyRect = new Rect();
     private final Runnable moveRedraw = () -> {
         moveRedrawPending = false;
         lastMoveRedraw = android.os.SystemClock.uptimeMillis();
-        invalidate();
+        if (!pendingMoveDirtyRect.isEmpty()) {
+            Rect dirty = new Rect(pendingMoveDirtyRect);
+            pendingMoveDirtyRect.setEmpty();
+            invalidate(dirty);
+        }
     };
 
-    private void invalidateThrottled() {
+    private void includeElementDirtyRect(Rect dirtyRect, ControlElement element) {
+        if (dirtyRect == null || element == null) return;
+        Rect bounds = element.getBoundingBox();
+        int padding = Math.max(8, snappingSize / 2);
+        int left = Math.max(0, bounds.left - padding);
+        int top = Math.max(0, bounds.top - padding);
+        int right = Math.min(getWidth(), bounds.right + padding);
+        int bottom = Math.min(getHeight(), bounds.bottom + padding);
+        if (right <= left || bottom <= top) return;
+        if (dirtyRect.isEmpty()) dirtyRect.set(left, top, right, bottom);
+        else dirtyRect.union(left, top, right, bottom);
+    }
+
+    private void invalidateImmediately(Rect dirtyRect) {
+        if (dirtyRect == null || dirtyRect.isEmpty()) return;
+        removeCallbacks(moveRedraw);
+        moveRedrawPending = false;
+        pendingMoveDirtyRect.setEmpty();
+        invalidate(dirtyRect);
+    }
+
+    private void invalidateThrottled(Rect dirtyRect) {
+        if (dirtyRect == null || dirtyRect.isEmpty()) return;
+        if (pendingMoveDirtyRect.isEmpty()) pendingMoveDirtyRect.set(dirtyRect);
+        else pendingMoveDirtyRect.union(dirtyRect);
         if (moveRedrawPending) return;
+
         long wait = lastMoveRedraw + MOVE_REDRAW_INTERVAL_MS - android.os.SystemClock.uptimeMillis();
         if (wait <= 0) {
             moveRedraw.run();

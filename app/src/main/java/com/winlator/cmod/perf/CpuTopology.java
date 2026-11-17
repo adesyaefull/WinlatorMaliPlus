@@ -20,6 +20,7 @@ import java.util.Map;
  */
 public class CpuTopology {
     private static final String TAG = "CpuTopology";
+    private static final float BIG_CORE_THRESHOLD_RATIO = 0.95f;
 
     public static List<Integer> detectBigCoreIndices() {
         int count = Runtime.getRuntime().availableProcessors();
@@ -45,8 +46,9 @@ public class CpuTopology {
 
         List<Integer> bigCores = new ArrayList<>();
         if (maxFreq > 0) {
-            // Include cores matching the highest max frequency or within 10% of max
-            int threshold = (int) (maxFreq * 0.90f);
+            // G99/G100 use 2.2 GHz Cortex-A76 and 2.0 GHz Cortex-A55 cores.
+            // A 90% threshold includes both clusters; 95% isolates the higher-frequency cluster.
+            int threshold = (int) (maxFreq * BIG_CORE_THRESHOLD_RATIO);
             for (int i = 0; i < count; i++) {
                 if (maxFreqs[i] >= threshold) {
                     bigCores.add(i);

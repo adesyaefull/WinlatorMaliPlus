@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: native-port-build-\${{ github.ref }}
+  group: native-port-build-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -36,7 +36,7 @@ jobs:
 
       - name: Validate native Android project
         env:
-          PROJECT_DIR: \${{ inputs.project_dir }}
+          PROJECT_DIR: ${{ inputs.project_dir }}
         run: |
           case "$PROJECT_DIR" in
             native-ports/*) ;;
@@ -76,8 +76,8 @@ jobs:
 
       - name: Build native Android APK
         env:
-          PROJECT_DIR: \${{ inputs.project_dir }}
-          BUILD_TYPE: \${{ inputs.build_type }}
+          PROJECT_DIR: ${{ inputs.project_dir }}
+          BUILD_TYPE: ${{ inputs.build_type }}
         run: |
           chmod +x "$PROJECT_DIR/gradlew"
           if [ "$BUILD_TYPE" = "release" ]; then
@@ -91,7 +91,7 @@ jobs:
       - name: Upload native APK
         uses: actions/upload-artifact@v4
         with:
-          name: native-android-game-\${{ inputs.build_type }}
-          path: \${{ inputs.project_dir }}/**/build/outputs/apk/**/*.apk
+          name: native-android-game-${{ inputs.build_type }}
+          path: ${{ inputs.project_dir }}/**/build/outputs/apk/**/*.apk
           if-no-files-found: error
           retention-days: 14

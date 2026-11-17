@@ -1,4 +1,4 @@
-name: Build Winlator Mali APK
+name: Build Winlator Mali Helio APK
 
 on:
   workflow_dispatch:
@@ -6,12 +6,13 @@ on:
       flavor:
         description: 'Product flavor to build'
         required: true
-        default: 'standard'
+        default: 'ludashi'
         type: choice
         options:
           - standard
           - antutu
           - ludashi
+          - futuremark
           - all
       build_type:
         description: 'Build type (debug or release)'
@@ -79,7 +80,7 @@ jobs:
       - name: Upload Built APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: winlator-mali-${{ github.event.inputs.flavor }}-${{ github.event.inputs.build_type }}
+          name: winlator-mali-helio-${{ github.event.inputs.flavor }}-${{ github.event.inputs.build_type }}
           path: app/build/outputs/apk/**/*.apk
           if-no-files-found: error
           retention-days: 14

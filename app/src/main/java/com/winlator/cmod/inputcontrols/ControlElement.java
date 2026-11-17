@@ -1123,9 +1123,9 @@ public class ControlElement {
         Rect box = getBoundingBox();
         int width = Math.max(1, box.width());
         int height = Math.max(1, box.height());
-        String label = getDisplayText();
 
         if (type == Type.BUTTON || type == Type.EXPANDABLE_BUTTON || type == Type.BUTTON_GRID) {
+            String label = getDisplayText();
             if (customIconAsButton && iconId > 0) return false;
             String key = "lite-button," + width + "," + height + "," + shape + "," + (int) alpha
                     + "," + selected + "," + label;
@@ -1313,6 +1313,8 @@ public class ControlElement {
             stylePreset = inputControlsView.getProfile().getStylePreset();
         }
 
+        if (stylePreset == ControlStylePreset.LIGHTWEIGHT && drawLightweight(canvas, pressed, alpha)) return;
+
         int customBg = 0xFF000000;
         int customStroke = 0xFFE6E6E6;
         int customContent = Color.WHITE;
@@ -1324,7 +1326,6 @@ public class ControlElement {
         // The three styles never fade below "clearly there": the opacity setting fades them down to 55 %, no further
         // (clear glass and dark plastic all but vanished over the game below that, while coloured parts still showed).
         float styledAlpha = Math.max(alpha, 255f * 0.55f);
-        if (stylePreset == ControlStylePreset.LIGHTWEIGHT && drawLightweight(canvas, pressed, alpha)) return;
         if (stylePreset == ControlStylePreset.GLASS && drawGlass(canvas, paint, pressed, styledAlpha, b0, label))
             return;
         if ((stylePreset == ControlStylePreset.XBOX || stylePreset == ControlStylePreset.PLAYSTATION) &&

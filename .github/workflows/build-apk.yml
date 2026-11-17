@@ -1,6 +1,8 @@
 name: Build Winlator Mali Helio APK
 
 on:
+  push:
+    branches: [ "bionic-mali-1.2" ]
   workflow_dispatch:
     inputs:
       flavor:
@@ -61,8 +63,8 @@ jobs:
 
       - name: Build APK(s)
         run: |
-          FLAVOR="${{ github.event.inputs.flavor }}"
-          BUILD_TYPE="${{ github.event.inputs.build_type }}"
+          FLAVOR="${{ github.event.inputs.flavor || 'ludashi' }}"
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
           
           # Capitalize build type for gradle task name (debug -> Debug, release -> Release)
           CAP_TYPE="$(echo ${BUILD_TYPE:0:1} | tr '[:lower:]' '[:upper:]')${BUILD_TYPE:1}"
@@ -80,7 +82,7 @@ jobs:
       - name: Upload Built APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: winlator-mali-helio-${{ github.event.inputs.flavor }}-${{ github.event.inputs.build_type }}
+          name: winlator-mali-helio-${{ github.event.inputs.flavor || 'ludashi' }}-${{ github.event.inputs.build_type || 'debug' }}
           path: app/build/outputs/apk/**/*.apk
           if-no-files-found: error
           retention-days: 14

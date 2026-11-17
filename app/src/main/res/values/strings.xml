@@ -229,6 +229,7 @@
     <string name="compatibility">Compatibility</string>
     <string name="intermediate">Intermediate</string>
     <string name="performance">Performance</string>
+    <string name="box64_helio_async_dynarec">Helio G99/G100 - Async DynaRec (Experimental)</string>
     <string name="performance_x87_off">Performance (X86 REDUCED PRECISION OFF)</string>
     <string name="performance_tso">Performance (TSO)</string>
     <string name="unreal_engine_3">Unreal Engine 3</string>

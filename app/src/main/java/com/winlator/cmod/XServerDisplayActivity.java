@@ -2541,7 +2541,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
                     // Remove any pending hide callbacks and reset the timeout
                     timeoutHandler.removeCallbacks(hideControlsRunnable);
-                    timeoutHandler.postDelayed(hideControlsRunnable, 5000); // Reset timeout
+                    timeoutHandler.postDelayed(hideControlsRunnable, InputControlsView.TOUCHSCREEN_TIMEOUT_MS); // Reset timeout
                 }
 
                 return false; // Allow the touch event to propagate
@@ -2549,7 +2549,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
             // Reset the timeout when the controls are initially displayed
             timeoutHandler.removeCallbacks(hideControlsRunnable);
-            timeoutHandler.postDelayed(hideControlsRunnable, 5000); // Hide after 5 seconds of inactivity
+            timeoutHandler.postDelayed(hideControlsRunnable, InputControlsView.TOUCHSCREEN_TIMEOUT_MS); // Hide after inactivity
         } else {
             // If timeout is disabled, keep the controls always visible
             Log.d("XServerDisplayActivity", "Timeout is disabled, controls will stay visible.");

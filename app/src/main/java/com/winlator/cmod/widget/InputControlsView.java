@@ -413,6 +413,7 @@ public class InputControlsView extends View {
 
         synchronized (mouseMoveTimerLock) {
             if (mouseMoveTimer != null) return;
+            final float cursorSpeed = profile.getCursorSpeed();
 
             // This worker exists only while mouse movement or fractional key pressure is active.
             // It no longer wakes the CPU at 60 Hz for the rest of an otherwise idle game session.
@@ -441,7 +442,7 @@ public class InputControlsView extends View {
 
                         if (velocityX != 0 || velocityY != 0) {
                             float magnitude = (float) Math.sqrt(velocityX * velocityX + velocityY * velocityY);
-                            float factor = (float) Math.pow(magnitude, 1.5f) * profile.getCursorSpeed() * 15.0f;
+                            float factor = (float) Math.pow(magnitude, 1.5f) * cursorSpeed * 15.0f;
                             int dx = Math.round((velocityX / magnitude) * factor);
                             int dy = Math.round((velocityY / magnitude) * factor);
                             if (dx != 0 || dy != 0) {

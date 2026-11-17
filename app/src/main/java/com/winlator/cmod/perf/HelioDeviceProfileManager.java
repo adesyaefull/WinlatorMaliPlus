@@ -103,11 +103,29 @@ public final class HelioDeviceProfileManager {
         return PROFILE_STABLE.equals(getSelectedProfile(preferences));
     }
 
-    public static boolean shouldPreferBigCores(Context context, SharedPreferences preferences) {
-        boolean legacy = preferences != null && preferences.getBoolean(
+    public static boolean isBigCoreProfileSelected(Context context, SharedPreferences preferences) {
+        if (isProfileEnabled(context, preferences)) {
+            return PROFILE_PERFORMANCE.equals(getSelectedProfile(preferences));
+        }
+        return preferences != null && preferences.getBoolean(
                 PerformanceManager.PREF_PREFER_BIG_CORES, false);
-        if (!isProfileEnabled(context, preferences)) return legacy;
-        return PROFILE_PERFORMANCE.equals(getSelectedProfile(preferences));
+    }
+
+    public static boolean shouldPreferBigCores(Context context, SharedPreferences preferences) {
+        boolean requested = isBigCoreProfileSelected(context, preferences);
+        return requested && !isThermalPressure(context);
+    }
+
+    /** True at Android's MODERATE thermal status or above; false when unavailable. */
+    public static boolean isThermalPressure(Context context) {
+        if (context == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false;
+        try {
+            PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            return pm != null && pm.getCurrentThermalStatus()
+                    >= PowerManager.THERMAL_STATUS_MODERATE;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     public static String[] getProfileIds() {

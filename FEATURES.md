@@ -192,6 +192,9 @@ The current working tree has built successfully for all four release flavors (`s
 
 
 ## Helio G99/G100 runtime profile and native port workspace
+- Adds a live Android thermal-status listener while the game session is active. At MODERATE thermal status or above, the optional big-core affinity is removed from the guest process tree; when the status falls below MODERATE and Performance mode is still selected, the affinity can be applied again.
+- Restores the guest process tree to the online CPU affinity mask when the game pauses, stops, or the user changes away from the big-core profile. The mask uses the existing ProcessHelper affinity API and does not change CPU frequency, voltage, or thermal policy.
+- Thermal guard availability depends on Android API 29+ and the device's PowerManager implementation. If the OS does not expose a thermal status listener, the profile falls back to existing affinity and system-level thermal controls.
 
 - Adds runtime chipset detection using Android SoC/build properties and the system GL renderer. Device matching is best-effort and uses a compatible MediaTek/Mali profile when firmware does not expose an exact commercial chipset name.
 - Adds Stable/Sustained, Balanced, and Performance/Big Cores profiles in Settings > Performance. The profile is consumed by the game start, resume, live-settings, and guest-PID paths through `PerformanceManager`.

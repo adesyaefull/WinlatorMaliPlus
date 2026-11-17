@@ -105,6 +105,28 @@ public class CpuTopology {
         return count;
     }
 
+    /**
+     * Restores the guest process tree to the full set of currently online CPUs.
+     * The mask is bounded to the int affinity API used by ProcessHelper.
+     */
+    public static int applyAllCoreAffinity(int guestRootPid) {
+        int cpuCount = Runtime.getRuntime().availableProcessors();
+        if (guestRootPid <= 0 || cpuCount <= 0 || cpuCount > 31) {
+            Log.w(TAG, "Cannot construct a safe all-core affinity mask (cpuCount=" + cpuCount + ")");
+            return 0;
+        }
+
+        int mask = (1 << cpuCount) - 1;
+        int updated = 0;
+        if (ProcessHelper.setLinuxAffinity(guestRootPid, mask)) updated++;
+        for (int pid : collectGuestPids(guestRootPid)) {
+            if (ProcessHelper.setLinuxAffinity(pid, mask)) updated++;
+        }
+        Log.d(TAG, "Restored full-core guest affinity (mask=0x"
+                + Integer.toHexString(mask) + ") to " + updated + " processes");
+        return updated;
+    }
+
     private static List<Integer> collectGuestPids(int rootPid) {
         List<Integer> result = new ArrayList<>();
         File proc = new File("/proc");

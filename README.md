@@ -14,6 +14,19 @@
 
 Built upon the high-performance **Android Bionic C runtime** (originating from Pipetto Cripto's Winlator Bionic fork), Winlator Mali bypasses traditional PRoot container and syscall-translation overhead, achieving near-native execution speed, reduced CPU bottlenecking, and superior thermal efficiency.
 
+## PC Game Launcher Integration
+
+This branch exposes an optional, package-verified ContentProvider bridge for the companion Android launcher:
+[PCGameLauncherAndroid](https://github.com/suksesjt12-source/PCGameLauncherAndroid).
+
+The bridge supports:
+- Listing container IDs and names to the paired launcher.
+- Starting an EXE with a selected container through the existing XServer display session.
+- Restricting launch paths to `Download/PCGameLauncher` and checking the EXE file and selected container before launch.
+- Restricting bridge calls to the companion package `com.suksesjt.pcgamelauncherplus`.
+
+The launcher copies the selected EXE into `Download/PCGameLauncher`. The directory is visible to Winlator through its Download drive mapping. This integration launches one EXE; it does not copy a complete PC game installation, DLLs, archives, or adjacent data files. For multi-file games, place the complete game folder in the shared storage and use the EXE entry point only when its required files remain accessible beside it. Other Winlator forks without this bridge can still be opened as applications but cannot expose containers or accept direct launch requests through this integration.
+
 ## Winlator Mali+ Local Integration
 
 This repository also contains the **Winlator Mali+** integration branch maintained by [Adesyaefull](https://github.com/adesyaefull). It builds on Winlator Mali 1.2 while retaining the upstream EGL/Gladio and ZeroFG paths.

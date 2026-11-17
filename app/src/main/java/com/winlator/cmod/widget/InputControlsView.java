@@ -78,7 +78,8 @@ public class InputControlsView extends View {
     private float overlayOpacity = DEFAULT_OVERLAY_OPACITY;
     private TouchpadView touchpadView;
     private XServer xServer;
-    private Timer mouseMoveTimer;
+    private volatile Timer mouseMoveTimer;
+    private final Object mouseMoveTimerLock = new Object();
     private final PointF mouseMoveOffset = new PointF();
     private final Map<Binding, Float> keyPressures = new HashMap<>();
     private final Map<Binding, Boolean> keyStates = new HashMap<>();
@@ -390,7 +391,12 @@ public class InputControlsView extends View {
         removeCallbacks(moveRedraw);
         moveRedrawPending = false;
         pendingMoveDirtyRect.setEmpty();
-        if (mouseMoveTimer != null) mouseMoveTimer.cancel();
+        synchronized (mouseMoveTimerLock) {
+            if (mouseMoveTimer != null) {
+                mouseMoveTimer.cancel();
+                mouseMoveTimer = null;
+            }
+        }
         synchronized(keyPressures) {
             for (Map.Entry<Binding, Boolean> entry : keyStates.entrySet()) {
                 if (entry.getValue()) xServer.injectKeyRelease(entry.getKey().keycode);
@@ -403,10 +409,16 @@ public class InputControlsView extends View {
 
     private void createMouseMoveTimer() {
         final WinHandler winHandler = xServer != null ? xServer.getWinHandler() : null;
-        if (mouseMoveTimer == null && profile != null && winHandler != null) {
-            final float cursorSpeed = profile.getCursorSpeed();
-            mouseMoveTimer = new Timer();
-            mouseMoveTimer.schedule(new TimerTask() {
+        if (xServer == null || profile == null || winHandler == null) return;
+
+        synchronized (mouseMoveTimerLock) {
+            if (mouseMoveTimer != null) return;
+
+            // This worker exists only while mouse movement or fractional key pressure is active.
+            // It no longer wakes the CPU at 60 Hz for the rest of an otherwise idle game session.
+            final Timer timer = new Timer("WinlatorMouseInput", true);
+            mouseMoveTimer = timer;
+            timer.schedule(new TimerTask() {
                 private float velocityX = 0;
                 private float velocityY = 0;
                 private static final float ACCELERATION = 0.2f;
@@ -414,15 +426,22 @@ public class InputControlsView extends View {
 
                 @Override
                 public void run() {
-                    if (mouseMoveOffset.x != 0 || mouseMoveOffset.y != 0 || velocityX != 0 || velocityY != 0) {
-                        velocityX += (mouseMoveOffset.x - velocityX) * ACCELERATION;
-                        velocityY += (mouseMoveOffset.y - velocityY) * ACCELERATION;
-                        if (mouseMoveOffset.x == 0 && Math.abs(velocityX) < 0.05f) velocityX = 0;
-                        if (mouseMoveOffset.y == 0 && Math.abs(velocityY) < 0.05f) velocityY = 0;
+                    float targetX;
+                    float targetY;
+                    synchronized (mouseMoveOffset) {
+                        targetX = mouseMoveOffset.x;
+                        targetY = mouseMoveOffset.y;
+                    }
+
+                    if (targetX != 0 || targetY != 0 || velocityX != 0 || velocityY != 0) {
+                        velocityX += (targetX - velocityX) * ACCELERATION;
+                        velocityY += (targetY - velocityY) * ACCELERATION;
+                        if (targetX == 0 && Math.abs(velocityX) < 0.05f) velocityX = 0;
+                        if (targetY == 0 && Math.abs(velocityY) < 0.05f) velocityY = 0;
 
                         if (velocityX != 0 || velocityY != 0) {
                             float magnitude = (float) Math.sqrt(velocityX * velocityX + velocityY * velocityY);
-                            float factor = (float) Math.pow(magnitude, 1.5f) * cursorSpeed * 15.0f;
+                            float factor = (float) Math.pow(magnitude, 1.5f) * profile.getCursorSpeed() * 15.0f;
                             int dx = Math.round((velocityX / magnitude) * factor);
                             int dy = Math.round((velocityY / magnitude) * factor);
                             if (dx != 0 || dy != 0) {
@@ -432,40 +451,50 @@ public class InputControlsView extends View {
                         }
                     }
 
-                    synchronized(keyPressures) {
-                        // 1. Process active keys and update their pulse state
+                    boolean keysIdle;
+                    synchronized (keyPressures) {
                         for (Map.Entry<Binding, Float> entry : keyPressures.entrySet()) {
                             Binding binding = entry.getKey();
                             float pressure = entry.getValue();
-                            
-                            // High-frequency distributed pulsing (Bresenham-based)
-                            // Pattern: pressure=0.5 -> OFF, ON, OFF, ON...
                             boolean newState = (int)((pulseCounter + 1) * pressure) > (int)(pulseCounter * pressure);
-                            
                             Boolean currentState = keyStates.get(binding);
                             if (currentState == null) currentState = false;
-                            
                             if (newState != currentState) {
                                 if (newState) xServer.injectKeyPress(binding.keycode);
                                 else xServer.injectKeyRelease(binding.keycode);
                                 keyStates.put(binding, newState);
                             }
                         }
-                        
-                        // 2. Cleanup: Release any keys that are no longer being pressed at all
-                        if (!keyStates.isEmpty()) {
-                            java.util.Iterator<Map.Entry<Binding, Boolean>> it = keyStates.entrySet().iterator();
-                            while (it.hasNext()) {
-                                Map.Entry<Binding, Boolean> entry = it.next();
-                                Binding binding = entry.getKey();
-                                if (!keyPressures.containsKey(binding)) {
-                                    if (entry.getValue()) xServer.injectKeyRelease(binding.keycode);
-                                    it.remove();
-                                }
+
+                        java.util.Iterator<Map.Entry<Binding, Boolean>> it = keyStates.entrySet().iterator();
+                        while (it.hasNext()) {
+                            Map.Entry<Binding, Boolean> entry = it.next();
+                            Binding binding = entry.getKey();
+                            if (!keyPressures.containsKey(binding)) {
+                                if (entry.getValue()) xServer.injectKeyRelease(binding.keycode);
+                                it.remove();
+                            }
+                        }
+                        keysIdle = keyPressures.isEmpty() && keyStates.isEmpty();
+                    }
+                    pulseCounter = (pulseCounter + 1) % 60;
+
+                    if (targetX == 0 && targetY == 0 && velocityX == 0 && velocityY == 0 && keysIdle) {
+                        synchronized (mouseMoveTimerLock) {
+                            boolean noMouseMovement;
+                            synchronized (mouseMoveOffset) {
+                                noMouseMovement = mouseMoveOffset.x == 0 && mouseMoveOffset.y == 0;
+                            }
+                            boolean noKeyPressure;
+                            synchronized (keyPressures) {
+                                noKeyPressure = keyPressures.isEmpty() && keyStates.isEmpty();
+                            }
+                            if (mouseMoveTimer == timer && noMouseMovement && noKeyPressure) {
+                                mouseMoveTimer = null;
+                                timer.cancel();
                             }
                         }
                     }
-                    pulseCounter = (pulseCounter + 1) % 60;
                 }
             }, 0, 1000 / 60);
         }
@@ -945,7 +974,11 @@ public class InputControlsView extends View {
     public void handleInputEvent(Binding binding, boolean isActionDown, float offset) { handleInputEvent(null, binding, isActionDown, offset); }
 
     public void handleMouseMovement(float deltaX, float deltaY) {
-        mouseMoveOffset.set(deltaX, deltaY);
+        synchronized (mouseMoveTimerLock) {
+            synchronized (mouseMoveOffset) {
+                mouseMoveOffset.set(deltaX, deltaY);
+            }
+        }
         if (deltaX != 0 || deltaY != 0) createMouseMoveTimer();
     }
 
@@ -1002,11 +1035,14 @@ public class InputControlsView extends View {
         else {
             if (binding.name().startsWith("MOUSE_MOVE")) {
                 float value = (offset != 0) ? Math.abs(offset) : 1.0f;
-                if (binding == Binding.MOUSE_MOVE_LEFT) mouseMoveOffset.x = isActionDown ? -value : 0;
-                else if (binding == Binding.MOUSE_MOVE_RIGHT) mouseMoveOffset.x = isActionDown ? value : 0;
-                else if (binding == Binding.MOUSE_MOVE_UP) mouseMoveOffset.y = isActionDown ? -value : 0;
-                else if (binding == Binding.MOUSE_MOVE_DOWN) mouseMoveOffset.y = isActionDown ? value : 0;
-
+                synchronized (mouseMoveTimerLock) {
+                    synchronized (mouseMoveOffset) {
+                        if (binding == Binding.MOUSE_MOVE_LEFT) mouseMoveOffset.x = isActionDown ? -value : 0;
+                        else if (binding == Binding.MOUSE_MOVE_RIGHT) mouseMoveOffset.x = isActionDown ? value : 0;
+                        else if (binding == Binding.MOUSE_MOVE_UP) mouseMoveOffset.y = isActionDown ? -value : 0;
+                        else if (binding == Binding.MOUSE_MOVE_DOWN) mouseMoveOffset.y = isActionDown ? value : 0;
+                    }
+                }
                 if (isActionDown) createMouseMoveTimer();
             }
             else {
@@ -1016,19 +1052,23 @@ public class InputControlsView extends View {
                     else { if (xServer.isRelativeMouseMovement()) winHandler.mouseEvent(MouseEventFlags.getFlagFor(pb, false), 0, 0, 0); else xServer.injectPointerButtonRelease(pb); }
                 }
                 else {
-                    synchronized(keyPressures) {
-                        if (isActionDown && offset > 0 && offset < 0.95f) {
-                            keyPressures.put(binding, offset);
-                            createMouseMoveTimer();
-                        } else {
-                            keyPressures.remove(binding);
-                            Boolean pulsedState = keyStates.remove(binding);
-                            if (pulsedState != null && pulsedState) xServer.injectKeyRelease(binding.keycode);
+                    boolean startPressureTimer = false;
+                    synchronized (mouseMoveTimerLock) {
+                        synchronized (keyPressures) {
+                            if (isActionDown && offset > 0 && offset < 0.95f) {
+                                keyPressures.put(binding, offset);
+                                startPressureTimer = true;
+                            } else {
+                                keyPressures.remove(binding);
+                                Boolean pulsedState = keyStates.remove(binding);
+                                if (pulsedState != null && pulsedState) xServer.injectKeyRelease(binding.keycode);
 
-                            if (isActionDown) xServer.injectKeyPress(binding.keycode);
-                            else xServer.injectKeyRelease(binding.keycode);
+                                if (isActionDown) xServer.injectKeyPress(binding.keycode);
+                                else xServer.injectKeyRelease(binding.keycode);
+                            }
                         }
                     }
+                    if (startPressureTimer) createMouseMoveTimer();
                 }
             }
         }

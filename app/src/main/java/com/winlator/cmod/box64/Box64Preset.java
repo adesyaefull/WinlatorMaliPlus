@@ -8,6 +8,7 @@ public class Box64Preset {
     public static final String INTERMEDIATE = "INTERMEDIATE";
     public static final String PERFORMANCE = "PERFORMANCE";
     public static final String HELIO_ASYNC_DYNAREC = "HELIO_ASYNC_DYNAREC";
+    public static final String HELIO_PAUSE_YIELD = "HELIO_PAUSE_YIELD";
     public static final String UNITY = "UNITY";
     public static final String UNITY_MONO_BLEEDING_EDGE = "UNITY_MONO_BLEEDING_EDGE";
     public static final String DENUVO = "DENUVO";

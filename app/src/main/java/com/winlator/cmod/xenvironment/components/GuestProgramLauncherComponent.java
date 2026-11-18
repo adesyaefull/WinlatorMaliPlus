@@ -20,6 +20,7 @@ import com.winlator.cmod.core.Callback;
 import com.winlator.cmod.core.EnvVars;
 import com.winlator.cmod.core.FileUtils;
 import com.winlator.cmod.core.GPUInformation;
+import com.winlator.cmod.core.DxvkCacheManager;
 import com.winlator.cmod.core.KeyValueSet;
 import com.winlator.cmod.core.ProcessHelper;
 import com.winlator.cmod.core.TarCompressorUtils;
@@ -368,6 +369,30 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         execEnvVars.put("VK_LAYER_PATH", rootDir.getPath() + "/usr/share/vulkan/implicit_layer.d" + ":" + rootDir.getPath() + "/usr/share/vulkan/explicit_layer.d");
         execEnvVars.put("WRAPPER_LAYER_PATH", rootDir.getPath() + "/usr/lib");
         execEnvVars.put("WRAPPER_CACHE_PATH", rootDir.getPath() + "/usr/var/cache");
+
+        // Keep shader and pipeline-state files separate for each game shortcut.
+        // DXVK ignores these paths when another D3D wrapper is selected.
+        String selectedDxWrapper = shortcut != null
+                ? shortcut.getExtra("dxwrapper", container.getDXWrapper())
+                : container.getDXWrapper();
+        if (selectedDxWrapper != null
+                && selectedDxWrapper.toLowerCase(java.util.Locale.ENGLISH).contains("dxvk")) {
+            String cacheIdentity = DxvkCacheManager.createIdentity(
+                    shortcut != null ? shortcut.getExtra("uuid") : "",
+                    shortcut != null ? shortcut.path : "",
+                    shortcut != null ? shortcut.name : "",
+                    container.id);
+            DxvkCacheManager.CachePaths cachePaths =
+                    DxvkCacheManager.prepareGameCache(rootDir, cacheIdentity);
+            if (cachePaths != null) {
+                execEnvVars.put("DXVK_SHADER_CACHE_PATH", cachePaths.shader.getAbsolutePath());
+                execEnvVars.put("DXVK_STATE_CACHE_PATH", cachePaths.state.getAbsolutePath());
+                Log.i("GuestProgramLauncherComponent",
+                        "DXVK per-game cache enabled: " + cachePaths.shader.getParent());
+            } else {
+                Log.w("GuestProgramLauncherComponent", "Could not prepare the per-game DXVK cache directory");
+            }
+        }
         execEnvVars.put("WINE_NO_DUPLICATE_EXPLORER", "1");
         execEnvVars.put("PREFIX", rootDir.getPath() + "/usr");
         execEnvVars.put("DISPLAY", ":0");

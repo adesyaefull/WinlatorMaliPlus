@@ -788,4 +788,7 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="reset_hero_art">Reset loading screen art</string>
     <string name="search">Search</string>
     <string name="refresh">Refresh</string>
+    <string name="dxvk_cache_title">DXVK Cache</string>
+    <string name="dxvk_cache_description">DXVK shader and pipeline-state cache is stored separately for each game. Clearing it may temporarily increase stutter while the cache is rebuilt.</string>
+    <string name="clear_dxvk_cache">Clear this game's DXVK cache</string>
 </resources>

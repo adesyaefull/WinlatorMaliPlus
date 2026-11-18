@@ -34,6 +34,7 @@ import com.winlator.cmod.container.Shortcut;
 import com.winlator.cmod.contents.ContentProfile;
 import com.winlator.cmod.contents.ContentsManager;
 import com.winlator.cmod.core.AppUtils;
+import com.winlator.cmod.core.DxvkCacheManager;
 import com.winlator.cmod.widget.GlassPopupMenu;
 import com.winlator.cmod.core.DefaultVersion;
 import com.winlator.cmod.core.EnvVars;
@@ -289,6 +290,32 @@ public class ShortcutSettingsDialog extends ContentDialog {
 
         final Spinner sBox64Preset = findViewById(R.id.SBox64Preset);
         Box64PresetManager.loadSpinner("box64", sBox64Preset, shortcut.getExtra("box64Preset", shortcut.container.getBox64Preset()));
+
+        View clearDxvkCacheButton = findViewById(R.id.BTClearDXVKCache);
+        clearDxvkCacheButton.setOnClickListener(v -> {
+            String selectedWrapper = StringUtils.parseIdentifier(sDXWrapper.getSelectedItem());
+            if (selectedWrapper == null
+                    || !selectedWrapper.toLowerCase(Locale.ENGLISH).contains("dxvk")) {
+                AppUtils.showToast(context, "Pilih DXVK sebagai DirectX wrapper terlebih dahulu.");
+                return;
+            }
+            File containerRoot = shortcut.container.getRootDir();
+            if (containerRoot == null) {
+                AppUtils.showToast(context, "Folder container belum tersedia. Buka container sekali, lalu coba lagi.");
+                return;
+            }
+            String cacheIdentity = DxvkCacheManager.createIdentity(
+                    shortcut.getExtra("uuid"), shortcut.path, shortcut.name, shortcut.container.id);
+            ContentDialog.confirm(context,
+                    "Hapus cache shader dan state DXVK untuk game \"" + shortcut.name
+                            + "\"? Cache akan dibuat ulang saat game dijalankan berikutnya.",
+                    () -> {
+                        boolean cleared = DxvkCacheManager.clearGameCache(containerRoot, cacheIdentity);
+                        AppUtils.showToast(context, cleared
+                                ? "Cache DXVK game berhasil dibersihkan."
+                                : "Cache DXVK tidak dapat dibersihkan.");
+                    });
+        });
 
         final Spinner sFEXCoreVersion = findViewById(R.id.SFEXCoreVersion);
         FEXCoreManager.loadFEXCoreVersion(context, contentsManager, sFEXCoreVersion, shortcut.getExtra("fexcoreVersion", shortcut.container.getFEXCoreVersion()));

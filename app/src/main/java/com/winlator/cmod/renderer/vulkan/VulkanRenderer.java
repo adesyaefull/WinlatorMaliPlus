@@ -671,10 +671,9 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
                             // FLIP/scanout present bypasses onUpdateWindowContentDirect, so tick the
                             // active (horizontal) HUD here too or it freezes in Native Rendering mode.
                             if (hudFrameTick != null) hudFrameTick.accept(window.id);
-                            if (classicHudRef != null) {
+                            if (classicHudRef != null && classicHudRef.isAttachedToWindow()) {
                                 classicHudRef.post(classicHudRef);
                             }
-                            if (classicHudRef != null && classicHudRef.isAttachedToWindow()) classicHudRef.post(classicHudRef);
                         } else if (!scanoutNow || !nativeIsGameFrameDelivered(nativeHandle)
                                 || !drawable.isDirectScanout()) {
                             nativeUpdateWindowContentAHB(nativeHandle, did(drawable), ahbPtr,

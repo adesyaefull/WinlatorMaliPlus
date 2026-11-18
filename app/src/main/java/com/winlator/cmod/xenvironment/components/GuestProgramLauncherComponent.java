@@ -217,6 +217,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
             checkDependencies();
             pid = execGuestProgram();
             if (pid > 0) {
+                ProcessHelper.applyGuestPerformanceAffinity(pid);
                 com.winlator.cmod.perf.PerformanceManager.updateGuestPid(null, pid);
             }
         }

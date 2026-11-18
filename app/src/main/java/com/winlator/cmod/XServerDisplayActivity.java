@@ -205,6 +205,11 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     private short taskAffinityMask = 0;
     private short taskAffinityMaskWoW64 = 0;
     private int frameRatingWindowId = -1;
+    private long lastGameFrameSampleNs = 0L;
+    private com.winlator.cmod.perf.AdaptiveFramePacingController adaptiveFramePacingController;
+    private com.winlator.cmod.perf.GameBenchmarkRecorder gameBenchmarkRecorder;
+    private final Handler benchmarkHandler = new Handler(Looper.getMainLooper());
+    private final Runnable finishBenchmarkRunnable = this::finishGameBenchmark;
     private boolean cursorLock; // Flag to track if pointer capture was requested
     private final float[] xform = XForm.getInstance();
     private ContentsManager contentsManager;
@@ -676,6 +681,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         xServer.windowManager.addOnWindowModificationListener(new WindowManager.OnWindowModificationListener() {
             @Override
             public void onUpdateWindowContentDirect(Window window, Drawable drawable) {
+                recordGameFrame(window);
                 // A game drawing through the GPU (its window may be a child, not an application window).
                 if (!winStarted[0] && window != null && window.id != xServer.windowManager.rootWindow.id && window.getWidth() > 10 && window.getHeight() > 10) {
                     Log.d("XServerDisplayActivity", "startup content (direct): " + window.id + " '" + window.getClassName() + "' " + window.getWidth() + "x" + window.getHeight() + " app=" + window.isApplicationWindow());
@@ -685,6 +691,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
             @Override
             public void onUpdateWindowContent(Window window) {
+                recordGameFrame(window);
                 if (!winStarted[0] && window != null && window.isApplicationWindow()) {
                     Log.d("XServerDisplayActivity", "startup content: " + window.id + " '" + window.getClassName() + "' " + window.getWidth() + "x" + window.getHeight());
                     onStartupContent();
@@ -1037,6 +1044,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             usbRumbleClaimed = false;
             com.winlator.cmod.inputcontrols.DirectGamepHidRumbleEngine.getInstance(this).releaseClaim();
         }
+        benchmarkHandler.removeCallbacks(finishBenchmarkRunnable);
+        restoreAdaptiveFramePacing();
         com.winlator.cmod.core.RefreshRateUtils.onActivityDestroyed(this);
         com.winlator.cmod.perf.PerformanceManager.onGameStop(this);
         if (xServerView != null) xServerView.onDestroy();
@@ -1437,6 +1446,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 spPreset.setSelection(WinlatorHUD.PRESET_TOP_RIGHT + 1);
             }, 50);
         });
+
+        Button benchmarkButton = dialog.findViewById(R.id.BTHudBenchmark);
+        if (benchmarkButton != null) benchmarkButton.setOnClickListener(v -> startGameBenchmark());
 
         dialog.setOnConfirmCallback(null);
         dialog.show();
@@ -1996,6 +2008,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             frameRating.enableByUser();
             rootView.addView(frameRating);
         }
+        configureAdaptiveFramePacing(savedSettings.fpsLimit);
 
         // Get the fullscreen stretched extra from the shortcut if available
         String shortcutFullscreenStretched = shortcut != null ? shortcut.getExtra("fullscreenStretched") : null;
@@ -3321,6 +3334,127 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         container.putExtra("desktopTheme", null);
     }
 
+    private void configureAdaptiveFramePacing(int originalFpsLimit) {
+        if (shortcut == null || !"1".equals(shortcut.getExtra("adaptiveFramePacing"))) return;
+
+        int displayFps = 60;
+        try {
+            displayFps = Math.round(getWindowManager().getDefaultDisplay().getRefreshRate());
+        } catch (Exception ignored) {}
+        int maximumFps = originalFpsLimit > 0
+                ? Math.min(60, originalFpsLimit)
+                : Math.min(60, Math.max(1, displayFps));
+
+        com.winlator.cmod.perf.AdaptiveFramePacingController controller =
+                new com.winlator.cmod.perf.AdaptiveFramePacingController(originalFpsLimit, maximumFps);
+        if (!controller.isEnabled()) {
+            Log.i("XServerDisplayActivity", "Adaptive frame pacing skipped: selected FPS ceiling is already 30 FPS or lower");
+            return;
+        }
+        adaptiveFramePacingController = controller;
+
+        // Keep thermal sampling active even if the visual HUD is disabled.
+        if (hudDataSource == null) {
+            hudDataSource = new HudDataSource(this);
+            hudDataSource.start();
+        }
+        Log.i("XServerDisplayActivity", "Adaptive frame pacing enabled; ceiling="
+                + maximumFps + " FPS, original cap=" + originalFpsLimit);
+    }
+
+    private void applyAdaptiveFpsLimit(int fpsLimit) {
+        if (xServer != null) xServer.setFpsLimit(fpsLimit);
+        if (xServerView != null && xServerView.getVulkanRenderer() != null) {
+            xServerView.getVulkanRenderer().setFpsLimit(fpsLimit);
+        }
+        Log.i("XServerDisplayActivity", "Adaptive frame pacing applied FPS limit=" + fpsLimit);
+    }
+
+    private void restoreAdaptiveFramePacing() {
+        if (adaptiveFramePacingController == null) return;
+        applyAdaptiveFpsLimit(adaptiveFramePacingController.getOriginalFpsLimit());
+        adaptiveFramePacingController = null;
+    }
+
+    private Window findGameFrameOwner(Window window) {
+        if (window == null || xServer == null) return null;
+        Window root = xServer.windowManager.rootWindow;
+        Window current = window;
+        while (current != null && current != root) {
+            if (current.isApplicationWindow()
+                    && current.getWidth() >= 320 && current.getHeight() >= 200) {
+                return current;
+            }
+            current = current.getParent();
+        }
+        return null;
+    }
+
+    /** Called from X window-content notifications on both EGL and Vulkan paths. */
+    private void recordGameFrame(Window window) {
+        Window owner = findGameFrameOwner(window);
+        if (owner == null) return;
+
+        if (frameRatingWindowId == -1) {
+            frameRatingWindowId = owner.id;
+            if (xServerView != null && xServerView.getVulkanRenderer() != null) {
+                xServerView.getVulkanRenderer().setFpsWindowId(owner.id);
+            }
+        }
+        if (owner.id != frameRatingWindowId) return;
+
+        long now = System.nanoTime();
+        // Main-window and child-surface callbacks can describe the same present.
+        if (now - lastGameFrameSampleNs < 2_000_000L) return;
+        lastGameFrameSampleNs = now;
+
+        if (frameRating != null) frameRating.onFrame();
+        int batteryTemp = hudDataSource != null ? hudDataSource.batteryTempC.get() : -1;
+        int thermalStatus = hudDataSource != null ? hudDataSource.thermalStatus.get() : -1;
+
+        if (gameBenchmarkRecorder != null) {
+            gameBenchmarkRecorder.onFrame(now, batteryTemp, thermalStatus);
+        }
+        if (adaptiveFramePacingController != null) {
+            int newLimit = adaptiveFramePacingController.onFrame(now, thermalStatus);
+            if (newLimit != com.winlator.cmod.perf.AdaptiveFramePacingController.NO_CHANGE) {
+                runOnUiThread(() -> applyAdaptiveFpsLimit(newLimit));
+            }
+        }
+    }
+
+    private void startGameBenchmark() {
+        if (gameBenchmarkRecorder != null && gameBenchmarkRecorder.isRunning()) {
+            AppUtils.showToast(this, getString(R.string.hud_benchmark_already_running));
+            return;
+        }
+        gameBenchmarkRecorder = new com.winlator.cmod.perf.GameBenchmarkRecorder(60_000L);
+        gameBenchmarkRecorder.start(System.nanoTime());
+        benchmarkHandler.removeCallbacks(finishBenchmarkRunnable);
+        benchmarkHandler.postDelayed(finishBenchmarkRunnable, 60_000L);
+        AppUtils.showToast(this, getString(R.string.hud_benchmark_started));
+    }
+
+    private void finishGameBenchmark() {
+        if (gameBenchmarkRecorder == null) return;
+        gameBenchmarkRecorder.finish(System.nanoTime());
+        String report = gameBenchmarkRecorder.getReport();
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(R.string.hud_benchmark_complete)
+                .setMessage(report)
+                .setPositiveButton(R.string.hud_benchmark_copy, (dialog, which) -> {
+                    android.content.ClipboardManager clipboard = (android.content.ClipboardManager)
+                            getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (clipboard != null) {
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText(
+                                "Winlator benchmark", report));
+                        AppUtils.showToast(this, getString(R.string.hud_benchmark_copied));
+                    }
+                })
+                .setNegativeButton(android.R.string.ok, null)
+                .show();
+    }
+
     private void assignTaskAffinity(Window window) {
         if (taskAffinityMask == 0 || taskAffinityMaskWoW64 == 0) return;
         int processId = window.getProcessId();
@@ -3336,8 +3470,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     }
 
     private void changeFrameRatingVisibility(Window window, Property property) {
-        if (frameRating == null) return;
-        if (xServerView != null && xServerView.isVulkanRendererActive()) return;
+        if (window == null) return;
 
         if (property != null) {
             String propName = property.nameAsString();
@@ -3345,18 +3478,32 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 if (frameRatingWindowId == -1 || window.isApplicationWindow()) {
                     if (frameRatingWindowId != window.id) {
                         frameRatingWindowId = window.id;
+                        lastGameFrameSampleNs = 0L;
+                        if (xServerView != null && xServerView.getVulkanRenderer() != null) {
+                            xServerView.getVulkanRenderer().setFpsWindowId(window.id);
+                        }
                         Log.d("XServerDisplayActivity", "HUD owner is now " + window.getName());
                     }
 
                 }
             }
-            if (propName.contains("_MESA_DRV_ENGINE_NAME")) {
-                runOnUiThread(() -> frameRating.onRendererDetected(property.toString()));
+            if (propName.contains("_MESA_DRV_ENGINE_NAME") && frameRating != null) {
+                runOnUiThread(() -> {
+                    if (frameRating != null) frameRating.onRendererDetected(property.toString());
+                });
             }
         }
         else if (frameRatingWindowId != -1 && frameRatingWindowId == window.id) {
             frameRatingWindowId = -1;
-            runOnUiThread(() -> frameRating.onRendererGone());
+            lastGameFrameSampleNs = 0L;
+            if (xServerView != null && xServerView.getVulkanRenderer() != null) {
+                xServerView.getVulkanRenderer().setFpsWindowId(-1);
+            }
+            if (frameRating != null) {
+                runOnUiThread(() -> {
+                    if (frameRating != null) frameRating.onRendererGone();
+                });
+            }
         }
     }
 

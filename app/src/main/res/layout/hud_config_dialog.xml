@@ -241,6 +241,14 @@
             </FrameLayout>
 
             <Button
+                android:id="@+id/BTHudBenchmark"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/hud_benchmark_start"
+                android:layout_marginTop="12dp"
+                style="@style/ButtonNeutral" />
+
+            <Button
                 android:id="@+id/BTHudReset"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

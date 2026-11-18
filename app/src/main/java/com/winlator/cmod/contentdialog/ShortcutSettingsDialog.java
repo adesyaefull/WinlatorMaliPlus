@@ -110,6 +110,9 @@ public class ShortcutSettingsDialog extends ContentDialog {
 
         loadScreenSizeSpinner(getContentView(), shortcut.getExtra("screenSize", shortcut.container.getScreenSize()), isDarkMode);
 
+        final CheckBox cbAdaptiveFramePacing = findViewById(R.id.CBAdaptiveFramePacing);
+        cbAdaptiveFramePacing.setChecked("1".equals(shortcut.getExtra("adaptiveFramePacing")));
+
         final Spinner sGraphicsDriver = findViewById(R.id.SGraphicsDriver);
         
         final Spinner sDXWrapper = findViewById(R.id.SDXWrapper);
@@ -308,9 +311,13 @@ public class ShortcutSettingsDialog extends ContentDialog {
             }
             String cacheIdentity = DxvkCacheManager.createIdentity(
                     shortcut.getExtra("uuid"), shortcut.path, shortcut.name, shortcut.container.id);
+            long cacheBytes = DxvkCacheManager.getGameCacheSizeBytes(imageFsRoot, cacheIdentity);
+            String cacheSize = cacheBytes < 0 ? "tidak dapat dibaca"
+                    : String.format(Locale.ROOT, "%.1f MiB", cacheBytes / (1024.0 * 1024.0));
             ContentDialog.confirm(context,
                     "Hapus cache shader dan state DXVK untuk game \"" + shortcut.name
-                            + "\"? Cache akan dibuat ulang saat game dijalankan berikutnya.",
+                            + "\"? Ukuran saat ini: " + cacheSize
+                            + ". Cache akan dibuat ulang saat game dijalankan berikutnya.",
                     () -> {
                         boolean cleared = DxvkCacheManager.clearGameCache(imageFsRoot, cacheIdentity);
                         AppUtils.showToast(context, cleared
@@ -523,6 +530,7 @@ public class ShortcutSettingsDialog extends ContentDialog {
                 String execArgs = etExecArgs.getText().toString();
                 shortcut.putExtra("execArgs", !execArgs.isEmpty() ? execArgs : null);
                 shortcut.putExtra("screenSize", screenSize);
+                shortcut.putExtra("adaptiveFramePacing", cbAdaptiveFramePacing.isChecked() ? "1" : null);
                 String hostRenderer = sHostRenderer.getSelectedItemPosition() == 1
                         ? Container.RENDERER_VULKAN : Container.RENDERER_OPENGL;
                 shortcut.putExtra("renderer",

@@ -791,4 +791,13 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="dxvk_cache_title">DXVK Cache</string>
     <string name="dxvk_cache_description">DXVK shader and pipeline-state cache is stored separately for each game. Clearing it may temporarily increase stutter while the cache is rebuilt.</string>
     <string name="clear_dxvk_cache">Clear DXVK cache for this game</string>
+    <string name="per_game_performance_profile">PER-GAME PERFORMANCE PROFILE</string>
+    <string name="adaptive_frame_pacing_title">Enable adaptive FPS pacing</string>
+    <string name="adaptive_frame_pacing_description">When frame pacing remains poor or Android reports moderate thermal pressure, the game FPS cap is lowered in safe steps (60 to 45 to 30). It returns to the original cap after sustained stability. CPU/GPU clocks and Android thermal protection are not changed.</string>
+    <string name="hud_benchmark_start">Run 60-second benchmark</string>
+    <string name="hud_benchmark_started">60-second benchmark started. Keep the game scene active.</string>
+    <string name="hud_benchmark_already_running">A benchmark is already running.</string>
+    <string name="hud_benchmark_complete">Performance benchmark</string>
+    <string name="hud_benchmark_copy">Copy report</string>
+    <string name="hud_benchmark_copied">Benchmark report copied.</string>
 </resources>

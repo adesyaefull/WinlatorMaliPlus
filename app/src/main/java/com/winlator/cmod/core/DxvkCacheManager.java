@@ -67,6 +67,36 @@ public final class DxvkCacheManager {
         }
     }
 
+    /** Returns -1 when the cache path cannot be inspected; symbolic links are never traversed. */
+    public static long getGameCacheSizeBytes(File imageFsRoot, String identity) {
+        if (imageFsRoot == null) return -1L;
+        try {
+            File cacheRoot = new File(imageFsRoot, CACHE_ROOT).getCanonicalFile();
+            File target = new File(cacheRoot, cacheKey(identity)).getCanonicalFile();
+            String allowedPrefix = cacheRoot.getPath() + File.separator;
+            if (!target.getPath().startsWith(allowedPrefix)) return -1L;
+            if (!target.exists()) return 0L;
+            return measureTreeWithoutFollowingLinks(target);
+        } catch (IOException | SecurityException e) {
+            return -1L;
+        }
+    }
+
+    private static long measureTreeWithoutFollowingLinks(File file) throws IOException {
+        Path path = file.toPath();
+        if (Files.isSymbolicLink(path)) return 0L;
+        if (!file.isDirectory()) return file.isFile() ? file.length() : 0L;
+        File[] children = file.listFiles();
+        if (children == null) throw new IOException("Unable to list cache directory");
+        long total = 0L;
+        for (File child : children) {
+            long size = measureTreeWithoutFollowingLinks(child);
+            if (Long.MAX_VALUE - total < size) return Long.MAX_VALUE;
+            total += size;
+        }
+        return total;
+    }
+
     private static boolean deleteTreeWithoutFollowingLinks(File file) throws IOException {
         Path path = file.toPath();
         if (Files.isSymbolicLink(path)) return Files.deleteIfExists(path);

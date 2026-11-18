@@ -1,89 +1,67 @@
-name: Winlator Mali+ - Helio G99/G100 CI
+name: Winlator Mali+ Android APK
 
 on:
   push:
     branches:
-      - bionic-mali-1.2
       - helio-g100-ultra
+      - bionic-mali-1.2
   pull_request:
     branches:
       - bionic-mali-1.2
   workflow_dispatch:
-    inputs:
-      flavor:
-        description: Product flavor to build
-        required: true
-        default: all
-        type: choice
-        options:
-          - standard
-          - ludashi
-          - antutu
-          - futuremark
-          - all
-      build_type:
-        description: Build type to build
-        required: true
-        default: debug
-        type: choice
-        options:
-          - debug
-          - release
-          - all
 
 permissions:
   contents: read
 
 concurrency:
-  group: winlator-mali-helio-build-${{ github.ref }}
+  group: winlator-mali-plus-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: ${{ matrix.flavor }} / ${{ matrix.build_type }}
+    name: Build Android APKs
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      ((inputs.flavor == 'all' || inputs.flavor == matrix.flavor) &&
-       (inputs.build_type == 'all' || inputs.build_type == matrix.build_type))
+    timeout-minutes: 180
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 1
       matrix:
         flavor: [standard, ludashi, antutu, futuremark]
         build_type: [debug, release]
 
     steps:
-      - name: Checkout source and submodules
+      - name: Checkout repository and submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 1
+          fetch-depth: 0
 
-      - name: Verify submodules
+      - name: Verify source and submodules
+        shell: bash
         run: |
+          git submodule sync --recursive
           git submodule update --init --recursive
           git submodule status --recursive
+          test -f gradlew
+          test -f app/build.gradle
+          test -f app/src/main/cpp/CMakeLists.txt
 
-      - name: Set up JDK 17 with Gradle cache
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Accept Android SDK licenses
-        shell: bash
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-
       - name: Install Android SDK, NDK and CMake
         shell: bash
         run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager --install \
             "platform-tools" \
             "platforms;android-34" \
@@ -91,39 +69,40 @@ jobs:
             "cmake;3.22.1" \
             "ndk;29.0.14206865"
 
-      - name: Cache downloaded ImageFS asset
-        uses: actions/cache@v4
-        with:
-          path: app/src/main/assets/imagefs.tzst
-          key: winlator-imagefs-tzst-v1
-
-      - name: Make Gradle wrapper executable
+      - name: Prepare Gradle wrapper
         run: chmod +x ./gradlew
 
-      - name: Build APK
+      - name: Validate Gradle configuration
+        run: ./gradlew --no-daemon --stacktrace help
+
+      - name: Build selected APK variant
         shell: bash
         env:
           BUILD_FLAVOR: ${{ matrix.flavor }}
           BUILD_TYPE: ${{ matrix.build_type }}
         run: |
-          FLAVOR_CAPITALIZED="${BUILD_FLAVOR^}"
-          BUILD_TYPE_CAPITALIZED="${BUILD_TYPE^}"
-          TASK=":app:assemble${FLAVOR_CAPITALIZED}${BUILD_TYPE_CAPITALIZED}"
-          echo "Running Gradle task: ${TASK}"
+          FLAVOR="$(tr '[:lower:]' '[:upper:]' <<< "${BUILD_FLAVOR:0:1}")${BUILD_FLAVOR:1}"
+          TYPE="$(tr '[:lower:]' '[:upper:]' <<< "${BUILD_TYPE:0:1}")${BUILD_TYPE:1}"
+          TASK=":app:assemble${FLAVOR}${TYPE}"
+          echo "Building ${TASK}"
           ./gradlew "${TASK}" \
             --no-daemon \
             --stacktrace \
             --build-cache \
             --max-workers=2
 
-      - name: Generate APK SHA-256 checksums
+      - name: Verify APK output and create checksums
         shell: bash
         env:
           BUILD_FLAVOR: ${{ matrix.flavor }}
           BUILD_TYPE: ${{ matrix.build_type }}
         run: |
           APK_DIR="app/build/outputs/apk/${BUILD_FLAVOR}/${BUILD_TYPE}"
-          test -d "${APK_DIR}"
+          if [ ! -d "${APK_DIR}" ]; then
+            echo "::error::APK output directory not found: ${APK_DIR}"
+            find app/build/outputs -maxdepth 5 -type f -print || true
+            exit 1
+          fi
           find "${APK_DIR}" -maxdepth 1 -type f -name '*.apk' -print0 \
             | xargs -0 -r sha256sum > "${APK_DIR}/SHA256SUMS.txt"
           test -s "${APK_DIR}/SHA256SUMS.txt"

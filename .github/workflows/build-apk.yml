@@ -1,46 +1,72 @@
-name: Build Winlator Mali Helio APK
+name: Winlator Mali+ - Helio G99/G100 CI
 
 on:
   push:
-    branches: [ "bionic-mali-1.2" ]
+    branches:
+      - bionic-mali-1.2
+      - helio-g100-ultra
+  pull_request:
+    branches:
+      - bionic-mali-1.2
   workflow_dispatch:
     inputs:
       flavor:
-        description: 'Product flavor to build'
+        description: Product flavor to build
         required: true
-        default: 'ludashi'
+        default: all
         type: choice
         options:
           - standard
-          - antutu
           - ludashi
+          - antutu
           - futuremark
           - all
       build_type:
-        description: 'Build type (debug or release)'
+        description: Build type to build
         required: true
-        default: 'debug'
+        default: debug
         type: choice
         options:
           - debug
           - release
+          - all
 
 permissions:
   contents: read
 
+concurrency:
+  group: winlator-mali-helio-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    name: ${{ matrix.flavor }} / ${{ matrix.build_type }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      ((inputs.flavor == 'all' || inputs.flavor == matrix.flavor) &&
+       (inputs.build_type == 'all' || inputs.build_type == matrix.build_type))
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        flavor: [standard, ludashi, antutu, futuremark]
+        build_type: [debug, release]
 
     steps:
-      - name: Check out repository with submodules
+      - name: Checkout source and submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 1
 
-      - name: Set up Java 17
+      - name: Verify submodules
+        run: |
+          git submodule update --init --recursive
+          git submodule status --recursive
+
+      - name: Set up JDK 17 with Gradle cache
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -50,39 +76,62 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Install Android SDK packages
-        run: >-
-          sdkmanager
-          "platforms;android-34"
-          "build-tools;35.0.0"
-          "cmake;3.22.1"
-          "ndk;29.0.14206865"
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
 
-      - name: Make Gradlew Executable
+      - name: Install Android SDK, NDK and CMake
+        shell: bash
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;35.0.0" \
+            "cmake;3.22.1" \
+            "ndk;29.0.14206865"
+
+      - name: Cache downloaded ImageFS asset
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/imagefs.tzst
+          key: winlator-imagefs-tzst-v1
+
+      - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Build APK(s)
+      - name: Build APK
+        shell: bash
+        env:
+          BUILD_FLAVOR: ${{ matrix.flavor }}
+          BUILD_TYPE: ${{ matrix.build_type }}
         run: |
-          FLAVOR="${{ github.event.inputs.flavor || 'ludashi' }}"
-          BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
-          
-          # Capitalize build type for gradle task name (debug -> Debug, release -> Release)
-          CAP_TYPE="$(echo ${BUILD_TYPE:0:1} | tr '[:lower:]' '[:upper:]')${BUILD_TYPE:1}"
-          
-          if [ "$FLAVOR" = "all" ]; then
-            echo "Building all flavors for $BUILD_TYPE..."
-            ./gradlew assemble${CAP_TYPE} --no-daemon --stacktrace
-          else
-            CAP_FLAVOR="$(echo ${FLAVOR:0:1} | tr '[:lower:]' '[:upper:]')${FLAVOR:1}"
-            TASK_NAME="assemble${CAP_FLAVOR}${CAP_TYPE}"
-            echo "Executing task: :app:${TASK_NAME}..."
-            ./gradlew :app:${TASK_NAME} --no-daemon --stacktrace
-          fi
+          FLAVOR_CAPITALIZED="${BUILD_FLAVOR^}"
+          BUILD_TYPE_CAPITALIZED="${BUILD_TYPE^}"
+          TASK=":app:assemble${FLAVOR_CAPITALIZED}${BUILD_TYPE_CAPITALIZED}"
+          echo "Running Gradle task: ${TASK}"
+          ./gradlew "${TASK}" \
+            --no-daemon \
+            --stacktrace \
+            --build-cache \
+            --max-workers=2
 
-      - name: Upload Built APK Artifacts
+      - name: Generate APK SHA-256 checksums
+        shell: bash
+        env:
+          BUILD_FLAVOR: ${{ matrix.flavor }}
+          BUILD_TYPE: ${{ matrix.build_type }}
+        run: |
+          APK_DIR="app/build/outputs/apk/${BUILD_FLAVOR}/${BUILD_TYPE}"
+          test -d "${APK_DIR}"
+          find "${APK_DIR}" -maxdepth 1 -type f -name '*.apk' -print0 \
+            | xargs -0 -r sha256sum > "${APK_DIR}/SHA256SUMS.txt"
+          test -s "${APK_DIR}/SHA256SUMS.txt"
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: winlator-mali-helio-${{ github.event.inputs.flavor || 'ludashi' }}-${{ github.event.inputs.build_type || 'debug' }}
-          path: app/build/outputs/apk/**/*.apk
+          name: winlator-mali-plus-${{ matrix.flavor }}-${{ matrix.build_type }}
+          path: app/build/outputs/apk/${{ matrix.flavor }}/${{ matrix.build_type }}/*
           if-no-files-found: error
           retention-days: 14

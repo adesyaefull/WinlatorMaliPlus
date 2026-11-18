@@ -253,15 +253,9 @@ public class DXVKConfigDialog extends ContentDialog {
             content.append("dxgi.nvapiHack = False\n");
             content.append("dxvk.numCompilerThreads = 4\n");
 
-            // Mali and non-Adreno specialized optimizations
-            if (!GPUInformation.isAdrenoGPU(context)) {
-                content.append("d3d11.relaxedBarriers = True\n");
-                content.append("d3d11.ignoreGraphicsBarriers = True\n");
-                content.append("dxvk.useEarlyDiscard = True\n");
-                content.append("d3d11.allowMapFlagNoWait = True\n");
-                content.append("dxvk.shrinkBindingSlots = True\n");
-                content.append("d3d11.maxQueuedFrames = 1\n");
-            }
+            // Keep DXVK defaults conservative on Mali and other non-Adreno GPUs.
+            // Relaxed UAV barriers can improve speed but DXVK documents that they may
+            // introduce rendering issues. Do not force driver-sensitive overrides globally.
 
             if (!maxDeviceMemoryValue.isEmpty()) {
                 content.append("dxgi.maxDeviceMemory = ").append(maxDeviceMemoryValue).append("\n");

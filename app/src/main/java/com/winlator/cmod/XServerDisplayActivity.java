@@ -583,14 +583,28 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             LogView.setFilename(getExecutable());
             ProcessHelper.addDebugCallback(debugDialog = new DebugDialog(this));
         }
-        // Log Manager: this session's logs go to <log root>/<game>/ (shortcut name, else container name; the
-        // previous run archived): Wine/Box64 output when on, DXVK/VKD3D logs, and logcat when the session ends.
+        // Log the effective per-shortcut settings, not only container defaults.
+        // This makes graphics failures reproducible when a shortcut overrides its container.
         {
+            String logGraphicsDriver = shortcut != null
+                    ? shortcut.getExtra("graphicsDriver", container.getGraphicsDriver())
+                    : container.getGraphicsDriver();
+            String logGraphicsDriverConfig = shortcut != null
+                    ? shortcut.getExtra("graphicsDriverConfig", container.getGraphicsDriverConfig())
+                    : container.getGraphicsDriverConfig();
+            String logDxWrapper = shortcut != null
+                    ? shortcut.getExtra("dxwrapper", container.getDXWrapper())
+                    : container.getDXWrapper();
+            String logDxWrapperConfig = shortcut != null
+                    ? shortcut.getExtra("dxwrapperConfig", container.getDXWrapperConfig())
+                    : container.getDXWrapperConfig();
+
             com.winlator.cmod.logs.SessionLog.start(this, shortcut != null ? shortcut.name : container.getName(),
                 "Container: " + container.getName() + " (id " + container.id + ")\n"
                 + "Wine: " + wineVersion + "\n"
-                + "Graphics driver: " + container.getGraphicsDriver() + "\n"
-                + "DX wrapper: " + container.getDXWrapper() + " / " + container.getDXWrapperConfig() + "\n"
+                + "Graphics driver: " + logGraphicsDriver + "\n"
+                + "Graphics driver config: " + logGraphicsDriverConfig + "\n"
+                + "DX wrapper: " + logDxWrapper + " / " + logDxWrapperConfig + "\n"
                 + (shortcut != null ? "Executable: " + shortcut.path + "\n" : "Executable: File Manager\n"));
         }
 

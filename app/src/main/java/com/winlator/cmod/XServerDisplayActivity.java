@@ -3429,6 +3429,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             return;
         }
         gameBenchmarkRecorder = new com.winlator.cmod.perf.GameBenchmarkRecorder(60_000L);
+        String deviceInfo = android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL
+                + " | Android " + android.os.Build.VERSION.RELEASE;
+        if (xServer != null && xServer.screenInfo != null) {
+            deviceInfo += " | Guest resolution " + xServer.screenInfo.width + "x" + xServer.screenInfo.height;
+        }
+        gameBenchmarkRecorder.setEnvironmentInfo(deviceInfo);
         gameBenchmarkRecorder.start(System.nanoTime());
         benchmarkHandler.removeCallbacks(finishBenchmarkRunnable);
         benchmarkHandler.postDelayed(finishBenchmarkRunnable, 60_000L);

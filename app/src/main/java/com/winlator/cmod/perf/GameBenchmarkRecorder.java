@@ -15,9 +15,14 @@ public final class GameBenchmarkRecorder {
     private long lastFrameNs;
     private boolean running;
     private boolean finished;
+    private String environmentInfo = "";
 
     public GameBenchmarkRecorder(long durationMs) {
         durationNs = Math.max(5_000L, durationMs) * 1_000_000L;
+    }
+
+    public synchronized void setEnvironmentInfo(String info) {
+        environmentInfo = info == null ? "" : info.trim();
     }
 
     public synchronized void start(long nowNs) {
@@ -72,6 +77,7 @@ public final class GameBenchmarkRecorder {
         report.append(String.format(java.util.Locale.ROOT,
                 "Duration: %.1f s\nFrames sampled: %d\nAverage update rate: %.1f FPS",
                 elapsedNs / 1_000_000_000f, frameCount, averageFps));
+        if (!environmentInfo.isEmpty()) report.append("\nEnvironment: ").append(environmentInfo);
 
         if (sorted.length > 0) {
             float median = percentile(sorted, 0.50d);

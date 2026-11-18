@@ -916,6 +916,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     @Override
     public void onResume() {
         super.onResume();
+        setSustainedPerformanceEnabled(true);
         com.winlator.cmod.core.RefreshRateUtils.onActivityResumed(this);
         if (xServerView != null) xServerView.onResume();
 
@@ -940,6 +941,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     public void onPause() {
+        setSustainedPerformanceEnabled(false);
         super.onPause();
         if (xServerView != null) xServerView.onPause();
 
@@ -953,6 +955,18 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         com.winlator.cmod.perf.PerformanceManager.onGamePause(this);
     }
 
+
+    private void setSustainedPerformanceEnabled(boolean enabled) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                getWindow().setSustainedPerformanceMode(enabled);
+                Log.i("XServerDisplayActivity",
+                        "Sustained performance mode " + (enabled ? "enabled" : "disabled"));
+            } catch (RuntimeException e) {
+                Log.w("XServerDisplayActivity", "Sustained performance mode is unavailable", e);
+            }
+        }
+    }
 
     private void savePlaytimeData() {
         long endTime = System.currentTimeMillis();
@@ -1046,6 +1060,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
         benchmarkHandler.removeCallbacks(finishBenchmarkRunnable);
         restoreAdaptiveFramePacing();
+        setSustainedPerformanceEnabled(false);
         com.winlator.cmod.core.RefreshRateUtils.onActivityDestroyed(this);
         com.winlator.cmod.perf.PerformanceManager.onGameStop(this);
         if (xServerView != null) xServerView.onDestroy();

@@ -34,6 +34,9 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
     private final XServer xServer;
     private long nativeHandle = 0;
     private final Object lock = new Object();
+    // Bound redundant native cursor/compositor updates to 125 Hz; XServer input remains full-rate.
+    private static final long MIN_NATIVE_POINTER_MOVE_INTERVAL_NS = 8_000_000L;
+    private long lastNativePointerMoveTimeNs = 0L;
 
     public final ViewTransformation viewTransformation = new ViewTransformation();
     // Fullscreen mode values match the shared fullscreen picker and ViewTransformation.

@@ -40,6 +40,7 @@ import com.winlator.cmod.core.DefaultVersion;
 import com.winlator.cmod.core.EnvVars;
 import com.winlator.cmod.core.StringUtils;
 import com.winlator.cmod.core.WineInfo;
+import com.winlator.cmod.xenvironment.ImageFs;
 import com.winlator.cmod.fexcore.FEXCoreManager;
 import com.winlator.cmod.fexcore.FEXCorePreset;
 import com.winlator.cmod.fexcore.FEXCorePresetManager;
@@ -299,9 +300,10 @@ public class ShortcutSettingsDialog extends ContentDialog {
                 AppUtils.showToast(context, "Pilih DXVK sebagai DirectX wrapper terlebih dahulu.");
                 return;
             }
-            File containerRoot = shortcut.container.getRootDir();
-            if (containerRoot == null) {
-                AppUtils.showToast(context, "Folder container belum tersedia. Buka container sekali, lalu coba lagi.");
+            ImageFs imageFs = ImageFs.find(context);
+            File imageFsRoot = imageFs != null ? imageFs.getRootDir() : null;
+            if (imageFsRoot == null) {
+                AppUtils.showToast(context, "Folder ImageFS belum tersedia.");
                 return;
             }
             String cacheIdentity = DxvkCacheManager.createIdentity(
@@ -310,7 +312,7 @@ public class ShortcutSettingsDialog extends ContentDialog {
                     "Hapus cache shader dan state DXVK untuk game \"" + shortcut.name
                             + "\"? Cache akan dibuat ulang saat game dijalankan berikutnya.",
                     () -> {
-                        boolean cleared = DxvkCacheManager.clearGameCache(containerRoot, cacheIdentity);
+                        boolean cleared = DxvkCacheManager.clearGameCache(imageFsRoot, cacheIdentity);
                         AppUtils.showToast(context, cleared
                                 ? "Cache DXVK game berhasil dibersihkan."
                                 : "Cache DXVK tidak dapat dibersihkan.");

@@ -159,13 +159,74 @@ public abstract class ProcessHelper {
         if (linuxPid <= 0 || mask == 0) return false;
         try {
             java.lang.Process p = Runtime.getRuntime().exec(new String[]{
-                "/system/bin/taskset", "-a", "-p", Integer.toHexString(mask & 0xff), Integer.toString(linuxPid)
+                "/system/bin/taskset", "-a", "-p", Integer.toHexString(mask), Integer.toString(linuxPid)
             });
             return p.waitFor() == 0;
         } catch (Exception e) {
             Log.w("ProcessHelper", "setLinuxAffinity failed pid=" + linuxPid, e);
             return false;
         }
+    }
+
+    public static boolean applyGuestPerformanceAffinity(int linuxPid) {
+        if (linuxPid <= 0) return false;
+        int[] cpus = getHighestCapacityCpus();
+        if (cpus.length != 2) {
+            Log.i("ProcessHelper", "Performance affinity skipped: CPU topology unavailable");
+            return false;
+        }
+        int mask = 0;
+        for (int cpu : cpus) {
+            if (cpu < 0 || cpu >= Integer.SIZE - 1) return false;
+            mask |= (1 << cpu);
+        }
+        boolean applied = setLinuxAffinity(linuxPid, mask);
+        Log.i("ProcessHelper", "Guest performance affinity " + (applied ? "applied" : "not applied")
+                + " pid=" + linuxPid + " mask=0x" + Integer.toHexString(mask));
+        return applied;
+    }
+
+    private static int[] getHighestCapacityCpus() {
+        File cpuRoot = new File("/sys/devices/system/cpu");
+        File[] cpuDirs = cpuRoot.listFiles(file ->
+                file.isDirectory() && file.getName().matches("cpu[0-9]+"));
+        if (cpuDirs == null || cpuDirs.length < 3) return new int[0];
+
+        ArrayList<int[]> capacities = new ArrayList<>();
+        for (File cpuDir : cpuDirs) {
+            int cpu;
+            try {
+                cpu = Integer.parseInt(cpuDir.getName().substring(3));
+            } catch (NumberFormatException e) {
+                continue;
+            }
+
+            File onlineFile = new File(cpuDir, "online");
+            if (cpu != 0 && onlineFile.isFile()) {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(onlineFile)))) {
+                    String online = reader.readLine();
+                    if (online == null || !"1".equals(online.trim())) continue;
+                } catch (IOException e) {
+                    continue;
+                }
+            }
+
+            File capacityFile = new File(cpuDir, "cpu_capacity");
+            if (!capacityFile.isFile()) continue;
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(capacityFile)))) {
+                String value = reader.readLine();
+                if (value != null) capacities.add(new int[]{cpu, Integer.parseInt(value.trim())});
+            } catch (IOException | NumberFormatException ignored) {
+            }
+        }
+
+        if (capacities.size() < 3) return new int[0];
+        capacities.sort((left, right) -> Integer.compare(right[1], left[1]));
+        int highest = capacities.get(0)[1];
+        int secondHighest = capacities.get(1)[1];
+        int lowest = capacities.get(capacities.size() - 1)[1];
+        if (highest <= lowest || secondHighest <= lowest) return new int[0];
+        return new int[]{capacities.get(0)[0], capacities.get(1)[0]};
     }
 
     private static void createDebugThread(final InputStream inputStream) {

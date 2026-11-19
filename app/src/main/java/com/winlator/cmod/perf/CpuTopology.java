@@ -20,6 +20,7 @@ import java.util.Map;
  */
 public class CpuTopology {
     private static final String TAG = "CpuTopology";
+    private static final float BIG_CORE_THRESHOLD_RATIO = 0.95f;
 
     public static List<Integer> detectBigCoreIndices() {
         int count = Runtime.getRuntime().availableProcessors();
@@ -45,8 +46,9 @@ public class CpuTopology {
 
         List<Integer> bigCores = new ArrayList<>();
         if (maxFreq > 0) {
-            // Include cores matching the highest max frequency or within 10% of max
-            int threshold = (int) (maxFreq * 0.90f);
+            // G99/G100 use 2.2 GHz Cortex-A76 and 2.0 GHz Cortex-A55 cores.
+            // A 90% threshold includes both clusters; 95% isolates the higher-frequency cluster.
+            int threshold = (int) (maxFreq * BIG_CORE_THRESHOLD_RATIO);
             for (int i = 0; i < count; i++) {
                 if (maxFreqs[i] >= threshold) {
                     bigCores.add(i);
@@ -103,6 +105,28 @@ public class CpuTopology {
         }
         Log.d(TAG, "Applied Big-Core affinity (mask=0x" + Integer.toHexString(mask) + ") to " + count + " processes");
         return count;
+    }
+
+    /**
+     * Restores the guest process tree to the full set of currently online CPUs.
+     * The mask is bounded to the int affinity API used by ProcessHelper.
+     */
+    public static int applyAllCoreAffinity(int guestRootPid) {
+        int cpuCount = Runtime.getRuntime().availableProcessors();
+        if (guestRootPid <= 0 || cpuCount <= 0 || cpuCount > 31) {
+            Log.w(TAG, "Cannot construct a safe all-core affinity mask (cpuCount=" + cpuCount + ")");
+            return 0;
+        }
+
+        int mask = (1 << cpuCount) - 1;
+        int updated = 0;
+        if (ProcessHelper.setLinuxAffinity(guestRootPid, mask)) updated++;
+        for (int pid : collectGuestPids(guestRootPid)) {
+            if (ProcessHelper.setLinuxAffinity(pid, mask)) updated++;
+        }
+        Log.d(TAG, "Restored full-core guest affinity (mask=0x"
+                + Integer.toHexString(mask) + ") to " + updated + " processes");
+        return updated;
     }
 
     private static List<Integer> collectGuestPids(int rootPid) {

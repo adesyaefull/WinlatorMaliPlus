@@ -96,6 +96,43 @@ public abstract class Box64PresetManager {
 
             }
         }
+        else if (id.equals(Box64Preset.HELIO_ASYNC_DYNAREC)) {
+            // Experimental: do not block while a DynaRec block is being built.
+            // Box64 may use the interpreter during that window; benchmark per game.
+            envVars.put(ucPrefix+"_DYNAREC_SAFEFLAGS", "1");
+            envVars.put(ucPrefix+"_DYNAREC_FASTNAN", "1");
+            envVars.put(ucPrefix+"_DYNAREC_FASTROUND", "1");
+            envVars.put(ucPrefix+"_DYNAREC_X87DOUBLE", "0");
+            envVars.put(ucPrefix+"_DYNAREC_BIGBLOCK", "3");
+            envVars.put(ucPrefix+"_DYNAREC_STRONGMEM", "0");
+            envVars.put(ucPrefix+"_DYNAREC_FORWARD", "512");
+            envVars.put(ucPrefix+"_DYNAREC_CALLRET", "1");
+            envVars.put(ucPrefix+"_DYNAREC_WAIT", "0");
+            if (ucPrefix.equals("BOX64")) {
+                envVars.put("BOX64_AVX", "0");
+                envVars.put("BOX64_UNITYPLAYER", "0");
+                envVars.put("BOX64_MMAP32", "1");
+            }
+        }
+        else if (id.equals(Box64Preset.HELIO_PAUSE_YIELD)) {
+            // Keep the proven performance DynaRec settings, but yield on x86 PAUSE
+            // instructions to avoid unnecessarily aggressive spin-loop execution on ARM64.
+            envVars.put(ucPrefix+"_DYNAREC_SAFEFLAGS", "1");
+            envVars.put(ucPrefix+"_DYNAREC_FASTNAN", "1");
+            envVars.put(ucPrefix+"_DYNAREC_FASTROUND", "1");
+            envVars.put(ucPrefix+"_DYNAREC_X87DOUBLE", "0");
+            envVars.put(ucPrefix+"_DYNAREC_BIGBLOCK", "3");
+            envVars.put(ucPrefix+"_DYNAREC_STRONGMEM", "0");
+            envVars.put(ucPrefix+"_DYNAREC_FORWARD", "512");
+            envVars.put(ucPrefix+"_DYNAREC_CALLRET", "1");
+            envVars.put(ucPrefix+"_DYNAREC_WAIT", "1");
+            if (ucPrefix.equals("BOX64")) {
+                envVars.put("BOX64_DYNAREC_PAUSE", "1");
+                envVars.put("BOX64_AVX", "0");
+                envVars.put("BOX64_UNITYPLAYER", "0");
+                envVars.put("BOX64_MMAP32", "1");
+            }
+        }
         else if (id.equals(Box64Preset.UNITY)) {
             envVars.put(ucPrefix+"_DYNAREC_SAFEFLAGS", "1");
             envVars.put(ucPrefix+"_DYNAREC_FASTNAN", "1");
@@ -168,6 +205,9 @@ public abstract class Box64PresetManager {
         presets.add(new Box64Preset(Box64Preset.COMPATIBILITY, context.getString(R.string.compatibility)));
         presets.add(new Box64Preset(Box64Preset.INTERMEDIATE, context.getString(R.string.intermediate)));
         presets.add(new Box64Preset(Box64Preset.PERFORMANCE, context.getString(R.string.performance)));
+        presets.add(new Box64Preset(Box64Preset.HELIO_ASYNC_DYNAREC, context.getString(R.string.box64_helio_async_dynarec)));
+        if (prefix.toUpperCase(Locale.ENGLISH).equals("BOX64"))
+            presets.add(new Box64Preset(Box64Preset.HELIO_PAUSE_YIELD, "Helio G99/G100 - Pause/Yield (Experimental)"));
         presets.add(new Box64Preset(Box64Preset.UNITY, context.getString(R.string.unity)));
         presets.add(new Box64Preset(Box64Preset.UNITY_MONO_BLEEDING_EDGE, context.getString(R.string.unity_mono_bleeding_edge)));
         presets.add(new Box64Preset(Box64Preset.DENUVO, context.getString(R.string.denuvo)));

@@ -34,11 +34,13 @@ import com.winlator.cmod.container.Shortcut;
 import com.winlator.cmod.contents.ContentProfile;
 import com.winlator.cmod.contents.ContentsManager;
 import com.winlator.cmod.core.AppUtils;
+import com.winlator.cmod.core.DxvkCacheManager;
 import com.winlator.cmod.widget.GlassPopupMenu;
 import com.winlator.cmod.core.DefaultVersion;
 import com.winlator.cmod.core.EnvVars;
 import com.winlator.cmod.core.StringUtils;
 import com.winlator.cmod.core.WineInfo;
+import com.winlator.cmod.xenvironment.ImageFs;
 import com.winlator.cmod.fexcore.FEXCoreManager;
 import com.winlator.cmod.fexcore.FEXCorePreset;
 import com.winlator.cmod.fexcore.FEXCorePresetManager;
@@ -107,6 +109,9 @@ public class ShortcutSettingsDialog extends ContentDialog {
 //        containerDetailFragment.loadScreenSizeSpinner(getContentView(), shortcut.getExtra("screenSize", shortcut.container.getScreenSize()));
 
         loadScreenSizeSpinner(getContentView(), shortcut.getExtra("screenSize", shortcut.container.getScreenSize()), isDarkMode);
+
+        final CheckBox cbAdaptiveFramePacing = findViewById(R.id.CBAdaptiveFramePacing);
+        cbAdaptiveFramePacing.setChecked("1".equals(shortcut.getExtra("adaptiveFramePacing")));
 
         final Spinner sGraphicsDriver = findViewById(R.id.SGraphicsDriver);
         
@@ -289,6 +294,37 @@ public class ShortcutSettingsDialog extends ContentDialog {
 
         final Spinner sBox64Preset = findViewById(R.id.SBox64Preset);
         Box64PresetManager.loadSpinner("box64", sBox64Preset, shortcut.getExtra("box64Preset", shortcut.container.getBox64Preset()));
+
+        View clearDxvkCacheButton = findViewById(R.id.BTClearDXVKCache);
+        clearDxvkCacheButton.setOnClickListener(v -> {
+            String selectedWrapper = StringUtils.parseIdentifier(sDXWrapper.getSelectedItem());
+            if (selectedWrapper == null
+                    || !selectedWrapper.toLowerCase(Locale.ENGLISH).contains("dxvk")) {
+                AppUtils.showToast(context, "Pilih DXVK sebagai DirectX wrapper terlebih dahulu.");
+                return;
+            }
+            ImageFs imageFs = ImageFs.find(context);
+            File imageFsRoot = imageFs != null ? imageFs.getRootDir() : null;
+            if (imageFsRoot == null) {
+                AppUtils.showToast(context, "Folder ImageFS belum tersedia.");
+                return;
+            }
+            String cacheIdentity = DxvkCacheManager.createIdentity(
+                    shortcut.getExtra("uuid"), shortcut.path, shortcut.name, shortcut.container.id);
+            long cacheBytes = DxvkCacheManager.getGameCacheSizeBytes(imageFsRoot, cacheIdentity);
+            String cacheSize = cacheBytes < 0 ? "tidak dapat dibaca"
+                    : String.format(Locale.ROOT, "%.1f MiB", cacheBytes / (1024.0 * 1024.0));
+            ContentDialog.confirm(context,
+                    "Hapus cache shader dan state DXVK untuk game \"" + shortcut.name
+                            + "\"? Ukuran saat ini: " + cacheSize
+                            + ". Cache akan dibuat ulang saat game dijalankan berikutnya.",
+                    () -> {
+                        boolean cleared = DxvkCacheManager.clearGameCache(imageFsRoot, cacheIdentity);
+                        AppUtils.showToast(context, cleared
+                                ? "Cache DXVK game berhasil dibersihkan."
+                                : "Cache DXVK tidak dapat dibersihkan.");
+                    });
+        });
 
         final Spinner sFEXCoreVersion = findViewById(R.id.SFEXCoreVersion);
         FEXCoreManager.loadFEXCoreVersion(context, contentsManager, sFEXCoreVersion, shortcut.getExtra("fexcoreVersion", shortcut.container.getFEXCoreVersion()));
@@ -494,6 +530,7 @@ public class ShortcutSettingsDialog extends ContentDialog {
                 String execArgs = etExecArgs.getText().toString();
                 shortcut.putExtra("execArgs", !execArgs.isEmpty() ? execArgs : null);
                 shortcut.putExtra("screenSize", screenSize);
+                shortcut.putExtra("adaptiveFramePacing", cbAdaptiveFramePacing.isChecked() ? "1" : null);
                 String hostRenderer = sHostRenderer.getSelectedItemPosition() == 1
                         ? Container.RENDERER_VULKAN : Container.RENDERER_OPENGL;
                 shortcut.putExtra("renderer",

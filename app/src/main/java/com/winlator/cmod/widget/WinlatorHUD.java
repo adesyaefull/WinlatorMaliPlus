@@ -323,8 +323,10 @@ public class WinlatorHUD extends View {
         }
         if (n < 100) { strLows = ""; return; }
         java.util.Arrays.sort(frameTimesSorted, 0, n);
+        float p50 = frameTimesSorted[Math.min(n - 1, n / 2)];
         float p99 = frameTimesSorted[Math.min(n - 1, (int) Math.ceil(n * 0.99) - 1)];
-        String lows = "1% " + Math.round(1000f / Math.max(0.1f, p99));
+        String lows = "FT " + String.format(Locale.US, "%.1fms", p50)
+                + " · 1% " + Math.round(1000f / Math.max(0.1f, p99));
         // 0.1% needs enough frames to mean more than "the single worst frame".
         if (n >= 500) {
             float p999 = frameTimesSorted[Math.min(n - 1, (int) Math.ceil(n * 0.999) - 1)];

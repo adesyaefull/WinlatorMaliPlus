@@ -1,85 +1,116 @@
-name: Build Winlator Mali APK
+name: Winlator Mali+ Android APK
 
 on:
+  push:
+    branches:
+      - helio-g100-ultra
+      - bionic-mali-1.2
+  pull_request:
+    branches:
+      - bionic-mali-1.2
   workflow_dispatch:
-    inputs:
-      flavor:
-        description: 'Product flavor to build'
-        required: true
-        default: 'standard'
-        type: choice
-        options:
-          - standard
-          - antutu
-          - ludashi
-          - all
-      build_type:
-        description: 'Build type (debug or release)'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - debug
-          - release
 
 permissions:
   contents: read
 
+concurrency:
+  group: winlator-mali-plus-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    name: Build Android APKs
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        flavor: [standard, ludashi, antutu, futuremark]
+        build_type: [debug, release]
 
     steps:
-      - name: Check out repository with submodules
+      - name: Checkout repository and submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 1
+          fetch-depth: 0
 
-      - name: Set up Java 17
+      - name: Verify source and submodules
+        shell: bash
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --recursive
+          git submodule status --recursive
+          test -f gradlew
+          test -f app/build.gradle
+          test -f app/src/main/cpp/CMakeLists.txt
+
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Install Android SDK packages
-        run: >-
-          sdkmanager
-          "platforms;android-34"
-          "build-tools;35.0.0"
-          "cmake;3.22.1"
-          "ndk;29.0.14206865"
+      - name: Install Android SDK, NDK and CMake
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;35.0.0" \
+            "cmake;3.22.1" \
+            "ndk;29.0.14206865"
 
-      - name: Make Gradlew Executable
+      - name: Prepare Gradle wrapper
         run: chmod +x ./gradlew
 
-      - name: Build APK(s)
-        run: |
-          FLAVOR="${{ github.event.inputs.flavor }}"
-          BUILD_TYPE="${{ github.event.inputs.build_type }}"
-          
-          # Capitalize build type for gradle task name (debug -> Debug, release -> Release)
-          CAP_TYPE="$(echo ${BUILD_TYPE:0:1} | tr '[:lower:]' '[:upper:]')${BUILD_TYPE:1}"
-          
-          if [ "$FLAVOR" = "all" ]; then
-            echo "Building all flavors for $BUILD_TYPE..."
-            ./gradlew assemble${CAP_TYPE} --no-daemon --stacktrace
-          else
-            CAP_FLAVOR="$(echo ${FLAVOR:0:1} | tr '[:lower:]' '[:upper:]')${FLAVOR:1}"
-            TASK_NAME="assemble${CAP_FLAVOR}${CAP_TYPE}"
-            echo "Executing task: :app:${TASK_NAME}..."
-            ./gradlew :app:${TASK_NAME} --no-daemon --stacktrace
-          fi
+      - name: Validate Gradle configuration
+        run: ./gradlew --no-daemon --stacktrace help
 
-      - name: Upload Built APK Artifacts
+      - name: Build selected APK variant
+        shell: bash
+        env:
+          BUILD_FLAVOR: ${{ matrix.flavor }}
+          BUILD_TYPE: ${{ matrix.build_type }}
+        run: |
+          FLAVOR="$(tr '[:lower:]' '[:upper:]' <<< "${BUILD_FLAVOR:0:1}")${BUILD_FLAVOR:1}"
+          TYPE="$(tr '[:lower:]' '[:upper:]' <<< "${BUILD_TYPE:0:1}")${BUILD_TYPE:1}"
+          TASK=":app:assemble${FLAVOR}${TYPE}"
+          echo "Building ${TASK}"
+          ./gradlew "${TASK}" \
+            --no-daemon \
+            --stacktrace \
+            --build-cache \
+            --max-workers=2
+
+      - name: Verify APK output and create checksums
+        shell: bash
+        env:
+          BUILD_FLAVOR: ${{ matrix.flavor }}
+          BUILD_TYPE: ${{ matrix.build_type }}
+        run: |
+          APK_DIR="app/build/outputs/apk/${BUILD_FLAVOR}/${BUILD_TYPE}"
+          if [ ! -d "${APK_DIR}" ]; then
+            echo "::error::APK output directory not found: ${APK_DIR}"
+            find app/build/outputs -maxdepth 5 -type f -print || true
+            exit 1
+          fi
+          find "${APK_DIR}" -maxdepth 1 -type f -name '*.apk' -print0 \
+            | xargs -0 -r sha256sum > "${APK_DIR}/SHA256SUMS.txt"
+          test -s "${APK_DIR}/SHA256SUMS.txt"
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: winlator-mali-${{ github.event.inputs.flavor }}-${{ github.event.inputs.build_type }}
-          path: app/build/outputs/apk/**/*.apk
+          name: winlator-mali-plus-${{ matrix.flavor }}-${{ matrix.build_type }}
+          path: app/build/outputs/apk/${{ matrix.flavor }}/${{ matrix.build_type }}/*
           if-no-files-found: error
           retention-days: 14

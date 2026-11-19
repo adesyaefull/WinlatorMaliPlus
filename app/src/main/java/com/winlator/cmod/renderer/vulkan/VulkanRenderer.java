@@ -34,6 +34,9 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
     private final XServer xServer;
     private long nativeHandle = 0;
     private final Object lock = new Object();
+    // Bound redundant native cursor/compositor updates to 125 Hz; XServer input remains full-rate.
+    private static final long MIN_NATIVE_POINTER_MOVE_INTERVAL_NS = 8_000_000L;
+    private long lastNativePointerMoveTimeNs = 0L;
 
     public final ViewTransformation viewTransformation = new ViewTransformation();
     // Fullscreen mode values match the shared fullscreen picker and ViewTransformation.
@@ -671,10 +674,9 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
                             // FLIP/scanout present bypasses onUpdateWindowContentDirect, so tick the
                             // active (horizontal) HUD here too or it freezes in Native Rendering mode.
                             if (hudFrameTick != null) hudFrameTick.accept(window.id);
-                            if (classicHudRef != null) {
+                            if (classicHudRef != null && classicHudRef.isAttachedToWindow()) {
                                 classicHudRef.post(classicHudRef);
                             }
-                            if (classicHudRef != null && classicHudRef.isAttachedToWindow()) classicHudRef.post(classicHudRef);
                         } else if (!scanoutNow || !nativeIsGameFrameDelivered(nativeHandle)
                                 || !drawable.isDirectScanout()) {
                             nativeUpdateWindowContentAHB(nativeHandle, did(drawable), ahbPtr,
@@ -703,19 +705,34 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
     public void onPointerMove(short x, short y) {
         synchronized (lock) {
             if (nativeHandle == 0) return;
+
+            // In games the cursor is commonly hidden. Do not forward high-rate pointer
+            // events through JNI unless the cursor or a cursor-following transform needs them.
+            final boolean transformFollowsPointer =
+                    screenOffsetYRelativeToCursor || magnifierZoom != 1.0f;
+            if (!cursorVisible && !transformFollowsPointer) return;
+
+            // Cap renderer-side pointer updates at 125 Hz. Input itself is processed by XServer;
+            // this only limits redundant compositor/cursor work when a device reports 500-1000 Hz.
+            long now = System.nanoTime();
+            if (now - lastNativePointerMoveTimeNs < MIN_NATIVE_POINTER_MOVE_INTERVAL_NS) return;
+            lastNativePointerMoveTimeNs = now;
+
             nativeSetPointerPos(nativeHandle, x, y);
             Window pw = xServer.inputDeviceManager.getPointWindow();
             Cursor cursor = pw != null ? pw.attributes.getCursor() : null;
-            if (cursor != lastCursor) { lastCursor = cursor; sendCursorToNative(cursor); }
-            if (nativeMode) {
+            if (cursor != lastCursor) {
+                lastCursor = cursor;
+                if (cursorVisible) sendCursorToNative(cursor);
+            }
+            if (nativeMode && cursorVisible) {
                 short hotX = 0, hotY = 0;
                 if (cursor != null) { hotX = (short)cursor.hotSpotX; hotY = (short)cursor.hotSpotY; }
                 nativeScanoutSetCursorPos(nativeHandle, x, y, hotX, hotY);
             }
             // Vulkan is event-driven (no continuous render loop), so the magnifier transform must
-            // be recomputed on pointer motion for the zoomed region to track the cursor; GLRenderer
-            // gets this for free from its per-frame render loop. Re-transform while magnified too.
-            if (screenOffsetYRelativeToCursor || magnifierZoom != 1.0f) updateTransform();
+            // be recomputed on pointer motion for the zoomed region to track the cursor.
+            if (transformFollowsPointer) updateTransform();
         }
     }
 
@@ -763,7 +780,16 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
     public void setCursorVisible(boolean visible) {
         cursorVisible = visible;
         synchronized (lock) {
-            if (nativeHandle != 0) { nativeSetCursorVisible(nativeHandle, visible); if (visible) sendCursorToNative(lastCursor); }
+            if (nativeHandle != 0) {
+                nativeSetCursorVisible(nativeHandle, visible);
+                if (visible) {
+                    // Pointer events are intentionally skipped while the cursor is hidden.
+                    // Resolve its current window cursor when it becomes visible again.
+                    Window pw = xServer.inputDeviceManager.getPointWindow();
+                    lastCursor = pw != null ? pw.attributes.getCursor() : null;
+                    sendCursorToNative(lastCursor);
+                }
+            }
         }
     }
 

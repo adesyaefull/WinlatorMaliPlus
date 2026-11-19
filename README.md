@@ -14,6 +14,19 @@
 
 Built upon the high-performance **Android Bionic C runtime** (originating from Pipetto Cripto's Winlator Bionic fork), Winlator Mali bypasses traditional PRoot container and syscall-translation overhead, achieving near-native execution speed, reduced CPU bottlenecking, and superior thermal efficiency.
 
+## PC Game Launcher Integration
+
+This branch exposes an optional, package-verified ContentProvider bridge for the companion Android launcher:
+[PCGameLauncherAndroid](https://github.com/suksesjt12-source/PCGameLauncherAndroid).
+
+The bridge supports:
+- Listing container IDs and names to the paired launcher.
+- Starting an EXE with a selected container through the existing XServer display session.
+- Restricting launch paths to `Download/PCGameLauncher` and checking the EXE file and selected container before launch.
+- Restricting bridge calls to the companion package `com.suksesjt.pcgamelauncherplus`.
+
+The launcher copies the selected EXE into `Download/PCGameLauncher`. The directory is visible to Winlator through its Download drive mapping. This integration launches one EXE; it does not copy a complete PC game installation, DLLs, archives, or adjacent data files. For multi-file games, place the complete game folder in the shared storage and use the EXE entry point only when its required files remain accessible beside it. Other Winlator forks without this bridge can still be opened as applications but cannot expose containers or accept direct launch requests through this integration.
+
 ## Winlator Mali+ Local Integration
 
 This repository also contains the **Winlator Mali+** integration branch maintained by [Adesyaefull](https://github.com/adesyaefull). It builds on Winlator Mali 1.2 while retaining the upstream EGL/Gladio and ZeroFG paths.
@@ -306,3 +319,20 @@ The local `bionic-mali-1.2` integration keeps the upstream native EGL/Gladio ren
 * **ZeroFG**: Apache 2.0 / BSD 3-Clause
 * **Inter Font**: SIL Open Font License 1.1 ([rsms/inter](https://github.com/rsms/inter))
 * **Android Open Source Project (AOSP)**: Apache 2.0
+
+
+## Helio G99/G100 runtime profile
+
+The Settings > Performance page includes a MediaTek profile detector and three runtime profiles:
+
+- **Stable / sustained** requests Android sustained-performance mode where supported and avoids forcing guest threads onto big CPU cores.
+- **Balanced** keeps standard Android Game Mode and guest-thread priority controls without sustained mode or big-core affinity.
+- **Performance / big cores** uses the existing guest-process big-core affinity path. It may increase heat and battery use.
+
+Detection uses Android SoC/build metadata and the system graphics renderer. Exact model identification is best-effort because OEM firmware may hide or rename SoC properties. Battery temperature is labelled as battery temperature; it is not a CPU/GPU junction sensor. The profile does not bypass thermal protections or write CPU/GPU voltage and frequency controls.
+
+## Native Port Workspace
+
+The Native Port Workspace imports a ZIP into private app storage, extracts it with path and size limits, and identifies Android Gradle, CMake/C++, Unity, Unreal, Godot, or EXE-only projects. It writes a `NATIVE_PORT_REPORT.md` readiness report and does not execute imported code.
+
+An existing Android Gradle project can be built remotely by placing it in `native-ports/<project-folder>`, pushing it to this repository, and running **Actions → Build native Android game project**. The workflow expects a Gradle wrapper, AndroidManifest.xml, and Android Gradle build files. C/C++ source without an Android application layer still requires engine-specific porting and NDK integration. A closed-source Windows EXE or game-data archive cannot be automatically converted into native ARM64 code.

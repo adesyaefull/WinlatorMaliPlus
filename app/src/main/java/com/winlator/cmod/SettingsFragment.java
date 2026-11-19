@@ -302,6 +302,17 @@ public class SettingsFragment extends Fragment {
             .replace(R.id.FLFragmentContainer, new LogManagerFragment())
             .commit());
         TextView tvLogSummary = view.findViewById(R.id.TVLogManagerSummary);
+
+        View nativePortWorkspace = view.findViewById(R.id.BTNativePortWorkspace);
+        if (nativePortWorkspace != null) {
+            nativePortWorkspace.setOnClickListener(v -> getParentFragmentManager().beginTransaction()
+                    .setCustomAnimations(R.anim.slide_in_up, R.anim.slide_out_down,
+                            R.anim.slide_in_down, R.anim.slide_out_up)
+                    .addToBackStack(null)
+                    .replace(R.id.FLFragmentContainer,
+                            new com.winlator.cmod.nativeport.NativePortFragment())
+                    .commit());
+        }
         boolean recording = com.winlator.cmod.logs.LogFiles.isOn(context, "enable_wine_debug") || com.winlator.cmod.logs.LogFiles.isOn(context, "enable_box64_logs");
         tvLogSummary.setText((!com.winlator.cmod.logs.LogFiles.isOn(context, com.winlator.cmod.logs.LogFiles.PREF_ENABLED) ? "Logs off" : recording ? "Recording game logs" : "Game logs off") + "  ·  " + com.winlator.cmod.logs.LogFiles.root(context).getAbsolutePath());
 
@@ -444,6 +455,52 @@ public class SettingsFragment extends Fragment {
         View deviceInfoHeader = view.findViewById(R.id.LLSettingsDeviceInfoHeader);
         TextView deviceInfoExpand = view.findViewById(R.id.TVSettingsDeviceInfoExpand);
         populateDeviceInfo(deviceInfoGrid, context);
+
+        // MediaTek Helio G99/G100 profile: runtime choices are consumed by PerformanceManager.
+        final android.widget.CheckBox cbHelioProfileEnabled =
+                view.findViewById(R.id.CBHelioProfileEnabled);
+        final Spinner sHelioProfile = view.findViewById(R.id.SHelioProfile);
+        final TextView tvHelioDetected = view.findViewById(R.id.TVHelioDetected);
+        final TextView tvHelioThermal = view.findViewById(R.id.TVHelioThermal);
+        final TextView tvHelioProfileDescription = view.findViewById(R.id.TVHelioProfileDescription);
+        final com.winlator.cmod.perf.HelioDeviceProfileManager.DeviceInfo helioInfo =
+                com.winlator.cmod.perf.HelioDeviceProfileManager.detect(context);
+        final String[] helioProfileIds =
+                com.winlator.cmod.perf.HelioDeviceProfileManager.getProfileIds();
+        final String[] helioProfileLabels =
+                com.winlator.cmod.perf.HelioDeviceProfileManager.getProfileLabels();
+        tvHelioDetected.setText(helioInfo.chipsetLabel + "\nGPU: " + helioInfo.gpuRenderer
+                + "\nSoC identifier: " + helioInfo.socModel);
+        tvHelioThermal.setText(
+                com.winlator.cmod.perf.HelioDeviceProfileManager.getBatteryTemperatureLabel(context)
+                + "  ·  Thermal status: "
+                + com.winlator.cmod.perf.HelioDeviceProfileManager.getThermalStatusLabel(context));
+        cbHelioProfileEnabled.setChecked(preferences.getBoolean(
+                com.winlator.cmod.perf.HelioDeviceProfileManager.PREF_ENABLED,
+                helioInfo.supported));
+        cbHelioProfileEnabled.setEnabled(helioInfo.supported);
+        sHelioProfile.setAdapter(createRootTuningAdapter(context,
+                java.util.Arrays.asList(helioProfileLabels)));
+        String selectedHelioProfile = preferences.getString(
+                com.winlator.cmod.perf.HelioDeviceProfileManager.PREF_PROFILE,
+                com.winlator.cmod.perf.HelioDeviceProfileManager.PROFILE_STABLE);
+        int helioProfileIndex = java.util.Arrays.asList(helioProfileIds).indexOf(selectedHelioProfile);
+        sHelioProfile.setSelection(Math.max(0, helioProfileIndex), false);
+        sHelioProfile.setEnabled(helioInfo.supported);
+        tvHelioProfileDescription.setText(
+                com.winlator.cmod.perf.HelioDeviceProfileManager.getProfileDescription(
+                        helioProfileIds[Math.max(0, helioProfileIndex)]));
+        sHelioProfile.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                tvHelioProfileDescription.setText(
+                        com.winlator.cmod.perf.HelioDeviceProfileManager.getProfileDescription(
+                                helioProfileIds[position]));
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
         deviceInfoHeader.setOnClickListener(header -> {
             boolean expanded = deviceInfoGrid.getVisibility() != View.VISIBLE;
             deviceInfoGrid.setVisibility(expanded ? View.VISIBLE : View.GONE);
@@ -521,6 +578,9 @@ public class SettingsFragment extends Fragment {
             editor.putBoolean("share_android_clipboard", cbShareClipboard.isChecked());
             editor.putBoolean("show_adrenotools_unsupported", cbShowAdrenoTools.isChecked());
 
+            editor.putBoolean(com.winlator.cmod.perf.HelioDeviceProfileManager.PREF_ENABLED, cbHelioProfileEnabled.isChecked());
+            editor.putString(com.winlator.cmod.perf.HelioDeviceProfileManager.PREF_PROFILE,
+                    helioProfileIds[Math.max(0, sHelioProfile.getSelectedItemPosition())]);
             if (cbGameModeSignal != null) editor.putBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_GAME_MODE_SIGNAL, cbGameModeSignal.isChecked());
             if (cbThreadPriorityBoost != null) editor.putBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_THREAD_PRIORITY_BOOST, cbThreadPriorityBoost.isChecked());
             if (cbPreferBigCores != null) editor.putBoolean(com.winlator.cmod.perf.PerformanceManager.PREF_PREFER_BIG_CORES, cbPreferBigCores.isChecked());
@@ -544,6 +604,8 @@ public class SettingsFragment extends Fragment {
             saveCustomApiKeySettings(editor);
 
             if (editor.commit()) {
+                com.winlator.cmod.perf.PerformanceManager.applySettingsLive(
+                        getActivity(), PreferenceManager.getDefaultSharedPreferences(getActivity()));
                 NavigationView navigationView = getActivity().findViewById(R.id.NavigationView);
                 navigationView.setCheckedItem(R.id.main_menu_containers);
                 FragmentManager fragmentManager = getParentFragmentManager();

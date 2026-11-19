@@ -215,12 +215,12 @@ public class TouchpadView extends View {
     }
 
     private void resetTouchscreenTimeout() {
-        //Log.d("TouchpadView", "Touch detected, resetting timeout.");
-        if (timeoutHandler != null && hideControlsRunnable != null) {
-            // Cancel any pending hide requests
+        if (timeoutHandler == null || hideControlsRunnable == null) return;
+        if (preferences.getBoolean("touchscreen_timeout_enabled", false)) {
             timeoutHandler.removeCallbacks(hideControlsRunnable);
-            // Post a new request to hide the controls after 5 seconds
-            timeoutHandler.postDelayed(hideControlsRunnable, 5000); // Adjust timeout as necessary
+            timeoutHandler.postDelayed(hideControlsRunnable, InputControlsView.TOUCHSCREEN_TIMEOUT_MS);
+        } else {
+            timeoutHandler.removeCallbacks(hideControlsRunnable);
         }
     }
     private boolean handleStylusHoverEvent(MotionEvent event) {

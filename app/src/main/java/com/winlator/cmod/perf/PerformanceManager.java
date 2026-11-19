@@ -28,6 +28,9 @@ public class PerformanceManager {
     private static SamsungSPerfDriver samsungDriver = null;
     private static int currentGuestPid = -1;
     private static boolean isSessionActive = false;
+    private static boolean bigCoreAffinityApplied = false;
+    private static PowerManager thermalPowerManager;
+    private static PowerManager.OnThermalStatusChangedListener thermalStatusListener;
 
     public static void init(Context context) {
         if (samsungDriver == null && context != null && SamsungSPerfDriver.isSamsungDevice()) {
@@ -52,18 +55,12 @@ public class PerformanceManager {
         }
 
         // 2. Sustained Performance Mode
-        if (prefs.getBoolean(PREF_SUSTAINED_PERFORMANCE, false)) {
-            setSustainedPerformance(activity, true);
-        }
+        setSustainedPerformance(activity,
+                HelioDeviceProfileManager.shouldUseSustainedPerformance(activity, prefs));
 
         // 3. Thread Priority Boost
         if (prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true) && guestRootPid > 0) {
             PerfPriority.boost(guestRootPid);
-        }
-
-        // 4. Prefer Big Cores
-        if (prefs.getBoolean(PREF_PREFER_BIG_CORES, false) && guestRootPid > 0) {
-            CpuTopology.applyBigCoreAffinity(guestRootPid);
         }
 
         // 5. Samsung Galaxy Performance SDK Boost
@@ -71,6 +68,8 @@ public class PerformanceManager {
             samsungDriver.startBoost();
         }
         applyRootPerformanceProfile(activity, prefs);
+        applyGuestAffinity(activity, prefs, guestRootPid);
+        registerThermalStatusListener(activity);
 
         Log.d(TAG, "Performance profile applied on game start (pid=" + guestRootPid + ")");
     }
@@ -86,26 +85,25 @@ public class PerformanceManager {
             GameModeSignal.enterGameplay(activity);
         }
 
-        if (prefs.getBoolean(PREF_SUSTAINED_PERFORMANCE, false)) {
-            setSustainedPerformance(activity, true);
-        }
+        setSustainedPerformance(activity,
+                HelioDeviceProfileManager.shouldUseSustainedPerformance(activity, prefs));
 
         if (prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true) && currentGuestPid > 0) {
             PerfPriority.boost(currentGuestPid);
-        }
-
-        if (prefs.getBoolean(PREF_PREFER_BIG_CORES, false) && currentGuestPid > 0) {
-            CpuTopology.applyBigCoreAffinity(currentGuestPid);
         }
 
         if (prefs.getBoolean(PREF_SAMSUNG_PERF_BOOST, true) && samsungDriver != null && samsungDriver.isSupported()) {
             samsungDriver.startBoost();
         }
         applyRootPerformanceProfile(activity, prefs);
+        applyGuestAffinity(activity, prefs, currentGuestPid);
+        registerThermalStatusListener(activity);
     }
 
     public static void onGamePause(Activity activity) {
         if (activity == null) return;
+        unregisterThermalStatusListener();
+        restoreGuestAffinity(currentGuestPid);
         GameModeSignal.exitGameplay(activity);
         setSustainedPerformance(activity, false);
         if (samsungDriver != null && samsungDriver.isSupported()) {
@@ -123,6 +121,8 @@ public class PerformanceManager {
     public static void onGameStop(Activity activity) {
         if (activity == null) return;
         isSessionActive = false;
+        unregisterThermalStatusListener();
+        restoreGuestAffinity(currentGuestPid);
         GameModeSignal.exitGameplay(activity);
         setSustainedPerformance(activity, false);
         PerfPriority.restore();
@@ -150,7 +150,8 @@ public class PerformanceManager {
             GameModeSignal.exitGameplay(activity);
         }
 
-        setSustainedPerformance(activity, prefs.getBoolean(PREF_SUSTAINED_PERFORMANCE, false));
+        setSustainedPerformance(activity,
+                HelioDeviceProfileManager.shouldUseSustainedPerformance(activity, prefs));
         if (prefs.getBoolean(PREF_ROOT_PERFORMANCE_PROFILE, false)) {
             applyRootPerformanceProfile(activity, prefs);
         } else {
@@ -163,9 +164,7 @@ public class PerformanceManager {
             PerfPriority.restore();
         }
 
-        if (prefs.getBoolean(PREF_PREFER_BIG_CORES, false)) {
-            if (currentGuestPid > 0) CpuTopology.applyBigCoreAffinity(currentGuestPid);
-        }
+        applyGuestAffinity(activity, prefs, currentGuestPid);
 
         if (samsungDriver != null && samsungDriver.isSupported()) {
             if (prefs.getBoolean(PREF_SAMSUNG_PERF_BOOST, true)) {
@@ -184,14 +183,70 @@ public class PerformanceManager {
             if (prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true)) {
                 PerfPriority.boost(pid);
             }
-            if (prefs.getBoolean(PREF_PREFER_BIG_CORES, false)) {
-                CpuTopology.applyBigCoreAffinity(pid);
-            }
+            applyGuestAffinity(activity, prefs, pid);
         }
     }
 
     public static boolean isSamsungSupported() {
         return samsungDriver != null && samsungDriver.isSupported();
+    }
+
+    private static void applyGuestAffinity(Activity activity, SharedPreferences prefs, int pid) {
+        if (pid <= 0 || activity == null || prefs == null) return;
+        if (HelioDeviceProfileManager.shouldPreferBigCores(activity, prefs)) {
+            int updated = CpuTopology.applyBigCoreAffinity(pid);
+            if (updated > 0) bigCoreAffinityApplied = true;
+        } else if (bigCoreAffinityApplied) {
+            CpuTopology.applyAllCoreAffinity(pid);
+            bigCoreAffinityApplied = false;
+        }
+    }
+
+    private static void restoreGuestAffinity(int pid) {
+        if (!bigCoreAffinityApplied) return;
+        if (pid > 0) CpuTopology.applyAllCoreAffinity(pid);
+        bigCoreAffinityApplied = false;
+    }
+
+    private static void registerThermalStatusListener(Activity activity) {
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
+        unregisterThermalStatusListener();
+        try {
+            PowerManager pm = (PowerManager) activity.getSystemService(Context.POWER_SERVICE);
+            if (pm == null) return;
+            PowerManager.OnThermalStatusChangedListener listener = status -> {
+                if (!isSessionActive || currentGuestPid <= 0) return;
+                SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(activity);
+                if (!HelioDeviceProfileManager.isBigCoreProfileSelected(activity, prefs)) {
+                    restoreGuestAffinity(currentGuestPid);
+                    return;
+                }
+                if (status >= PowerManager.THERMAL_STATUS_MODERATE) {
+                    restoreGuestAffinity(currentGuestPid);
+                    Log.i(TAG, "Thermal guard restored guest affinity to all online cores");
+                } else if (HelioDeviceProfileManager.shouldPreferBigCores(activity, prefs)) {
+                    int updated = CpuTopology.applyBigCoreAffinity(currentGuestPid);
+                    if (updated > 0) bigCoreAffinityApplied = true;
+                }
+            };
+            pm.addThermalStatusListener(activity.getMainExecutor(), listener);
+            thermalPowerManager = pm;
+            thermalStatusListener = listener;
+        } catch (Throwable error) {
+            Log.w(TAG, "Thermal status listener unavailable: " + error.getMessage());
+        }
+    }
+
+    private static void unregisterThermalStatusListener() {
+        if (thermalPowerManager == null || thermalStatusListener == null) return;
+        try {
+            thermalPowerManager.removeThermalStatusListener(thermalStatusListener);
+        } catch (Throwable error) {
+            Log.w(TAG, "Could not unregister thermal listener: " + error.getMessage());
+        } finally {
+            thermalPowerManager = null;
+            thermalStatusListener = null;
+        }
     }
 
     private static void applyRootPerformanceProfile(Activity activity, SharedPreferences prefs) {

@@ -5,7 +5,8 @@ public enum ControlStylePreset {
     // "WINLATOR_MALI", Cyberpunk, Retro Arcade, Stealth) load as this one (see parse).
     GLASS("WinMali Default", 0),
     XBOX("Xbox Edition", 1),
-    PLAYSTATION("PlayStation Edition", 2);
+    PLAYSTATION("PlayStation Edition", 2),
+    LIGHTWEIGHT("Low Resource (Flat)", 3);
 
     public final String title;
     public final int id;

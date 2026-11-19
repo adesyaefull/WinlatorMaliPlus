@@ -74,6 +74,7 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
                         break;
                     case XBOX:
                     case PLAYSTATION:
+                    case LIGHTWEIGHT:
                     default:
                         if (isTrigger || isStartSelect) el.setShape(ControlElement.Shape.CAPSULE);
                         else el.setShape(ControlElement.Shape.CIRCLE);

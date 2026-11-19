@@ -58,6 +58,8 @@ public class InputControlsView extends View {
     private boolean drawOpaqueBackground = true;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
+    private final Rect drawClipBounds = new Rect();
+    public static final long TOUCHSCREEN_TIMEOUT_MS = 15_000L;
     private final ColorFilter colorFilter = new PorterDuffColorFilter(0xffffffff, PorterDuff.Mode.SRC_IN);
     private final Point cursor = new Point();
     private boolean readyToDraw = false;
@@ -76,7 +78,8 @@ public class InputControlsView extends View {
     private float overlayOpacity = DEFAULT_OVERLAY_OPACITY;
     private TouchpadView touchpadView;
     private XServer xServer;
-    private Timer mouseMoveTimer;
+    private volatile Timer mouseMoveTimer;
+    private final Object mouseMoveTimerLock = new Object();
     private final PointF mouseMoveOffset = new PointF();
     private final Map<Binding, Float> keyPressures = new HashMap<>();
     private final Map<Binding, Boolean> keyStates = new HashMap<>();
@@ -194,12 +197,16 @@ public class InputControlsView extends View {
             drawCursor(canvas);
         }
 
-        if (stickElement != null) stickElement.draw(canvas);
+        canvas.getClipBounds(drawClipBounds);
+
+        if (stickElement != null && shouldDrawElement(stickElement, drawClipBounds)) {
+            stickElement.draw(canvas);
+        }
 
         if (profile != null && showTouchscreenControls && !isFocusedOnStick()) {
             if (!profile.isElementsLoaded()) profile.loadElements(this);
             for (ControlElement element : profile.getElements()) {
-                element.draw(canvas);
+                if (shouldDrawElement(element, drawClipBounds)) element.draw(canvas);
             }
         }
 
@@ -381,7 +388,15 @@ public class InputControlsView extends View {
 
     @Override
     protected void onDetachedFromWindow() {
-        if (mouseMoveTimer != null) mouseMoveTimer.cancel();
+        removeCallbacks(moveRedraw);
+        moveRedrawPending = false;
+        pendingMoveDirtyRect.setEmpty();
+        synchronized (mouseMoveTimerLock) {
+            if (mouseMoveTimer != null) {
+                mouseMoveTimer.cancel();
+                mouseMoveTimer = null;
+            }
+        }
         synchronized(keyPressures) {
             for (Map.Entry<Binding, Boolean> entry : keyStates.entrySet()) {
                 if (entry.getValue()) xServer.injectKeyRelease(entry.getKey().keycode);
@@ -394,10 +409,17 @@ public class InputControlsView extends View {
 
     private void createMouseMoveTimer() {
         final WinHandler winHandler = xServer != null ? xServer.getWinHandler() : null;
-        if (mouseMoveTimer == null && profile != null && winHandler != null) {
+        if (xServer == null || profile == null || winHandler == null) return;
+
+        synchronized (mouseMoveTimerLock) {
+            if (mouseMoveTimer != null) return;
             final float cursorSpeed = profile.getCursorSpeed();
-            mouseMoveTimer = new Timer();
-            mouseMoveTimer.schedule(new TimerTask() {
+
+            // This worker exists only while mouse movement or fractional key pressure is active.
+            // It no longer wakes the CPU at 60 Hz for the rest of an otherwise idle game session.
+            final Timer timer = new Timer("WinlatorMouseInput", true);
+            mouseMoveTimer = timer;
+            timer.schedule(new TimerTask() {
                 private float velocityX = 0;
                 private float velocityY = 0;
                 private static final float ACCELERATION = 0.2f;
@@ -405,11 +427,18 @@ public class InputControlsView extends View {
 
                 @Override
                 public void run() {
-                    if (mouseMoveOffset.x != 0 || mouseMoveOffset.y != 0 || velocityX != 0 || velocityY != 0) {
-                        velocityX += (mouseMoveOffset.x - velocityX) * ACCELERATION;
-                        velocityY += (mouseMoveOffset.y - velocityY) * ACCELERATION;
-                        if (mouseMoveOffset.x == 0 && Math.abs(velocityX) < 0.05f) velocityX = 0;
-                        if (mouseMoveOffset.y == 0 && Math.abs(velocityY) < 0.05f) velocityY = 0;
+                    float targetX;
+                    float targetY;
+                    synchronized (mouseMoveOffset) {
+                        targetX = mouseMoveOffset.x;
+                        targetY = mouseMoveOffset.y;
+                    }
+
+                    if (targetX != 0 || targetY != 0 || velocityX != 0 || velocityY != 0) {
+                        velocityX += (targetX - velocityX) * ACCELERATION;
+                        velocityY += (targetY - velocityY) * ACCELERATION;
+                        if (targetX == 0 && Math.abs(velocityX) < 0.05f) velocityX = 0;
+                        if (targetY == 0 && Math.abs(velocityY) < 0.05f) velocityY = 0;
 
                         if (velocityX != 0 || velocityY != 0) {
                             float magnitude = (float) Math.sqrt(velocityX * velocityX + velocityY * velocityY);
@@ -423,40 +452,50 @@ public class InputControlsView extends View {
                         }
                     }
 
-                    synchronized(keyPressures) {
-                        // 1. Process active keys and update their pulse state
+                    boolean keysIdle;
+                    synchronized (keyPressures) {
                         for (Map.Entry<Binding, Float> entry : keyPressures.entrySet()) {
                             Binding binding = entry.getKey();
                             float pressure = entry.getValue();
-                            
-                            // High-frequency distributed pulsing (Bresenham-based)
-                            // Pattern: pressure=0.5 -> OFF, ON, OFF, ON...
                             boolean newState = (int)((pulseCounter + 1) * pressure) > (int)(pulseCounter * pressure);
-                            
                             Boolean currentState = keyStates.get(binding);
                             if (currentState == null) currentState = false;
-                            
                             if (newState != currentState) {
                                 if (newState) xServer.injectKeyPress(binding.keycode);
                                 else xServer.injectKeyRelease(binding.keycode);
                                 keyStates.put(binding, newState);
                             }
                         }
-                        
-                        // 2. Cleanup: Release any keys that are no longer being pressed at all
-                        if (!keyStates.isEmpty()) {
-                            java.util.Iterator<Map.Entry<Binding, Boolean>> it = keyStates.entrySet().iterator();
-                            while (it.hasNext()) {
-                                Map.Entry<Binding, Boolean> entry = it.next();
-                                Binding binding = entry.getKey();
-                                if (!keyPressures.containsKey(binding)) {
-                                    if (entry.getValue()) xServer.injectKeyRelease(binding.keycode);
-                                    it.remove();
-                                }
+
+                        java.util.Iterator<Map.Entry<Binding, Boolean>> it = keyStates.entrySet().iterator();
+                        while (it.hasNext()) {
+                            Map.Entry<Binding, Boolean> entry = it.next();
+                            Binding binding = entry.getKey();
+                            if (!keyPressures.containsKey(binding)) {
+                                if (entry.getValue()) xServer.injectKeyRelease(binding.keycode);
+                                it.remove();
+                            }
+                        }
+                        keysIdle = keyPressures.isEmpty() && keyStates.isEmpty();
+                    }
+                    pulseCounter = (pulseCounter + 1) % 60;
+
+                    if (targetX == 0 && targetY == 0 && velocityX == 0 && velocityY == 0 && keysIdle) {
+                        synchronized (mouseMoveTimerLock) {
+                            boolean noMouseMovement;
+                            synchronized (mouseMoveOffset) {
+                                noMouseMovement = mouseMoveOffset.x == 0 && mouseMoveOffset.y == 0;
+                            }
+                            boolean noKeyPressure;
+                            synchronized (keyPressures) {
+                                noKeyPressure = keyPressures.isEmpty() && keyStates.isEmpty();
+                            }
+                            if (mouseMoveTimer == timer && noMouseMovement && noKeyPressure) {
+                                mouseMoveTimer = null;
+                                timer.cancel();
                             }
                         }
                     }
-                    pulseCounter = (pulseCounter + 1) % 60;
                 }
             }, 0, 1000 / 60);
         }
@@ -672,6 +711,7 @@ public class InputControlsView extends View {
             switch (actionMasked) {
                 case MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                     float x = event.getX(actionIndex), y = event.getY(actionIndex);
+                    Rect dirtyRect = new Rect();
                     for (ControlElement element : profile.getElements()) {
                         boolean contains = element.containsPoint(x, y);
                         if (contains && radialWheelManager != null && !radialWheelManager.getConfigs().isEmpty()) {
@@ -686,6 +726,7 @@ public class InputControlsView extends View {
                         }
                         if (element.handleTouchDown(pointerId, x, y)) {
                             handled = true;
+                            includeElementDirtyRect(dirtyRect, element);
                             if (preferences.getBoolean("touchscreen_haptics_enabled", true)) {
                                 if (cachedVibrator != null && cachedHapticEffect != null) cachedVibrator.vibrate(cachedHapticEffect);
                             }
@@ -695,7 +736,8 @@ public class InputControlsView extends View {
                         }
                     }
                     if (!handled && touchpadView != null) touchpadView.onTouchEvent(event);
-                    invalidate();
+                    if (radialWheelManager != null && radialWheelManager.isOpen()) invalidate();
+                    else if (!dirtyRect.isEmpty()) invalidateImmediately(dirtyRect);
                 }
                 case MotionEvent.ACTION_MOVE -> {
                     if (radialWheelManager != null && radialWheelManager.isOpen()) {
@@ -704,19 +746,15 @@ public class InputControlsView extends View {
                         return true;
                     }
                     boolean hasUnhandledPointer = false;
-                    boolean needsRedraw = false;
-                    for (byte i = 0; i < event.getPointerCount(); i++) {
+                    Rect dirtyRect = new Rect();
+                    for (int i = 0; i < event.getPointerCount(); i++) {
                         boolean elementHandled = false;
                         for (ControlElement element : profile.getElements()) {
                             if (element.handleTouchMove(event.getPointerId(i), event.getX(i), event.getY(i))) {
                                 elementHandled = true;
-                                // Only request canvas redraw if the element has visual changes
-                                // during move (stick knob, D-pad direction, range scroller).
-                                // Static buttons (A/B/X/Y, triggers, bumpers) don't change
-                                // appearance while held, so skip the expensive full-view redraw.
-                                if (element.isDynamicVisual()) {
-                                    needsRedraw = true;
-                                }
+                                // Static buttons do not change appearance while held. For dynamic
+                                // controls, redraw only their bounds and throttle to display cadence.
+                                if (element.isDynamicVisual()) includeElementDirtyRect(dirtyRect, element);
                                 break;
                             }
                         }
@@ -725,9 +763,7 @@ public class InputControlsView extends View {
                     if (hasUnhandledPointer && touchpadView != null) {
                         touchpadView.onTouchEvent(event);
                     }
-                    if (needsRedraw) {
-                        invalidateThrottled();
-                    }
+                    if (!dirtyRect.isEmpty()) invalidateThrottled(dirtyRect);
                 }
                 case MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
                     if (radialWheelManager != null && radialWheelManager.isOpen()) {
@@ -736,17 +772,20 @@ public class InputControlsView extends View {
                         return true;
                     }
                     if (actionMasked == MotionEvent.ACTION_CANCEL) {
+                        Rect dirtyRect = new Rect();
                         for (ControlElement element : profile.getElements()) {
                             int pid = element.getCurrentPointerId();
                             if (pid != -1) {
+                                includeElementDirtyRect(dirtyRect, element);
                                 element.handleTouchUp(pid);
                             }
                         }
                         handleMouseMovement(0, 0);
                         if (touchpadView != null) touchpadView.onTouchEvent(event);
-                        invalidate();
+                        if (!dirtyRect.isEmpty()) invalidateImmediately(dirtyRect);
                         return true;
                     }
+                    Rect dirtyRect = new Rect();
                     for (ControlElement element : profile.getElements()) {
                         if (element.getCurrentPointerId() == pointerId) {
                             for (int b = 0; b < element.getBindingCount(); b++) {
@@ -758,32 +797,76 @@ public class InputControlsView extends View {
                         }
                         if (element.handleTouchUp(pointerId)) {
                             handled = true;
+                            includeElementDirtyRect(dirtyRect, element);
                             if (touchpadView != null && element.getBindingAt(0) == Binding.MOUSE_LEFT_BUTTON) {
                                 touchpadView.setPointerButtonLeftEnabled(true);
                             }
                         }
                     }
                     if (!handled && touchpadView != null) touchpadView.onTouchEvent(event);
-                    invalidate();
+                    if (!dirtyRect.isEmpty()) invalidateImmediately(dirtyRect);
                 }
             }
         }
         return true;
     }
 
-    // A moving stick knob or D-pad redraws the overlay at most 60 times a second: touch events come at up to the
-    // screen's 120 Hz, and every redraw is GPU work the game shares. Presses and releases still redraw at once.
-    private static final long MOVE_REDRAW_INTERVAL_MS = 16;
+    // Dirty-region rendering avoids walking and drawing controls outside the damaged region.
+    // Input events still reach the game at the device's full touch sampling rate; only the
+    // decorative stick/D-pad artwork is capped to about 40 redraws per second.
+    private static final long MOVE_REDRAW_INTERVAL_MS = 24;
     private long lastMoveRedraw = 0;
     private boolean moveRedrawPending = false;
+    private final Rect pendingMoveDirtyRect = new Rect();
     private final Runnable moveRedraw = () -> {
         moveRedrawPending = false;
         lastMoveRedraw = android.os.SystemClock.uptimeMillis();
-        invalidate();
+        if (!pendingMoveDirtyRect.isEmpty()) {
+            Rect dirty = new Rect(pendingMoveDirtyRect);
+            pendingMoveDirtyRect.setEmpty();
+            invalidate(dirty);
+        }
     };
 
-    private void invalidateThrottled() {
+    private boolean shouldDrawElement(ControlElement element, Rect clipBounds) {
+        if (element == null || clipBounds == null || clipBounds.isEmpty()) return false;
+        Rect bounds = element.getBoundingBox();
+        // Include bitmap margins, strokes and subtle glass/controller highlights.
+        int padding = Math.max(12, (int) (Math.max(bounds.width(), bounds.height()) * 0.22f));
+        return bounds.right + padding > clipBounds.left
+                && bounds.left - padding < clipBounds.right
+                && bounds.bottom + padding > clipBounds.top
+                && bounds.top - padding < clipBounds.bottom;
+    }
+
+    private void includeElementDirtyRect(Rect dirtyRect, ControlElement element) {
+        if (dirtyRect == null || element == null) return;
+        Rect bounds = element.getBoundingBox();
+        // The draw bounds include cached bitmap margins and the controller-style rim glow.
+        int padding = Math.max(12, (int) (Math.max(bounds.width(), bounds.height()) * 0.22f));
+        int left = Math.max(0, bounds.left - padding);
+        int top = Math.max(0, bounds.top - padding);
+        int right = Math.min(getWidth(), bounds.right + padding);
+        int bottom = Math.min(getHeight(), bounds.bottom + padding);
+        if (right <= left || bottom <= top) return;
+        if (dirtyRect.isEmpty()) dirtyRect.set(left, top, right, bottom);
+        else dirtyRect.union(left, top, right, bottom);
+    }
+
+    private void invalidateImmediately(Rect dirtyRect) {
+        if (dirtyRect == null || dirtyRect.isEmpty()) return;
+        removeCallbacks(moveRedraw);
+        moveRedrawPending = false;
+        pendingMoveDirtyRect.setEmpty();
+        invalidate(dirtyRect);
+    }
+
+    private void invalidateThrottled(Rect dirtyRect) {
+        if (dirtyRect == null || dirtyRect.isEmpty()) return;
+        if (pendingMoveDirtyRect.isEmpty()) pendingMoveDirtyRect.set(dirtyRect);
+        else pendingMoveDirtyRect.union(dirtyRect);
         if (moveRedrawPending) return;
+
         long wait = lastMoveRedraw + MOVE_REDRAW_INTERVAL_MS - android.os.SystemClock.uptimeMillis();
         if (wait <= 0) {
             moveRedraw.run();
@@ -793,10 +876,22 @@ public class InputControlsView extends View {
         }
     }
 
+    public boolean hasActiveTouches() {
+        if (stickElement != null && stickElement.getCurrentPointerId() != -1) return true;
+        if (profile == null || !profile.isElementsLoaded()) return false;
+        for (ControlElement element : profile.getElements()) {
+            if (element.getCurrentPointerId() != -1) return true;
+        }
+        return false;
+    }
+
     private void resetTouchscreenTimeout() {
-        if (timeoutHandler != null && hideControlsRunnable != null) {
+        if (timeoutHandler == null || hideControlsRunnable == null) return;
+        if (preferences != null && preferences.getBoolean("touchscreen_timeout_enabled", false)) {
             timeoutHandler.removeCallbacks(hideControlsRunnable);
-            timeoutHandler.postDelayed(hideControlsRunnable, 5000);
+            timeoutHandler.postDelayed(hideControlsRunnable, TOUCHSCREEN_TIMEOUT_MS);
+        } else {
+            timeoutHandler.removeCallbacks(hideControlsRunnable);
         }
     }
 
@@ -880,7 +975,11 @@ public class InputControlsView extends View {
     public void handleInputEvent(Binding binding, boolean isActionDown, float offset) { handleInputEvent(null, binding, isActionDown, offset); }
 
     public void handleMouseMovement(float deltaX, float deltaY) {
-        mouseMoveOffset.set(deltaX, deltaY);
+        synchronized (mouseMoveTimerLock) {
+            synchronized (mouseMoveOffset) {
+                mouseMoveOffset.set(deltaX, deltaY);
+            }
+        }
         if (deltaX != 0 || deltaY != 0) createMouseMoveTimer();
     }
 
@@ -937,11 +1036,14 @@ public class InputControlsView extends View {
         else {
             if (binding.name().startsWith("MOUSE_MOVE")) {
                 float value = (offset != 0) ? Math.abs(offset) : 1.0f;
-                if (binding == Binding.MOUSE_MOVE_LEFT) mouseMoveOffset.x = isActionDown ? -value : 0;
-                else if (binding == Binding.MOUSE_MOVE_RIGHT) mouseMoveOffset.x = isActionDown ? value : 0;
-                else if (binding == Binding.MOUSE_MOVE_UP) mouseMoveOffset.y = isActionDown ? -value : 0;
-                else if (binding == Binding.MOUSE_MOVE_DOWN) mouseMoveOffset.y = isActionDown ? value : 0;
-
+                synchronized (mouseMoveTimerLock) {
+                    synchronized (mouseMoveOffset) {
+                        if (binding == Binding.MOUSE_MOVE_LEFT) mouseMoveOffset.x = isActionDown ? -value : 0;
+                        else if (binding == Binding.MOUSE_MOVE_RIGHT) mouseMoveOffset.x = isActionDown ? value : 0;
+                        else if (binding == Binding.MOUSE_MOVE_UP) mouseMoveOffset.y = isActionDown ? -value : 0;
+                        else if (binding == Binding.MOUSE_MOVE_DOWN) mouseMoveOffset.y = isActionDown ? value : 0;
+                    }
+                }
                 if (isActionDown) createMouseMoveTimer();
             }
             else {
@@ -951,19 +1053,23 @@ public class InputControlsView extends View {
                     else { if (xServer.isRelativeMouseMovement()) winHandler.mouseEvent(MouseEventFlags.getFlagFor(pb, false), 0, 0, 0); else xServer.injectPointerButtonRelease(pb); }
                 }
                 else {
-                    synchronized(keyPressures) {
-                        if (isActionDown && offset > 0 && offset < 0.95f) {
-                            keyPressures.put(binding, offset);
-                            createMouseMoveTimer();
-                        } else {
-                            keyPressures.remove(binding);
-                            Boolean pulsedState = keyStates.remove(binding);
-                            if (pulsedState != null && pulsedState) xServer.injectKeyRelease(binding.keycode);
+                    boolean startPressureTimer = false;
+                    synchronized (mouseMoveTimerLock) {
+                        synchronized (keyPressures) {
+                            if (isActionDown && offset > 0 && offset < 0.95f) {
+                                keyPressures.put(binding, offset);
+                                startPressureTimer = true;
+                            } else {
+                                keyPressures.remove(binding);
+                                Boolean pulsedState = keyStates.remove(binding);
+                                if (pulsedState != null && pulsedState) xServer.injectKeyRelease(binding.keycode);
 
-                            if (isActionDown) xServer.injectKeyPress(binding.keycode);
-                            else xServer.injectKeyRelease(binding.keycode);
+                                if (isActionDown) xServer.injectKeyPress(binding.keycode);
+                                else xServer.injectKeyRelease(binding.keycode);
+                            }
                         }
                     }
+                    if (startPressureTimer) createMouseMoveTimer();
                 }
             }
         }
